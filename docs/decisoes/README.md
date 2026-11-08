@@ -9,6 +9,7 @@ Atualizado em 08/11/2026. Use ADRs numerados com contexto, decisão, status e co
 | 0003 — Frontend Vercel e API Railway | Aceita; base local implementada | [ADR-0003](0003-frontend-vercel-api-railway.md) |
 | 0004 — Landing, editor local e marcos no Git | Aceita; editor local implementado | [ADR-0004](0004-editor-local-e-marcos-git.md) |
 | 0005 — Comandos do domínio com compartilhamento estrutural | Aceita; implementada | [ADR-0005](0005-comandos-com-compartilhamento-estrutural.md) |
+| 0006 — Aparelhos de referência e aceite de desempenho da fase 2 | Aceita: decisão do usuário | [ADR-0006](0006-aparelhos-de-referencia-e-aceite-da-fase-2.md) |
 | Drizzle/`pg`; Better Auth para contas | Driver/pool implementados; autenticação ainda planejada | [Arquitetura](../arquitetura.md) |
 | Aplicação Next.js/React com Supabase | Proposta inicial descartada após orientação do usuário | [ADR-0002](0002-railway-postgres-e-stack-enxuta.md) |
 | Planta JSONB, convidados/atribuições relacionais e revisão transacional | Proposta técnica | [Modelo de dados](../modelo-de-dados.md) |

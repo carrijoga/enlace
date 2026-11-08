@@ -1,6 +1,6 @@
 # Roadmap de implementação
 
-Atualizado em 08/11/2026, com frontend Vercel e backend/PostgreSQL Railway. Fases 0 e 1 concluídas no escopo local. Fase 2 entregue funcionalmente, com aceite de desempenho e aparelhos reais ainda pendentes. Etapas posteriores são propostas, não funcionalidades entregues.
+Atualizado em 08/11/2026, com frontend Vercel e backend/PostgreSQL Railway. Fases 0 e 1 concluídas no escopo local. Fase 2 concluída em 08/11/2026: meta de desempenho atingida no desktop de referência; o celular de entrada testado ficou registrado como limite conhecido ([ADR-0006](decisoes/0006-aparelhos-de-referencia-e-aceite-da-fase-2.md)). Etapas posteriores são propostas, não funcionalidades entregues.
 
 ## Fase 0 — Diagnóstico e estrutura documental — concluída
 
@@ -18,11 +18,11 @@ Entregue: workspace pnpm, SvelteKit/Vercel, API Hono/Node, Drizzle/pg, contratos
 
 Aceite local: página/API/proxy responderam, exemplo e download foram verificados no navegador; 25 testes passaram, sem erros de tipos/lint. JavaScript inicial da tela base: 36,80 KiB gzip. Veja [validação](validacao-fase1.md). O pacote Vercel completo aguarda Linux/CI (symlinks bloqueados no Windows); o banco real aguarda daemon Docker/infraestrutura. Better Auth e migrações de negócio pertencem à fase 3, sem stubs que finjam esses recursos.
 
-## Fase 2 — Migrar o editor local — funcional, em validação
+## Fase 2 — Migrar o editor local — concluída
 
 Entregue: domínio testável, editor `/editor`, landing `/`, formatos/curvatura/corredor/fileiras, convidados/busca/categorias, atribuição/troca, desfazer/refazer, rascunho local protegido, JSON novo/v3, PNG geral/individual e impressão. Exemplos são fictícios e não incluem regras familiares pessoais. [Relatório](validacao-fase2.md).
 
-Atualização 08/11/2026: perfil do cenário máximo feito e benchmark ampliado (`scripts/bench-editor.js`) para formato, seleção de cadeira/pessoa, troca, filtro e busca. Após as otimizações (ADR-0005, SVG em pixels, lista com `content-visibility`), todas as ações ficaram com p95 ≤ 50 ms no desktop, medidas sem pintura. Pendências para fechar todo o aceite: repetir a medição com pintura (painel visível) e verificar em celular físico. Não declarar a fase totalmente encerrada antes disso. Em seguida, fase 3: contas e persistência entre dispositivos.
+Atualização 08/11/2026: perfil do cenário máximo feito e benchmark ampliado (`scripts/bench-editor.js`) para formato, seleção de cadeira/pessoa, troca, filtro e busca. Após as otimizações (ADR-0005, SVG em pixels, lista com `content-visibility`), todas as ações ficaram com p95 ≤ 50 ms no desktop, primeiro sem pintura e depois com pintura (modo `frame`, painel visível: pior p95 37,1 ms). Celular físico (execução 1): formato 62 e filtro 57,6 ms de p95 acima da meta; filtro/busca e o script do formato foram otimizados; A/B no mesmo aparelho confirmou ganho em filtro/busca, mas quase todas as ações seguem em ~50–70 ms nesse celular. Decisão do usuário ([ADR-0006](decisoes/0006-aparelhos-de-referencia-e-aceite-da-fase-2.md)): orçamento de 50 ms mantido, aceite pelo desktop de referência, celular testado registrado como limite conhecido; classe de celular de referência e otimização para aparelhos de entrada passam para a fase 5. Fase concluída; próxima: fase 3, contas e persistência entre dispositivos.
 
 Aceite:
 
@@ -68,6 +68,8 @@ Aceite:
 ## Fase 5 — Preparar a primeira versão utilizável
 
 Revisar acessibilidade, responsividade, estados vazios/erros, limites e desempenho com conjuntos sintéticos. Definir ambientes, recuperação de dados, observabilidade sem dados pessoais, exclusão de conta e publicação.
+
+Inclui, conforme o [ADR-0006](decisoes/0006-aparelhos-de-referencia-e-aceite-da-fase-2.md): definir a classe de celular de referência (modelo identificado) e, se ela exigir, a otimização para aparelhos de entrada — atualização fina por cadeira/linha em troca e seleção, lista virtualizada se medida a necessidade e revisão das legendas da planta.
 
 Aceite: fluxo completo em ambiente de teste, migrações reproduzíveis, isolamento verificado, metas de desempenho aferidas e procedimento de backup/restauração ensaiado com dados fictícios. Vercel para frontend e Railway para API/PostgreSQL já estão escolhidos; validar o pacote completo, healthcheck e migrações pré-deploy. Domínio, região, recursos, orçamento e qualquer publicação são tratados quando houver uma versão concreta.
 

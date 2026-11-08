@@ -1,6 +1,6 @@
 # Validação do editor local — fase 2
 
-Data: 07/11/2026, America/Sao_Paulo. Branch `codex/ceremony-editor`. Base fase 1 `91fab30`; domínio `60f3298`. Entrega funcional local, com pendências de desempenho/aparelhos reais. Sem push, deploy, conta, banco de negócio ou CSV.
+Data: 07/11/2026, America/Sao_Paulo. Branch `codex/ceremony-editor`. Base fase 1 `91fab30`; domínio `60f3298`. Entrega funcional local; fase concluída em 08/11/2026 conforme o ADR-0006 (celular de entrada como limite conhecido). Sem push, deploy, conta, banco de negócio ou CSV.
 
 ## Implementação verificada
 
@@ -78,12 +78,81 @@ Nenhuma dependência nova. JS inicial após a mudança: landing 39.793 bytes (38
 
 A coluna “Antes, `layout`” foi medida por engano num servidor de preview que ainda servia o build antigo; serve como baseline no mesmo modo da medição posterior. Com 20 amostras o p95 é a 19ª menor, então dois valores isolados bastam para elevá-lo. Na execução 1, a troca de formato teve medianas de ~21 ms e dois picos (115,2 e 67,9 ms); uma série dedicada de 40 trocas de formato resultou em p95 **23,1 ms** (mediana 20,1, máximo 31,5). Picos isolados de ~100 ms apareceram em ações diferentes nas duas execuções (seleção de pessoa 99,4; filtro 126,6), compatíveis com ruído da máquina compartilhada ou coleta de lixo.
 
-Conclusão: no desktop de referência e no modo `layout`, todas as ações ficaram com p95 ≤ 50 ms na execução 2 e na série dedicada de formato; a execução 1 ficou acima apenas na troca de formato por dois picos. A meta de 50 ms está **atingida no desktop, sem incluir pintura**. Não foi repetida a medição `frame` (com pintura) depois das mudanças, porque o painel estava oculto; também não há medição em celular físico. Esses dois itens impedem declarar o aceite de desempenho completo.
+Conclusão: no desktop de referência e no modo `layout`, todas as ações ficaram com p95 ≤ 50 ms na execução 2 e na série dedicada de formato; a execução 1 ficou acima apenas na troca de formato por dois picos. A meta de 50 ms está **atingida no desktop, sem incluir pintura**. A medição `frame` (com pintura) foi repetida depois, com o painel visível, e também ficou dentro da meta (ver subseção seguinte). Falta a medição em celular físico.
 
 Verificação visual após a mudança: desktop 1440×900 com a planta enquadrada (692×576 px dentro de 696×576, sem rolagem) e zoom 130%/150%/Ajustar corretos; mobile emulado 375×812 com zoom 100% mantendo o mínimo de 760 px e rolagem dentro do quadro, sem overflow da página. Testes: 44 em 7 arquivos; `check`, `lint` e `format:check` sem erros.
+
+### Medição com pintura (modo `frame`) — 08/11/2026
+
+Mesmo desktop e build de produção (rebuild antes da medição, preview reiniciado), painel do navegador **visível** (`document.visibilityState = visible`, primeiro quadro em 8,8 ms), viewport 1440×900, cenário 288/300. Duas execuções seguidas de 20 amostras por ação, p95 em ms:
+
+| Ação | Antes, `frame` | Depois, `frame` — execução 1 | Depois, `frame` — execução 2 |
+| --- | ---: | ---: | ---: |
+| Trocar formato | 120,7 | 29,1 | 31,5 |
+| Selecionar cadeira | 70,1 | 16,6 | 17,0 |
+| Selecionar pessoa | 46,9 | 18,2 | 17,4 |
+| Trocar ocupantes | 64,5 | 27,4 | 22,8 |
+| Filtro “Sem lugar” | 67,3 | 37,1 | 36,8 |
+| Busca | 54,8 | 33,6 | 32,9 |
+
+Medianas da execução 2: 25,6 / 14,6 / 16,4 / 21,0 / 13,6 / 14,5 ms. Filtro e busca alternam entre ~13 ms (voltar à lista completa) e ~35 ms (aplicar o filtro), por isso o p95 reflete o caso de aplicar. A primeira amostra de cada ação na execução 1 ficou em 36–40 ms (aquecimento). Único pico: um formato de 105,1 ms na execução 2, fora do p95.
+
+Conclusão: **meta de p95 ≤ 50 ms atingida no desktop também com pintura**, em todas as ações e nas duas execuções. Hardware do desktop não caracterizado; sem limitação artificial de CPU.
+
+### Ensaio em celular físico
+
+Página auxiliar `scripts/bench-phone.html` (fora da aplicação; dados fictícios): carrega o projeto 288/300, abre `/editor` num iframe da mesma origem para teste manual de toque e roda o mesmo procedimento do modo `frame`, mostrando p95/mediana/máximo, modelo do aparelho (user agent), tela e memória JS quando o navegador expõe. Procedimento: `pnpm run build`, copiar o arquivo para `apps/web/.svelte-kit/output/client/bench.html`, iniciar o preview com `--host 0.0.0.0` (configuração local `web-preview-lan`) e abrir `http://<IP-do-PC>:4173/bench.html` no celular na mesma rede.
+
+Limite do ensaio na rede local: `http://<IP>` não é contexto seguro, então `crypto.randomUUID` não existe e **adicionar convidado ou fileira falha nesse endereço**. Em produção (https na Vercel) e em `localhost` isso não ocorre; selecionar, trocar, formato, filtro e busca não geram IDs e funcionam. A página auxiliar tem gerador próprio para semear os dados.
+
+Validação da página no próprio desktop, com emulação de celular 375×812 (CPU do desktop, **não substitui o aparelho**): formato 22,7; cadeira 7,7; pessoa 8,2; troca 19,2; filtro 19,9; busca 15,3 ms (p95); 18,5 MiB de heap JS.
+
+#### Celular físico — execução 1 (08/11/2026)
+
+Aparelho Android do usuário, Chrome 156 (user agent reduzido: “Android 10; K”, modelo não informado pelo navegador), tela 509×1130 CSS px @2,125x, janela 508×926, mesma rede local, cenário 288/300, 14,5 MiB de heap JS. p95 (mediana) em ms:
+
+| Ação | p95 | Mediana | Resultado |
+| --- | ---: | ---: | --- |
+| Trocar formato | 62,0 | 50,9 | Acima |
+| Selecionar cadeira | 32,1 | 23,2 | OK (um pico de 121,1 na 1ª amostra) |
+| Selecionar pessoa | 29,2 | 22,3 | OK |
+| Trocar ocupantes | 46,5 | 43,2 | OK, perto do limite |
+| Filtro “Sem lugar” | 57,6 | 50,9 | Acima |
+| Busca | 49,4 | 42,8 | OK, no limite |
+
+O celular ficou ~3–4× mais lento que o desktop de referência. Filtro e busca alternam aplicar (~23 ms) e voltar à lista completa (~55 ms): o custo estava em voltar.
+
+#### Diagnóstico e correção após a execução 1
+
+Decomposição no desktop, com largura de 514 px (layout de celular), em script / estilo+layout / restante até o quadro:
+
+- Filtro e busca: o tempo era quase todo script. O `{#each}` sobre a lista filtrada destruía e recriava ~288 linhas a cada mudança (11,2 ms no desktop ao voltar para “Todas”). **Correção:** todas as linhas ficam montadas, agrupadas por categoria a partir da referência de `project.guests`; busca e filtro calculam um `Set` de IDs visíveis e só alternam `hidden` na linha e no grupo. A busca usa um texto normalizado por convidado, calculado uma vez por lista. Resultado no desktop: 2,0 ms (filtro) e 1,2 ms (busca) de script.
+- Trocar formato: script 7,5 + layout 5,2 + pintura 6,8 ms. As 288 cadeiras recebiam objetos novos e todas as expressões de cada cadeira eram reavaliadas; o painel de convidados recalculava rótulos e mapas. **Correção:** `PlanCanvas` itera sobre uma lista de cadeiras estável enquanto `rows` não muda; só o `transform` lê o mapa de posições da nova geometria (setas do teclado também usam a posição atual). Mapas de convidados/atribuições e rótulos dependem das referências de `guests`, `assignments` e `rows`. O script caiu para 6,3 ms (2,2 ms são o comando e a validação Zod completa; Zod sozinho ~0,9 ms no Node).
+- Layout e pintura da troca de formato vêm sobretudo das 576 legendas SVG (nome e “fileira · cadeira”) em posições e ângulos novos. Ocultar as legendas no diagnóstico cortou o layout de ~4,9 para ~2,4 ms e a pintura de ~7 para ~4,7 ms; outras formas quase não pesam. `text-rendering`, unir as duas legendas num `<text>` com `<tspan>` e deixar o texto fora do grupo girado não ajudaram. Reduzir mais exigiria mudar o desenho das cadeiras.
+
+Após a correção, mesma página auxiliar no desktop a 514 px (`frame`): formato 25,3; cadeira 7,0; pessoa 8,0; troca 18,2; filtro 10,8 (antes 19,9); busca 8,7 (antes 15,3) ms de p95. JS inicial: landing 39.812 bytes (38,88 KiB), editor 81.159 bytes (79,26 KiB). 44 testes, `check`, `lint` e `format:check` sem erros; filtro, busca, contagem por grupo, mensagem vazia e setas após trocar formato conferidos no navegador.
+
+#### Celular físico — execução 2 e comparação A/B (08/11/2026)
+
+Execução 2 (build corrigido, `bench-phone.html`), p95: formato 69,8; cadeira 32,3; pessoa 41,0; troca 64,2; filtro 68,6; busca 66,0 ms. Ações não alteradas (pessoa, troca) também pioraram em relação à execução 1, o que indica variação do próprio aparelho entre execuções (temperatura, economia de energia, apps em segundo plano). Duas execuções em momentos diferentes não bastam para comparar versões.
+
+Comparação A/B no mesmo aparelho e na mesma sessão: página temporária servindo o build anterior (`3.WQqzTAQ2`, HEAD) e o corrigido (`3.CyRU9nlU`) na mesma origem, ordem antigo, novo, novo, antigo, 20 amostras por ação por rodada (40 por versão), sem quadros perdidos. Janela 508×999. p95 (mediana) em ms:
+
+| Ação | Antigo | Novo |
+| --- | ---: | ---: |
+| Trocar formato | 78,6 (69,1) | 89,3 (65,9) |
+| Selecionar cadeira | 41,3 (23,4) | 62,6 (23,4) — um pico isolado; rodada 3: 31,4 |
+| Selecionar pessoa | 41,7 (35,9) | 42,2 (37,4) |
+| Trocar ocupantes | 63,1 (53,9) | 60,9 (54,5) |
+| Filtro “Sem lugar” | 86,1 (51,0) | 68,6 (58,9) |
+| Busca | 77,4 (61,0) | 57,1 (47,1) |
+
+Leitura: a correção melhora o pior caso do filtro (antigo alternava ~33 ms ao aplicar e ~83 ms ao voltar; o novo fica em ~45–68 ms nos dois sentidos) e a busca; formato, troca e seleções não mudam além do ruído. A correção é mantida. Neste aparelho, porém, quase todas as ações do cenário 288/300 ficam entre ~50 e ~70 ms de p95 (troca: mediana 54 ms no celular contra ~18 ms no desktop): o aparelho é ~3–4× mais lento que o desktop e varia bastante entre execuções. Modelo não identificado (user agent reduzido).
+
+Situação do aceite: meta de 50 ms **atingida no desktop** (com e sem pintura) e **não atingida neste celular** no cenário máximo. Decisão do usuário em 08/11/2026 ([ADR-0006](decisoes/0006-aparelhos-de-referencia-e-aceite-da-fase-2.md)): orçamento mantido em 50 ms, aceite pelo desktop de referência e este celular registrado como limite conhecido, abaixo da classe de referência. A classe de celular de referência e a rodada estrutural para aparelhos de entrada ficam para a fase 5. **Fase 2 concluída.**
 
 ## Revisão e limites
 
 Subagents econômicos gpt-6-luna trabalharam em áreas exclusivas (domínio, arquivos, painéis, landing, medição, revisão e documentação). Revisor independente retornou **ship** para código/capturas do editor, sem achados materiais nesse escopo; não reproduziu os fluxos. Uma inspeção adicional do PNG completo identificou nomes sobrepostos; o revisor pediu correção. Nomes foram divididos em duas linhas internas, com truncamento e largura limitada a 44 unidades; o navegador baixou full-corrected.png e o revisor marcou esse achado como resolvido. O nome completo permanece no JSON; a imagem individual preserva seu comportamento. O revisor também confirmou a integridade de $state.raw e dos mapas derivados, sem reavaliar desempenho. Motor/detector Impeccable indisponível por cache/permissões; fallback manual explicitado. Não é auditoria completa de acessibilidade, contraste ou segurança.
 
-Próximo passo: repetir o benchmark no modo `frame` com o painel visível e medir num celular físico (Android/iOS de referência, registrando modelo); depois implementar autenticação/persistência com autorização por proprietário, transações e conflitos entre dispositivos. PostgreSQL real e pacote Vercel completo continuam pendentes conforme a fase 1.
+Próximo passo: fase 3. Definir a classe de celular de referência e otimizar para aparelhos de entrada fica para a fase 5 (ADR-0006). Na fase 3, implementar autenticação/persistência com autorização por proprietário, transações e conflitos entre dispositivos. PostgreSQL real e pacote Vercel completo continuam pendentes conforme a fase 1.
