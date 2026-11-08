@@ -26,10 +26,28 @@
   const guests = $derived(new Map(project.guests.map((guest) => [guest.id, guest])));
   const assignments = $derived(new Map(project.assignments.map((a) => [a.seatId, a.guestId])));
   let hovered = $state<string | null>(null);
+  // Valor primitivo: o efeito só roda quando a largura muda de fato, não a cada nova geometria
+  // (trocar o formato gera outro objeto com a mesma largura e forçaria layout síncrono).
+  const mapWidth = $derived(geometry.width);
+  // Tamanho da planta em pixels, calculado a partir da área disponível (offset* não varia com
+  // barras de rolagem nem com o conteúdo). Com largura/altura percentuais o Chrome refaz o layout
+  // de todas as cadeiras do SVG a cada alteração; com tamanho definido, só o que mudou.
+  let viewportWidth = $state(0);
+  let viewportHeight = $state(0);
+  const mapSize = $derived.by(() => {
+    if (!viewportWidth || !viewportHeight) return null;
+    const ratio = geometry.height / geometry.width;
+    if (zoom === 0) {
+      const width = Math.min(viewportWidth, viewportHeight / ratio);
+      return { width: Math.floor(width), height: Math.floor(width * ratio) };
+    }
+    const width = Math.max(zoom * viewportWidth, 760 * zoom);
+    return { width: Math.round(width), height: Math.round(width * ratio) };
+  });
 
   $effect(() => {
     void zoom;
-    void geometry.width;
+    void mapWidth;
     void tick().then(() => {
       if (viewport) viewport.scrollLeft = (viewport.scrollWidth - viewport.clientWidth) / 2;
     });
@@ -76,14 +94,20 @@
   }
 </script>
 
-<div class="map-viewport" bind:this={viewport}>
+<div
+  class="map-viewport"
+  bind:this={viewport}
+  bind:offsetWidth={viewportWidth}
+  bind:offsetHeight={viewportHeight}
+>
   <svg
     bind:this={svg}
     class="ceremony-map"
-    class:fit={zoom === 0}
+    class:fit={zoom === 0 && !mapSize}
     viewBox={`0 0 ${geometry.width} ${geometry.height}`}
-    style:width={zoom ? `${zoom * 100}%` : '100%'}
-    style:min-width={zoom ? `${760 * zoom}px` : '0'}
+    style:width={mapSize ? `${mapSize.width}px` : zoom ? `${zoom * 100}%` : '100%'}
+    style:height={mapSize ? `${mapSize.height}px` : null}
+    style:min-width={mapSize ? null : zoom ? `${760 * zoom}px` : '0'}
     role="group"
     aria-label={`Planta ${project.layout.mode === 'curve' ? 'em meia-lua' : 'tradicional'} com ${geometry.seats.length} cadeiras`}
   >
@@ -261,6 +285,7 @@
     }
     .ceremony-map {
       width: 100% !important;
+      height: auto !important;
       min-width: 0 !important;
       max-height: 230mm;
     }

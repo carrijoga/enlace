@@ -1,6 +1,6 @@
 # Registro de decisões
 
-Atualizado em 07/11/2026. Use ADRs numerados com contexto, decisão, status e consequências. Status possíveis: proposta, aceita, substituída ou rejeitada. Um documento de arquitetura proposto não é uma implementação.
+Atualizado em 08/11/2026. Use ADRs numerados com contexto, decisão, status e consequências. Status possíveis: proposta, aceita, substituída ou rejeitada. Um documento de arquitetura proposto não é uma implementação.
 
 | Registro | Status | Referência |
 | --- | --- | --- |
@@ -8,6 +8,7 @@ Atualizado em 07/11/2026. Use ADRs numerados com contexto, decisão, status e co
 | 0002 — Railway, PostgreSQL e SvelteKit/TypeScript | Parcialmente substituída pelo ADR-0003 | [ADR-0002](0002-railway-postgres-e-stack-enxuta.md) |
 | 0003 — Frontend Vercel e API Railway | Aceita; base local implementada | [ADR-0003](0003-frontend-vercel-api-railway.md) |
 | 0004 — Landing, editor local e marcos no Git | Aceita; editor local implementado | [ADR-0004](0004-editor-local-e-marcos-git.md) |
+| 0005 — Comandos do domínio com compartilhamento estrutural | Aceita; implementada | [ADR-0005](0005-comandos-com-compartilhamento-estrutural.md) |
 | Drizzle/`pg`; Better Auth para contas | Driver/pool implementados; autenticação ainda planejada | [Arquitetura](../arquitetura.md) |
 | Aplicação Next.js/React com Supabase | Proposta inicial descartada após orientação do usuário | [ADR-0002](0002-railway-postgres-e-stack-enxuta.md) |
 | Planta JSONB, convidados/atribuições relacionais e revisão transacional | Proposta técnica | [Modelo de dados](../modelo-de-dados.md) |

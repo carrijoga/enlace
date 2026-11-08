@@ -1,6 +1,6 @@
 # Roadmap de implementação
 
-Atualizado em 07/11/2026, com frontend Vercel e backend/PostgreSQL Railway. Fases 0 e 1 concluídas no escopo local. Fase 2 entregue funcionalmente, com aceite de desempenho e aparelhos reais ainda pendentes. Etapas posteriores são propostas, não funcionalidades entregues.
+Atualizado em 08/11/2026, com frontend Vercel e backend/PostgreSQL Railway. Fases 0 e 1 concluídas no escopo local. Fase 2 entregue funcionalmente, com aceite de desempenho e aparelhos reais ainda pendentes. Etapas posteriores são propostas, não funcionalidades entregues.
 
 ## Fase 0 — Diagnóstico e estrutura documental — concluída
 
@@ -22,7 +22,7 @@ Aceite local: página/API/proxy responderam, exemplo e download foram verificado
 
 Entregue: domínio testável, editor `/editor`, landing `/`, formatos/curvatura/corredor/fileiras, convidados/busca/categorias, atribuição/troca, desfazer/refazer, rascunho local protegido, JSON novo/v3, PNG geral/individual e impressão. Exemplos são fictícios e não incluem regras familiares pessoais. [Relatório](validacao-fase2.md).
 
-Pendências para fechar todo o aceite: reduzir p95 do cenário máximo (92,1 ms na troca de formato, meta 50 ms), ampliar medição para mover/selecionar/filtrar e verificar em celular físico. A medição atual é Windows/IAB desktop e emulação responsiva; não declarar a fase totalmente encerrada. Em seguida, fase 3: contas e persistência entre dispositivos.
+Atualização 08/11/2026: perfil do cenário máximo feito e benchmark ampliado (`scripts/bench-editor.js`) para formato, seleção de cadeira/pessoa, troca, filtro e busca. Após as otimizações (ADR-0005, SVG em pixels, lista com `content-visibility`), todas as ações ficaram com p95 ≤ 50 ms no desktop, medidas sem pintura. Pendências para fechar todo o aceite: repetir a medição com pintura (painel visível) e verificar em celular físico. Não declarar a fase totalmente encerrada antes disso. Em seguida, fase 3: contas e persistência entre dispositivos.
 
 Aceite:
 

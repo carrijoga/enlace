@@ -95,11 +95,38 @@
       selectedGuestId = null;
     if (
       selectedSeatId &&
-      !project?.layout.rows.some((r) =>
-        [...r.leftSeatIds, ...r.rightSeatIds].includes(selectedSeatId!),
+      !project?.layout.rows.some(
+        (r) => r.leftSeatIds.includes(selectedSeatId!) || r.rightSeatIds.includes(selectedSeatId!),
       )
     )
       selectedSeatId = null;
+  }
+  // Comparação barata: os comandos preservam referências do que não mudou, então convidados e
+  // atribuições são comparados item a item por referência/campos, sem serializar o projeto todo.
+  function sameItems<T extends object>(a: readonly T[], b: readonly T[]) {
+    return (
+      a === b ||
+      (a.length === b.length &&
+        a.every((item, index) => {
+          const other = b[index]!;
+          return (
+            item === other ||
+            Object.keys(item).every((key) => item[key as keyof T] === other[key as keyof T])
+          );
+        }))
+    );
+  }
+  function sameProject(a: CeremonyProject, b: CeremonyProject) {
+    return (
+      a === b ||
+      (a.title === b.title &&
+        a.weddingDate === b.weddingDate &&
+        a.couple.first === b.couple.first &&
+        a.couple.second === b.couple.second &&
+        (a.layout === b.layout || JSON.stringify(a.layout) === JSON.stringify(b.layout)) &&
+        sameItems(a.guests, b.guests) &&
+        sameItems(a.assignments, b.assignments))
+    );
   }
   function recordFrame(start: number) {
     void tick().then(() =>
@@ -126,10 +153,9 @@
     const start = performance.now();
     try {
       const next = action(project);
-      if (JSON.stringify(next) === JSON.stringify(project)) return true;
-      const displaced = project.assignments.filter(
-        (a) => !next.assignments.some((b) => b.guestId === a.guestId),
-      ).length;
+      if (sameProject(next, project)) return true;
+      const stillSeated = new Set(next.assignments.map((b) => b.guestId));
+      const displaced = project.assignments.filter((a) => !stillSeated.has(a.guestId)).length;
       if (protectPlaces && displaced) {
         ask(
           next,

@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { CeremonyProject } from '@enlace/contracts';
-  import { getSeatLabel } from '@enlace/domain';
+  import { getSeatLabels } from '@enlace/domain';
   import { GUEST_CATEGORIES, GUEST_CATEGORY_OPTIONS, type GuestCategory } from './guest-categories';
 
   type Guest = CeremonyProject['guests'][number];
@@ -43,11 +43,12 @@
   let pendingRemoval = $state<string | null>(null);
 
   const seatByGuest = $derived(new Map(project.assignments.map((a) => [a.guestId, a.seatId])));
+  const seatLabels = $derived(getSeatLabels(project.layout));
   const labelByGuest = $derived(
-    new Map(project.assignments.map((a) => [a.guestId, getSeatLabel(project, a.seatId)])),
+    new Map(project.assignments.map((a) => [a.guestId, seatLabels.get(a.seatId)])),
   );
 
-  const selectedSeatLabel = $derived(selectedSeatId ? getSeatLabel(project, selectedSeatId) : null);
+  const selectedSeatLabel = $derived(selectedSeatId ? seatLabels.get(selectedSeatId) : null);
   const selectedSeatGuestId = $derived(
     selectedSeatId
       ? (project.assignments.find((assignment) => assignment.seatId === selectedSeatId)?.guestId ??
@@ -561,6 +562,9 @@
     padding: 5px;
     border: 1px solid transparent;
     border-radius: 8px;
+    /* Linhas fora da área visível não entram em estilo/layout/pintura (300 convidados). */
+    content-visibility: auto;
+    contain-intrinsic-size: auto 52px;
   }
   .guest-row:focus-within {
     border-color: var(--guest-line);

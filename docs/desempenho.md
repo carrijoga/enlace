@@ -1,6 +1,6 @@
 # Desempenho e facilidade de uso
 
-Atualizado em 07/11/2026. **Status: metas do produto e primeira medição do editor local.** Frontend SvelteKit/TypeScript na Vercel; API Hono/Node e PostgreSQL privado na Railway. Landing: 37,69 KiB gzip; editor: 77,55 KiB. Troca de formato no desktop local: p95 12,1 ms no cenário comum e 92,1 ms no limite, acima da meta de 50 ms. Condições, amostras e pendências na [validação da fase 2](validacao-fase2.md). Não ampliar o orçamento para acomodar o desvio.
+Atualizado em 08/11/2026. **Status: metas do produto e medições do editor local.** Frontend SvelteKit/TypeScript na Vercel; API Hono/Node e PostgreSQL privado na Railway. Landing: 38,86 KiB gzip; editor: 79,09 KiB. Cenário máximo (288 cadeiras/300 convidados) no desktop local, após a otimização de 08/11: trocar formato, selecionar cadeira/pessoa, trocar ocupantes, filtrar e buscar com p95 ≤ 50 ms sem incluir pintura (modo `layout` de `scripts/bench-editor.js`); antes, 46,9–120,7 ms com pintura. Medição com pintura após a mudança e celular físico continuam pendentes. Condições, amostras e limites na [validação da fase 2](validacao-fase2.md). Não ampliar o orçamento para acomodar desvios.
 
 O resultado esperado é abrir o projeto rapidamente, editar a planta sem esperar a rede e encontrar as ações principais com facilidade. A escolha de framework ajuda a controlar o custo inicial, mas não comprova desempenho: tamanho entregue, renderização, consultas e comportamento em celular serão medidos na aplicação real.
 
@@ -12,7 +12,8 @@ O resultado esperado é abrir o projeto rapidamente, editar a planta sem esperar
 - Manter Drizzle, `node-postgres`, autenticação do Better Auth e credenciais no servidor. Não entregar o cliente do banco ao navegador.
 - Preferir CSS e componentes próprios simples. Avaliar cada dependência por necessidade, tamanho entregue e manutenção; não duplicar bibliotecas para a mesma função.
 - Vercel Web Analytics (`@vercel/analytics`) é a única medição de terceiros no navegador: `inject()` no layout raiz, só no browser. Não usar `@vercel/analytics/sveltekit`, que depende de `$app/environment`/`$app/stores`, removidos no SvelteKit 3. Coleta só ocorre com Web Analytics ativado no projeto Vercel.
-- Introduzir Redis, filas, Web Workers ou virtualização somente após medir um problema que os justifique.
+- Introduzir Redis, filas, Web Workers ou virtualização somente após medir um problema que os justifique. No cenário máximo, `content-visibility: auto` nas linhas de convidados e SVG com tamanho em pixels bastaram; virtualização da lista não foi necessária.
+- Comandos de domínio preservam referências do que não mudou (ADR-0005). Não comparar projetos serializando tudo nem devolver cópias profundas a cada edição.
 - Limitar snapshots de desfazer, rascunhos e arquivos de entrada. Revogar URLs temporárias e liberar recursos de exportação depois do uso.
 
 ## Metas iniciais
