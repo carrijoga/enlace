@@ -7,6 +7,22 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: enlace_test
+          POSTGRES_PASSWORD: enlace_test_local
+          POSTGRES_DB: enlace_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U enlace_test -d enlace_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://enlace_test:enlace_test_local@127.0.0.1:5432/enlace_test
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

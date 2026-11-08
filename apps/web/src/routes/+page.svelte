@@ -35,6 +35,10 @@
   <a class="header-link" href={resolve('/editor')}
     >Abrir meu planejamento <span aria-hidden="true">→</span></a
   >
+  <nav class="account-nav" aria-label="Acesso à conta">
+    <a href={resolve('/conta')}>Entrar</a>
+    <a href={resolve('/projetos')}>Meus projetos</a>
+  </nav>
 </header>
 
 <main>
@@ -145,6 +149,17 @@
     font-weight: 600;
     text-decoration: none;
   }
+  .account-nav {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-left: 20px;
+  }
+  .account-nav a {
+    color: #626e63;
+    font-size: 13px;
+    text-underline-offset: 4px;
+  }
   .header-link:hover,
   .site-footer a:hover {
     text-decoration: underline;
@@ -222,6 +237,15 @@
     font-size: 11px;
   }
   @media (max-width: 680px) {
+    .site-header {
+      flex-wrap: wrap;
+      gap: 12px;
+      padding-block: 16px;
+    }
+    .account-nav {
+      margin-left: auto;
+      gap: 10px;
+    }
     .header-link {
       font-size: 11px;
     }

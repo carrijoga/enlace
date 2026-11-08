@@ -1,71 +1,75 @@
 # Desenvolvimento e preparação de hospedagem
 
-Base da fase 1, 07/11/2026. Sem deploy, contas ou migrações de negócio executados.
+Atualizado em 08/11/2026. Base, editor local e integração de contas/persistência. Nenhum deploy remoto nesta entrega.
 
-## Ambiente e comandos
+## Ambiente
 
-Usar Node 24.22.1 e pnpm 12.18.0. Instalar pela raiz com `pnpm install --frozen-lockfile`. O lockfile do pnpm 12 contém dois documentos YAML (boot do gerenciador e dependências do workspace); não remover a primeira seção nem editar versões manualmente no lockfile.
+Node 24.22.1 e pnpm 12.18.0. `pnpm install --frozen-lockfile`; neste checkout o store existente fica em `.pnpm-store` (usar `--store-dir .pnpm-store` se necessário). O lockfile pnpm 12 contém dois documentos YAML e não deve ser editado manualmente.
+
+Neste Windows, se o PATH apontar a um shim que tenta baixar Node, o runtime já instalado fica em `C:/Users/gabri/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin`.
 
 | Comando na raiz | Efeito |
 | --- | --- |
-| `pnpm run dev` | Compila e observa contracts; inicia web em 5173 e API em 3001 |
-| `pnpm run dev:web` / `dev:api` | Compila contratos e inicia somente o app escolhido |
-| `pnpm run check` | Compila contratos e verifica tipos dos pacotes |
-| `pnpm run lint` / `format:check` | ESLint / Prettier |
-| `pnpm run test` | Testes Vitest de API, transporte e JSON |
-| `pnpm run build` | Contratos, API e frontend; no Windows, saída web para preview local |
-| `pnpm run build:api` | Contratos e API, sem precisar do frontend |
-| `pnpm run build:vercel` | Contratos e pacote completo do adaptador Vercel |
-| `pnpm --filter @enlace/web run preview` | Serve o build web local em 4173 |
-| `pnpm run measure:web` | Soma gzip dos chunks iniciais da rota `/` e verifica meta de 150 KiB |
+| `pnpm run dev` | Compila contratos/domínio e observa os dois pacotes, web 5173 e API 3001 |
+| `pnpm run dev:web` / `dev:api` | Inicia um app após compilar dependências compartilhadas |
+| `pnpm run check` / `lint` / `format:check` / `test` | Tipos, lint, formatação e testes |
+| `pnpm run build` | Build local; Windows gera preview da web |
+| `pnpm run build:api` | Contratos e API |
+| `pnpm run build:vercel` | Pacote completo Vercel; executar Linux/CI |
+| `pnpm --filter @enlace/web run preview` | Preview web 4173 |
+| `pnpm run measure:web` | Mede JS inicial produção; opção de rota conforme script |
+| `pnpm run db:up` / `db:check` / `db:down` | Sobe, verifica ou para PostgreSQL local, preservando volume |
+| `pnpm run db:generate` | Gera mudança SQL/metadata a partir do schema Drizzle; revisar antes de aplicar |
+| `pnpm run db:migrate` | Aplica migrações versionadas com credencial explícita; nunca durante build/requisição |
 
-Ao editar contratos com somente um app em execução, compile-os novamente ou mantenha `pnpm --filter @enlace/contracts run dev` em outro terminal. O comando conjunto já faz isso.
+O adaptador Vercel exige symlinks que falham neste Windows. O sucesso de `build` local não comprova `build:vercel`; a CI exige o segundo.
 
-O adaptador Vercel exige links simbólicos de funções e falhou com EPERM neste Windows. O build padrão aqui compila/prerenderiza para o preview, sem empacotar o adaptador. A CI Linux e a configuração Vercel exigem `build:vercel`; ainda não foram executadas remotamente. Não é necessário mudar permissões do sistema para trabalhar localmente.
+## Configuração local
 
-## Variáveis e PostgreSQL local
-
-O editor local está em `/editor`; `/` é a landing. Ambos funcionam sem banco e sem API para editar. O rascunho fica na chave `enlace:draft:anonymous:v1` do localStorage da origem; porta/domínio diferentes têm rascunhos diferentes. Use exportar/importar JSON para transportar dados até existir conta/sincronização. `packages/domain` precisa ser compilado junto com contracts; os scripts da raiz já incluem ambos. A geração de PNG carrega sob demanda e não faz upload.
-
-Os exemplos contêm apenas valores fictícios. Copie os exemplos somente se o destino ainda não existir:
-
-```powershell
-if (!(Test-Path apps/web/.env)) { Copy-Item apps/web/.env.example apps/web/.env }
-if (!(Test-Path apps/api/.env)) { Copy-Item apps/api/.env.example apps/api/.env }
-```
+A landing `/` e `/editor` anônimo continuam funcionando sem conta/banco. Copie `.env.example` de cada app somente se `.env` ainda não existir; não comite credenciais.
 
 | App | Variável | Uso |
 | --- | --- | --- |
-| Web | `API_ORIGIN` | Origem da API no servidor. Local: `http://localhost:3001`; obrigatória e HTTPS em produção. Não usar prefixo público. |
-| API | `PORT` | Porta Railway ou 3001 local |
-| API | `WEB_ORIGIN` | Origem exata permitida pelo CORS; local `http://localhost:5173`, HTTPS em produção |
-| API | `DATABASE_URL` | Conexão PostgreSQL exclusiva da API; obrigatória em produção |
-| API | `NODE_ENV` | `development` local; `production` na Railway |
+| Web | `API_ORIGIN` | Destino fixo do proxy, somente servidor; local `http://localhost:3001`; HTTPS obrigatório em produção |
+| API | `PORT` | 3001 local ou porta da Railway |
+| API | `WEB_ORIGIN` | Origem pública exata da web, incluindo porta local; HTTPS obrigatório em produção |
+| API | `DATABASE_URL` | Conexão privada exclusiva da API |
+| API | `BETTER_AUTH_SECRET` | Segredo aleatório com pelo menos 32 caracteres; obrigatório em produção |
+| API | `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM` | Transporte de recuperação de senha; sem esses valores o recurso é indisponível |
+| API | `SMTP_USER`, `SMTP_PASSWORD` | Credenciais SMTP quando o transporte as exigir |
+| API | `NODE_ENV` | `production` na Railway |
+| Migração | `PG_MIGRATOR_ROLE` | Role explícita opcional do runner; credencial deve possuir essa associação |
+| Testes | `TEST_DATABASE_URL` | Banco descartável/local de teste; suites criam schemas isolados e os removem ao concluir |
 
-A API carrega `.env` pelo Node; a configuração Vite carrega o `.env` local da web com a API nativa do Node, preservando variáveis já definidas no ambiente. Em produção, configurar as variáveis nas hospedagens. Reiniciar o processo ao mudar essas configurações.
+A API carrega `.env` pelo Node e a web pela configuração Vite. Reinicie após mudar variáveis. Para gerar o segredo, use gerador criptográfico local e armazene somente no ambiente. Sem segredo/banco, autenticação responde indisponível; não há login fictício.
 
-Com Docker Desktop/daemon em execução:
+Com Docker Desktop ativo, `pnpm run db:up` usa explicitamente `docker-compose.yml`. PostgreSQL 17 escuta apenas `127.0.0.1:5432`, em volume nomeado. Os dados/credenciais de Compose são exclusivos de desenvolvimento. O daemon foi iniciado e o banco real validado nesta entrega; nenhuma infraestrutura remota foi criada.
 
-```powershell
-pnpm run db:up
-pnpm run db:check
-pnpm run db:down
-```
+Aplique `pnpm run db:migrate` com `DATABASE_URL` do ambiente de migração, depois inicie os apps. Contas em `/conta`, lista em `/projetos`, editor remoto em `/editor?project=UUID`. Para preview local com API HTTP, iniciar o comando de preview com `NODE_ENV=development` (o bundle já é de produção); a validação HTTPS permanece obrigatória no ambiente hospedado. Para preview em 4173, a API precisa de `WEB_ORIGIN=http://localhost:4173`; origem diferente deve ser recusada.
 
-PostgreSQL 17 fica em `127.0.0.1:5432` com volume nomeado. Os scripts usam explicitamente `docker-compose.yml`, pois outros arquivos Compose foram adicionados durante o trabalho e foram preservados. `db:down` apenas para o serviço, preservando o volume. O daemon Docker não estava ativo nesta sessão; não foram executados container, conexão real ou migrações.
+## Sessão, rascunhos e testes
 
-`GET /health` verifica o processo da API sem depender do banco. `GET /ready` executa `SELECT 1`, devolvendo 200 quando disponível e 503 sem expor detalhes quando não configurado/indisponível. Health positivo não comprova autenticação ou persistência de projetos.
+O proxy encaminha cookies de primeira parte sem expor o destino ao cliente. `WEB_ORIGIN` também define o endereço público dos links de recuperação. Não configurar origem de API como origem pública de autenticação. Respostas privadas usam `no-store`.
 
-## Configurações de futuro deploy
+O rascunho anônimo usa `enlace:draft:anonymous:v1`; os remotos têm prefixo isolado por conta e projeto. Nenhum token é armazenado junto do rascunho. JSON permite backup manual; PNG não faz upload. Logout limpa a recuperação local da conta.
 
-Vercel: selecionar `apps/web` como Root Directory e permitir fontes do workspace fora desse diretório. `apps/web/vercel.json` instala pela raiz e executa `build:vercel`. Definir `API_ORIGIN` como a origem HTTPS da API Railway. Não colocar `DATABASE_URL` na Vercel.
+Para testes PostgreSQL, defina `TEST_DATABASE_URL` e execute `pnpm test`. Sem a variável, suites integradas são explicitamente ignoradas; isso não comprova persistência. A CI inclui serviço PostgreSQL 17. Testes usam somente contas/dados fictícios, incluindo captura local de recuperação de senha sem envio externo.
 
-Erro conhecido: `STATIC_BUILD_NO_OUT_DIR` ("No Output Directory named public") após o adaptador imprimir `✔ done` indica Root Directory na raiz do repositório. O adaptador grava `apps/web/.vercel/output`, mas a Vercel procura `.vercel/output` no Root Directory e cai no preset estático. Corrigir no painel: Root Directory `apps/web`, Framework Preset SvelteKit, Output Directory sem override; depois fazer redeploy sem cache.
+## Migrações e permissões
 
-Railway: raiz do repositório como diretório de build; `railway.toml` declara Railpack, compila contracts + API, inicia somente a API e usa `/health`. Configurar Node 24, `NODE_ENV`, `WEB_ORIGIN` e a `DATABASE_URL` privada do PostgreSQL no mesmo ambiente/região. Antes de publicar, revisar a detecção do `Dockerfile` raiz acrescentado paralelamente: ele não faz parte da configuração da API desta entrega e pode influenciar a seleção de builder. Não aplicar a configuração Vercel à API. Região, orçamento e recursos seguem pendentes.
+Schema de autenticação em `apps/api/src/auth-schema.ts`; negócio em `apps/api/src/db/schema.ts`; SQL e metadata em `apps/api/drizzle`. Rever SQL e migração anterior antes de aplicar. O runner usa lock e registro de aplicação, transação e credencial separada. Não executar `drizzle-kit push` no ambiente de produção.
 
-O proxy da web implementa somente `/api/health` com destino fixo. Antes da fase de contas, desenhar/testar o transporte de autenticação e projetos com cookies de primeira parte, origem, limites e erros. Não expor um proxy para destinos arbitrários.
+`apps/api/drizzle/roles.sql` é preparação administrativa explícita, não migração automática: roles sem login, associação às credenciais fora do repositório. A credencial de runtime deve ser NOSUPERUSER/NOCREATEDB/NOCREATEROLE e ter somente DML nas tabelas da aplicação, sem alteração do registro de migrações. Migrações devem criar objetos sob a role de migração para os grants padrão valerem. Validar privilégios efetivos antes de publicar.
 
-## Processo de futuras migrações
+## Vercel e Railway
 
-A fase 1 prepara driver, pool e Drizzle, sem inventar tabelas ou migrações vazias. Na fase 3: escolher/gerar o schema de autenticação compatível; definir tabelas e constraints do modelo; adicionar Drizzle Kit e scripts de geração/aplicação; revisar SQL; aplicar primeiro em PostgreSQL local/teste; ensaiar isolamento/transações; então configurar migração pré-deploy com credencial separada, timeout e compatibilidade com a versão em execução. Não rodar migração por requisição ou durante build que não tem rede privada.
+Vercel: Root Directory `apps/web`, acesso a fontes externas do workspace, Framework Preset SvelteKit, Output Directory sem override. `apps/web/vercel.json` instala pela raiz e executa `build:vercel`. Configurar `API_ORIGIN` HTTPS da API. Não colocar `DATABASE_URL` na Vercel.
+
+`STATIC_BUILD_NO_OUT_DIR` após sucesso do adaptador indica frequentemente Root Directory na raiz; a saída correta fica em `apps/web/.vercel/output`. Corrigir Root Directory e refazer deploy sem cache quando publicação for autorizada.
+
+Railway: raiz do repositório, Railpack, `railway.toml`, Node 24, build/start da API, `/health`. Configurar `NODE_ENV`, `WEB_ORIGIN`, segredo e PostgreSQL privado no mesmo ambiente/região. Revisar o Dockerfile raiz adicionado em paralelo pelo usuário antes de publicar; ele não define o build desta API. Migração deve ocorrer em etapa própria com credencial separada e conectividade privada.
+
+`/health` confirma processo; `/ready` verifica `SELECT 1`. Validar cookies, origem e links de recuperação através da hospedagem real antes do aceite remoto. Limitação atual: contadores de autenticação são compartilhados por endpoint, pois cabeçalhos IP externos não são confiáveis. Definir cadeia de proxies confiável e proteção por cliente antes da exposição pública.
+
+Região, orçamento, domínio, SMTP real, backup/restauração e publicação continuam pendentes. Evidências e limites em [validação fase 3](validacao-fase3.md).
+

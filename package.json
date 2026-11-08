@@ -24,7 +24,9 @@
     "measure:web": "node scripts/measure-web.mjs",
     "db:up": "docker compose -f docker-compose.yml up -d postgres",
     "db:down": "docker compose -f docker-compose.yml stop postgres",
-    "db:check": "pnpm --filter @enlace/api db:check"
+    "db:check": "pnpm --filter @enlace/api db:check",
+    "db:migrate": "pnpm --filter @enlace/api run db:migrate",
+    "db:generate": "pnpm --filter @enlace/api run db:generate"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

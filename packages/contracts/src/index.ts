@@ -323,3 +323,39 @@ export function createDemoDocument(): ProjectDocument {
     project,
   });
 }
+const revisionSchema = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+export const projectSummarySchema = z
+  .object({
+    id: z.uuid(),
+    title: z.string().min(1).max(120),
+    revision: revisionSchema,
+    updatedAt: z.iso.datetime(),
+  })
+  .strict();
+export const projectWriteResponseSchema = projectSummarySchema.omit({ title: true });
+export const projectSnapshotSchema = projectWriteResponseSchema.extend({
+  project: ceremonyProjectSchema,
+});
+export const projectListResponseSchema = z
+  .object({ projects: z.array(projectSummarySchema) })
+  .strict();
+export const createProjectRequestSchema = z
+  .object({
+    id: z.uuid(),
+    operationId: z.uuid(),
+    project: ceremonyProjectSchema,
+  })
+  .strict();
+export const saveProjectRequestSchema = z
+  .object({
+    expectedRevision: revisionSchema,
+    operationId: z.uuid(),
+    project: ceremonyProjectSchema,
+  })
+  .strict();
+export const deleteProjectRequestSchema = z.object({ expectedRevision: revisionSchema }).strict();
+export type ProjectSummary = z.infer<typeof projectSummarySchema>;
+export type ProjectSnapshot = z.infer<typeof projectSnapshotSchema>;
+export type ProjectWriteResponse = z.infer<typeof projectWriteResponseSchema>;
+export type CreateProjectRequest = z.infer<typeof createProjectRequestSchema>;
+export type SaveProjectRequest = z.infer<typeof saveProjectRequestSchema>;

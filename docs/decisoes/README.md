@@ -19,3 +19,7 @@ Atualizado em 08/11/2026. Use ADRs numerados com contexto, decisão, status e co
 O ADR-0003 registra a direção atual. Antes de adicionar integrações, validar e fixar versões compatíveis; mudanças relevantes de direção exigem atualizar o registro. Não é necessário interromper o trabalho para escolhas rotineiras já autorizadas pelo escopo; documente a decisão e avance.
 
 Não decididos: região e recursos na Railway, orçamento, transporte de e-mail, versões das integrações, identidade visual final, domínio público, modelo comercial, colaboração entre contas e suporte a múltiplos cenários dentro do mesmo projeto.
+
+## 0007 — Contas e salvamento transacional
+
+[ADR-0007](0007-contas-e-salvamento-transacional.md): aceita para implementação local da fase 3. Better Auth, proxy same-origin, agregado relacional, revisões e recibos de operação. Validação remota e transporte de e-mail permanecem dependentes de ambiente.

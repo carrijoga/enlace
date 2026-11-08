@@ -61,3 +61,19 @@ const demo = createDemoDocument(); // dados fictícios, sem participantes reais
 ## Limite de responsabilidade
 
 O mesmo pacote de schemas deve ser usado pela interface e pela API para evitar divergência de formato. A validação no navegador melhora o feedback, mas não é uma barreira de segurança: a API deve validar novamente entradas não confiáveis no servidor e aplicar sessão, autorização por proprietário, integridade transacional e controle de concorrência antes de persistir no PostgreSQL. Na implantação planejada, a interface fica na Vercel e a API com o PostgreSQL privado fica na Railway; o navegador não recebe acesso direto ao banco.
+
+## Transporte autenticado — fase 3
+
+O formato portátil JSON v1 permanece inalterado. O transporte remoto tem schemas estritos separados no mesmo pacote:
+
+| Operação | Entrada | Resposta |
+| --- | --- | --- |
+| `GET /api/projects` | Sessão por cookie | `{ projects: [{ id, title, revision, updatedAt }] }` |
+| `POST /api/projects` | `{ id, operationId, project }` | `{ id, revision, updatedAt, project }` |
+| `GET /api/projects/:id` | Sessão por cookie | `{ id, revision, updatedAt, project }` |
+| `PUT /api/projects/:id` | `{ expectedRevision, operationId, project }` | `{ id, revision, updatedAt }` |
+| `DELETE /api/projects/:id` | `{ expectedRevision }` | `204` |
+
+IDs de projeto/operação são UUIDs. Revisões são inteiros positivos seguros; timestamps são ISO UTC. Campos de proprietário são recusados: a API determina a identidade pela sessão. Erros usam `{ error: código }`: `unauthenticated` (401), `not_found` (404), `revision_conflict`/`operation_reused` (409) e `invalid_request` (400). Indisponibilidade não deve ser tratada como confirmação de salvamento.
+
+Exports: `createProjectRequestSchema`, `saveProjectRequestSchema`, `deleteProjectRequestSchema`, `projectSummarySchema`, `projectSnapshotSchema`, `projectListResponseSchema`, `projectWriteResponseSchema` e os tipos correspondentes. A revisão remota não entra no arquivo exportado. O recibo de repetição de PUT confirma sua revisão original; o conteúdo atual exige GET separado. Ver [ADR-0007](decisoes/0007-contas-e-salvamento-transacional.md).

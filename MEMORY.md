@@ -2,6 +2,16 @@
 
 Atualizado em 08/11/2026, America/Sao_Paulo.
 
+## Fase 3 concluída localmente — 08/11/2026
+
+Implementação (agent anterior, tokens esgotados antes de fechar) revisada e validada nesta sessão por Claude. Better Auth e-mail/senha, proxy same-origin `/api/*`, Drizzle schema + migrações SQL (0000 baseline, 0001 remove índice de recibos — estava vazia, corrigida), roles `enlace_runtime`/`enlace_migrator`, API de projetos por proprietário com `expectedRevision` + `operationId`, telas `/conta` e `/projetos`, editor remoto em `/editor?project=UUID` com conflito visível e rascunho por conta/projeto. ADR-0007.
+
+Validação: check/lint/format ok; 64 testes unitários; 36 integrados com PostgreSQL 17 real (Docker local, `TEST_DATABASE_URL`, `TEST_CREATE_DATABASE=1`). Navegador: criar conta, criar projeto, salvar (rev 2), conflito com outro dispositivo, salvar como cópia, isolamento entre contas (401/404). Corrigidos: `rawAccountDraft` sem `$state` (bloco de recuperação não aparecia), import não usado, formatação, tela presa em "Preparando seu espaço…" com aviso de sincronização falso ao abrir projeto negado/sem sessão. Detalhes e limites em docs/validacao-fase3.md.
+
+Pendente (dependente de ambiente, fica para fase 5): cookies/origem Vercel↔Railway em HTTPS, SMTP real, aparelho físico. Decidir se sair deve limpar rascunhos da conta no localStorage (computador compartilhado). Acessibilidade de /conta e /projetos não auditada.
+
+Execução local da fase 3: `pnpm run db:up`, `pnpm run db:migrate`, `apps/api/.env` e `apps/web/.env` (ignorados) e configs `api-dev` (3011) / `web-dev` (5183) em `.claude/launch.json`. Portas 3001/5173 estavam ocupadas por servidores antigos do agent anterior. Credenciais de teste: contas fictícias @example.test com senha aleatória (não reutilizáveis).
+
 ## Estado atual
 
 Fase 2 concluída em 08/11/2026 (ADR-0006): landing `/` e editor local `/editor`. Desempenho no limite otimizado em 08/11: p95 ≤ 50 ms no desktop com e sem pintura (modo frame, painel visível, pior p95 37,1 ms). Celular físico (Android, Chrome 156, execução 1): formato p95 62 e filtro 57,6 acima da meta; busca 49,4, troca 46,5, seleções ~30. Corrigido filtro/busca (linhas sempre montadas + `hidden`) e reduzido o script da troca de formato. A/B no mesmo celular (antigo×novo, ABBA): correção melhora p95 de filtro (86→69) e busca (77→57), resto igual; mas neste aparelho quase todas as ações ficam em ~50–70 ms de p95 (variação grande entre execuções). Decisão do usuário (ADR-0006): orçamento 50 ms mantido, aceite pelo desktop de referência, este celular registrado como limite conhecido; classe de celular de referência e otimização para aparelhos de entrada ficam para a fase 5. Frontend Vercel, API Hono/Node e PostgreSQL privado Railway. Sem Supabase, push, deploy ou provisionamento.
@@ -10,11 +20,11 @@ Branch `codex/ceremony-editor`. Commits locais: `91fab30` (base fase 1), `60f329
 
 ## Implementado
 
-- pnpm workspace, Node 24.22.1 / pnpm 12.18.0 / TS 6, SvelteKit 3 / Svelte 5 / Vite 8, Hono, Drizzle/pg. Configuração Vercel/Railway, health/readiness, proxy GET /api/health, pool lazy e Compose PostgreSQL 17 preparados. Sem schema/migrações de negócio, autenticação ou API de projeto.
+- pnpm workspace, Node 24.22.1 / pnpm 12.18.0 / TS 6, SvelteKit 3 / Svelte 5 / Vite 8, Hono, Drizzle/pg. Configuração Vercel/Railway, health/readiness, proxy GET /api/health, pool lazy e Compose PostgreSQL 17 preparados. Fase 3 acrescentou schema/migrações, Better Auth e API de projetos (ver seção da fase 3).
 - Contratos Zod estritos, JSON enlace-project/schemaVersion 1, parser/migração v3, limites/UUIDs/referências validados.
 - packages/domain: geometria tradicional/meia-lua, corredor, fileiras e assentos; comandos puros imutáveis, atribuir/mover/trocar sem duplicar ocupantes, remover lugares preservando convidados.
 - Editor: estrutura, casal/data, convidados/categorias/busca, clique/toque/teclado e implementação de arrastar; zoom/ajuste, desfazer/refazer 35 entradas, confirmação de mudanças estruturais com perda de lugares.
-- Rascunho anônimo local por origem, debounce 250 ms, erro/quota e recuperação explícita de rascunho corrompido; snapshots sem proxies profundos. Não existe sincronização entre dispositivos.
+- Rascunho anônimo local por origem, debounce 250 ms, erro/quota e recuperação explícita de rascunho corrompido; snapshots sem proxies profundos. Com conta, o editor sincroniza com a API (fase 3); o rascunho anônimo continua separado.
 - JSON novo/v3, PNG geral/individual lazy e impressão. Individual mostra só destinatário/cadeira e geometria neutra. Mapa geral abrevia nome/sobrenome em duas linhas para não sobrepor vizinhos.
 - Vercel Web Analytics via `inject()` em `apps/web/src/routes/+layout.svelte` (helper SvelteKit incompatível com Kit 3; aviso de peer esperado). Ativação no painel Vercel e verificação em deploy pendentes. Instalação local usa `--store-dir .pnpm-store` (store do `node_modules` atual).
 - Otimização 08/11 (ADR-0005): comandos de domínio validam mas devolvem o objeto do comando (compartilhamento estrutural, sem cópia profunda do Zod); `getSeatLabels`; editor compara sem `JSON.stringify`; centralização da planta depende só da largura; SVG em pixels via `bind:offsetWidth/offsetHeight` (percentual fazia o Chrome refazer layout das 288 cadeiras); linhas de convidados com `content-visibility: auto`; lista sempre montada, filtro/busca só alternam `hidden`; `PlanCanvas` itera lista de cadeiras estável e só o `transform` lê as posições novas. Custo restante do formato: layout/pintura das 576 legendas SVG. Benchmark reproduzível em `scripts/bench-editor.js`; ensaio em celular via `scripts/bench-phone.html`.
@@ -28,7 +38,7 @@ JS inicial produção (08/11): landing 39.812 bytes/38,88 KiB gzip; editor 81.15
 
 Subagents econômicos gpt-6-luna: domínio, arquivos, painéis, landing, medição, revisão e documentação. Revisor aprovou interface/código no escopo de capturas e confirmou integridade das otimizações. Inspeção do PNG geral revelou sobreposição de nomes; correção em duas linhas incluída nesta entrega. Motor/detector Impeccable indisponível por cache/permissões; fallback manual, sem auditoria completa de acessibilidade. Ver relatório para alcance exato da revisão.
 
-Windows bloqueia symlinks do pacote Vercel: build local gera preview; `build:vercel` aguarda Linux/CI. Docker daemon não estava ativo; sem banco real testado. Impressora física, arrastar automatizado, offline, export repetido/memória e celular físico não verificados. Better Auth é recomendação fase 3, não instalada. CSV fase 4.
+Windows bloqueia symlinks do pacote Vercel: build local gera preview; `build:vercel` aguarda Linux/CI. (Fase 2.) Impressora física, arrastar automatizado, offline, export repetido/memória e celular físico não verificados. CSV fase 4.
 
 ## Como retomar
 
@@ -38,7 +48,7 @@ Neste ambiente o `node` do PATH pode ser shim pnpm que tenta baixar runtime. Par
 
 ## Próximo passo concreto
 
-Fase 3: PostgreSQL real, schema/migrações, contas/sessões, consultas por proprietário, transações/revisões e integração do editor com conflitos/falhas verificáveis. Não provisionar recursos pagos nem publicar como efeito colateral. Para repetir ensaios de desempenho: `scripts/bench-editor.js` (console de `/editor`, semear em `/` antes) e `scripts/bench-phone.html` (copiar para `apps/web/.svelte-kit/output/client/bench.html` após o build, configuração local `web-preview-lan` do `.claude/launch.json`, reiniciar o preview após cada build; no IP da rede local adicionar convidado/fileira falha por falta de `crypto.randomUUID`).
+Fase 4: CSV com prévia, mapeamento de colunas, política de duplicidade e erros por linha (nada gravado antes de confirmar); round-trip JSON contra o modelo atual; importar como novo projeto na conta. Fase 3 commitada (feat(fase3)). Não provisionar recursos pagos nem publicar como efeito colateral. Para repetir ensaios de desempenho: `scripts/bench-editor.js` e `scripts/bench-phone.html` (ver docs/desempenho.md).
 
 Questões futuras: colaboração entre contas, cenários alternativos, medidas reais/altar livre, regras familiares configuráveis, e-mail, domínio, região/recursos/orçamento. ADR-0004 registra rotas, editor local e commits por entrega coesa; fases são marcos.
 
@@ -51,3 +61,4 @@ Preservados sem incluir nos commits: Dockerfile, .dockerignore, compose.yaml, co
 Original privado ignorado: prototypes/private/Planejador-da-Cerimonia-v3.html, 62.046 bytes, SHA256 7d9f86a0b89b33f6113efa4ff14f8765882a1351b0e727476866d93d813d2426. Fonte Downloads; não publicar, nem usar dados pessoais como fixture. Diagnóstico histórico permanece separado das melhorias novas.
 
 Nenhum subagent com implementação pendente ao encerrar.
+

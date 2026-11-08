@@ -35,7 +35,9 @@ Aceite:
 
 Trabalho paralelo possível após os contratos: domínio/geometria; interface/editor; importadores/exportadores. Cada agent fica com arquivos exclusivos; alterações em contratos são integradas pelo coordenador.
 
-## Fase 3 — Contas e persistência na nuvem
+## Fase 3 — Contas e persistência na nuvem — concluída localmente; aceite hospedado pendente
+
+Estado 08/11/2026 ([ADR-0007](decisoes/0007-contas-e-salvamento-transacional.md), [validação](validacao-fase3.md)): Better Auth (e-mail/senha), proxy same-origin, schema/migrações versionadas, roles runtime/migração, API de projetos por proprietário com revisão esperada e recibos de operação, telas `/conta` e `/projetos`, editor sincronizado com conflito visível e rascunho por conta/projeto. 36 testes integrados com PostgreSQL real passaram e o fluxo conta → projeto → salvar → conflito → cópia → isolamento entre contas foi verificado no navegador. Pendente, dependente de ambiente: cookies/origem Vercel↔Railway em HTTPS, SMTP real e reabertura em aparelho físico. Esses itens são verificados quando houver ambiente de teste (fase 5); a fase 4 pode começar.
 
 Completar a preparação PostgreSQL com banco real, schema/migrações Drizzle versionadas, Better Auth, autorização por proprietário na API e operações transacionais. Implementar transporte frontend→API de autenticação/projetos e conectar o editor ao salvamento com revisão esperada e recuperação de falhas. Validar cookies/origem entre Vercel e Railway. Não provisionar/publicar como efeito colateral.
 

@@ -6,7 +6,7 @@ Planejamento visual de cerimônias de casamento: visualizar altar, corredor, fil
 
 Base executável e editor local da fase 2, criados em 07/11/2026: frontend SvelteKit para Vercel, API Hono/Node para Railway, contratos JSON e domínio compartilhados. O protótipo HTML permanece como referência privada.
 
-A rota `/` é a landing page; `/editor` configura a planta, organiza convidados e lugares, desfaz/refaz, salva um rascunho neste navegador e importa/exporta JSON novo ou legado v3. Exporta PNG completo e individual e oferece impressão. Contas, salvamento na nuvem e CSV são próximos passos. Nenhum deploy foi realizado. Evidências e pendências em [validação do editor](docs/validacao-fase2.md).
+A rota `/` é a landing page; `/editor` configura a planta, organiza convidados e lugares, desfaz/refaz, salva um rascunho neste navegador e importa/exporta JSON novo ou legado v3. Exporta PNG completo e individual e oferece impressão. Contas (`/conta`), lista de projetos (`/projetos`) e salvamento na conta com detecção de conflito funcionam localmente com PostgreSQL; validação hospedada pendente ([validação da fase 3](docs/validacao-fase3.md)). CSV é o próximo passo. Nenhum deploy foi realizado. Evidências e pendências em [validação do editor](docs/validacao-fase2.md).
 
 ## Executar localmente
 
@@ -43,6 +43,7 @@ No Windows, `build` gera o build de produção para preview local. O pacote Verc
 | [Desenvolvimento](docs/desenvolvimento.md) | Comandos, ambientes e preparação Vercel/Railway |
 | [Validação da base](docs/validacao-fase1.md) | Evidências, medições e limites desta entrega |
 | [Validação do editor](docs/validacao-fase2.md) | Fluxos locais, imagens e medições da fase 2 |
+| [Validação de contas](docs/validacao-fase3.md) | Contas, persistência, conflitos e isolamento da fase 3 |
 | [Design](DESIGN.md) | Tokens e direção herdados do protótipo |
 | [Desempenho](docs/desempenho.md) | Metas de leveza, resposta da edição e facilidade de uso |
 | [Roadmap](docs/roadmap.md) | Ordem de implementação e critérios de aceite |

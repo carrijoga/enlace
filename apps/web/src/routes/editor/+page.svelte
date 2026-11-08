@@ -4,6 +4,10 @@
   import {
     parseProjectFile,
     MAX_PROJECT_FILE_BYTES,
+    projectSnapshotSchema,
+    projectWriteResponseSchema,
+    type ProjectSnapshot,
+    type SaveProjectRequest,
     type CeremonyProject,
   } from '@enlace/contracts';
   import {
@@ -26,7 +30,20 @@
   import StructurePanel from '../../lib/editor/StructurePanel.svelte';
   import GuestsPanel from '../../lib/editor/GuestsPanel.svelte';
   import { GUEST_CATEGORIES, type GuestCategory } from '../../lib/editor/guest-categories';
-  import { loadDraft, saveDraft } from '../../lib/editor/files/drafts';
+  import {
+    accountDraftKey,
+    loadAccountDraft,
+    loadDraft,
+    saveAccountDraft,
+    saveDraft,
+    type AccountDraft,
+  } from '../../lib/editor/files/drafts';
+  import { readSession, type AccountSession } from '../../lib/account/client';
+  import {
+    selectWriteRequest,
+    stateAfterAcknowledgement,
+    writesBlocked,
+  } from '../../lib/editor/remote-sync';
 
   type ProjectAction = (current: CeremonyProject) => CeremonyProject;
   // Comandos de domínio substituem snapshots imutáveis: não observar cada campo.
@@ -37,7 +54,9 @@
   let selectedSeatId = $state<string | null>(null);
   let mobilePanel = $state<'structure' | 'guests'>('structure');
   let zoom = $state(0);
-  let status = $state<'pending' | 'saved' | 'error' | 'blocked'>('pending');
+  let status = $state<'pending' | 'saved' | 'error' | 'blocked' | 'conflict' | 'expired'>(
+    'pending',
+  );
   let feedback = $state('');
   let feedbackError = $state(false);
   let rawDraft = $state<string | null>(null);
@@ -55,6 +74,16 @@
   } | null>(null);
   let editTimes = $state<number[]>([]);
   let exporting = $state<string | null>(null);
+  let accountSession = $state<AccountSession | null>(null);
+  let projectId = $state<string | null>(null);
+  let revision = $state<number | null>(null);
+  let conflictSnapshot = $state<ProjectSnapshot | null>(null);
+  let retryRequest: SaveProjectRequest | null = null;
+  let savingRemote = false;
+  let accountKey: string | null = null;
+  let remoteReady = false;
+  let accountDraftCorrupt = false;
+  let rawAccountDraft = $state<string | null>(null);
   const geometry = $derived(project ? getLayoutGeometry(project.layout) : null);
   const total = $derived(geometry?.seats.length ?? 0);
   const assigned = $derived(project?.assignments.length ?? 0);
@@ -73,6 +102,11 @@
     feedbackError = error;
   }
   function saveNow() {
+    if (projectId) {
+      if (!accountDraftCorrupt && project && accountSession && revision !== null && accountKey)
+        persistAccountDraft();
+      return;
+    }
     if (!project || !allowSave) return;
     try {
       saveDraft(window.localStorage, project);
@@ -82,6 +116,18 @@
     }
   }
   function queueSave() {
+    if (projectId) {
+      if (!remoteReady) return;
+      if (status === 'conflict' || status === 'expired') {
+        persistAccountDraft();
+        return;
+      }
+      status = 'pending';
+      persistAccountDraft();
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => void sendRemote(), 500);
+      return;
+    }
     if (!allowSave) {
       status = 'blocked';
       return;
@@ -89,6 +135,277 @@
     status = 'pending';
     clearTimeout(saveTimer);
     saveTimer = setTimeout(saveNow, 250);
+  }
+  function persistAccountDraft() {
+    if (accountDraftCorrupt || !project || !accountKey || revision === null) return;
+    try {
+      const draft: AccountDraft = {
+        baseRevision: revision,
+        project,
+        dirty: status !== 'saved',
+        ...(retryRequest ? { pending: retryRequest } : {}),
+      };
+      saveAccountDraft(window.localStorage, accountKey, draft);
+    } catch {
+      status = 'error';
+      announce(
+        'Não foi possível guardar o rascunho desta conta neste navegador. Baixe uma cópia em JSON.',
+        true,
+      );
+    }
+  }
+  async function sendRemote() {
+    if (
+      !project ||
+      !projectId ||
+      revision === null ||
+      !remoteReady ||
+      savingRemote ||
+      writesBlocked(status)
+    )
+      return;
+    const request = selectWriteRequest<CeremonyProject>(retryRequest, () => ({
+      expectedRevision: revision!,
+      operationId: crypto.randomUUID(),
+      project: project!,
+    }));
+    retryRequest = request;
+    persistAccountDraft();
+    savingRemote = true;
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}`, {
+        method: 'PUT',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(request),
+      });
+      if (response.status === 401) {
+        status = 'expired';
+        announce(
+          'Sua sessão expirou. Entre novamente; o rascunho desta conta continua guardado neste navegador.',
+          true,
+        );
+        return;
+      }
+      if (response.status === 409) {
+        status = 'conflict';
+        const remote = await fetch(`/api/projects/${encodeURIComponent(projectId)}`, {
+          credentials: 'same-origin',
+        });
+        if (remote.ok) conflictSnapshot = projectSnapshotSchema.parse(await remote.json());
+        announce(
+          'Este projeto foi alterado em outro dispositivo. Suas mudanças locais estão preservadas.',
+          true,
+        );
+        return;
+      }
+      if (!response.ok) throw new Error('Não foi possível sincronizar agora.');
+      const saved = projectWriteResponseSchema.parse(await response.json());
+      revision = saved.revision;
+      retryRequest = null;
+      const afterAck = stateAfterAcknowledgement(project, request.project, sameProject);
+      status = afterAck;
+      persistAccountDraft();
+      if (afterAck === 'saved') {
+        status = 'saved';
+        announce('Projeto salvo na sua conta.');
+      } else {
+        status = 'pending';
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(() => void sendRemote(), 0);
+      }
+    } catch {
+      // Keep the exact operation and body for a safe retry after an ambiguous network result.
+      status = 'error';
+      persistAccountDraft();
+      announce(
+        'Não foi possível confirmar o salvamento. Tente novamente; a mesma alteração será reenviada com segurança.',
+        true,
+      );
+    } finally {
+      savingRemote = false;
+    }
+  }
+  async function retryRemote() {
+    if (!project) {
+      await initializeEditor();
+      return;
+    }
+    if (status === 'expired') {
+      const destination = projectId
+        ? `${resolve('/editor')}?project=${encodeURIComponent(projectId)}`
+        : resolve('/projetos');
+      window.location.assign(`${resolve('/conta')}?next=${encodeURIComponent(destination)}`);
+      return;
+    }
+    if (status === 'conflict') return;
+    status = 'pending';
+    await sendRemote();
+  }
+  async function loadRemoteVersion() {
+    if (!projectId) return;
+    const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}`, {
+      credentials: 'same-origin',
+    });
+    if (!response.ok) {
+      announce('Não foi possível carregar a versão salva.', true);
+      return;
+    }
+    const snapshot = projectSnapshotSchema.parse(await response.json());
+    project = snapshot.project;
+    revision = snapshot.revision;
+    conflictSnapshot = null;
+    retryRequest = null;
+    past = [];
+    future = [];
+    status = 'saved';
+    persistAccountDraft();
+    announce('Versão salva carregada.');
+  }
+  function acceptRemoteOverAccountDraft() {
+    if (!accountKey || !projectId) return;
+    try {
+      window.localStorage.removeItem(accountKey);
+    } catch {
+      /* The explicit replacement continues in memory. */
+    }
+    rawAccountDraft = null;
+    accountDraftCorrupt = false;
+    remoteReady = true;
+    status = 'saved';
+    persistAccountDraft();
+    announce('Rascunho local substituído pela versão salva na conta.');
+  }
+  async function saveAsNewProject() {
+    if (!project || !accountSession) return;
+    const copy = { ...project, title: `${project.title} (cópia)`.slice(0, 120) };
+    try {
+      const id = crypto.randomUUID();
+      const response = await fetch('/api/projects', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id, operationId: crypto.randomUUID(), project: copy }),
+      });
+      if (!response.ok) throw new Error('Não foi possível criar uma cópia. Tente novamente.');
+      const snapshot = projectSnapshotSchema.parse(await response.json());
+      window.location.assign(`${resolve('/editor')}?project=${encodeURIComponent(snapshot.id)}`);
+    } catch (error) {
+      announce(error instanceof Error ? error.message : 'Não foi possível criar uma cópia.', true);
+    }
+  }
+  async function initializeEditor() {
+    const requestedId = new URL(window.location.href).searchParams.get('project');
+    if (requestedId) {
+      projectId = requestedId;
+      try {
+        accountSession = await readSession();
+        if (!accountSession) {
+          status = 'expired';
+          announce('Entre na conta proprietária para abrir este projeto.', true);
+          return;
+        }
+        const response = await fetch(`/api/projects/${encodeURIComponent(requestedId)}`, {
+          credentials: 'same-origin',
+        });
+        if (response.status === 401) {
+          status = 'expired';
+          announce('Sua sessão expirou. Entre novamente para abrir o projeto.', true);
+          return;
+        }
+        if (!response.ok)
+          throw new Error(
+            'Não foi possível abrir este projeto. Confira sua conta e tente novamente.',
+          );
+        const snapshot = projectSnapshotSchema.parse(await response.json());
+        if (snapshot.id !== requestedId)
+          throw new Error('A resposta não corresponde ao projeto solicitado.');
+        revision = snapshot.revision;
+        accountKey = accountDraftKey(accountSession.user.id, requestedId);
+        let local: AccountDraft | null;
+        try {
+          local = loadAccountDraft(window.localStorage, accountKey);
+        } catch {
+          accountDraftCorrupt = true;
+          try {
+            rawAccountDraft = window.localStorage.getItem(accountKey);
+          } catch {
+            rawAccountDraft = null;
+          }
+          project = snapshot.project;
+          status = 'blocked';
+          announce(
+            rawAccountDraft
+              ? 'O rascunho local desta conta não pôde ser lido. Ele foi preservado para recuperação.'
+              : 'O armazenamento local desta conta está indisponível. Nenhum salvamento remoto será feito até você escolher continuar.',
+            true,
+          );
+          return;
+        }
+        project = snapshot.project;
+        if (local?.pending) {
+          retryRequest = local.pending;
+          project = local.project;
+          revision = local.baseRevision;
+          status = 'pending';
+        } else if (
+          local &&
+          local.dirty &&
+          local.baseRevision === snapshot.revision &&
+          !sameProject(local.project, snapshot.project)
+        ) {
+          project = local.project;
+          status = 'pending';
+          revision = local.baseRevision;
+        } else if (
+          local &&
+          local.dirty &&
+          local.baseRevision !== snapshot.revision &&
+          !sameProject(local.project, snapshot.project)
+        ) {
+          project = local.project;
+          status = 'conflict';
+          revision = local.baseRevision;
+          conflictSnapshot = snapshot;
+          announce(
+            'Há um rascunho local e uma versão salva mais recente. Escolha como continuar.',
+            true,
+          );
+        } else {
+          project = snapshot.project;
+          revision = snapshot.revision;
+          status = 'saved';
+        }
+        remoteReady = true;
+        if (status === 'pending') queueSave();
+      } catch (error) {
+        status = accountSession ? 'error' : 'expired';
+        announce(
+          error instanceof Error ? error.message : 'Não foi possível abrir o projeto.',
+          true,
+        );
+      }
+      return;
+    }
+    try {
+      const draft = loadDraft(window.localStorage);
+      if (draft.status === 'ready') {
+        project = draft.project;
+        restored = true;
+        status = 'saved';
+      } else {
+        project = createInitialProject();
+        if (draft.status === 'corrupt') {
+          rawDraft = draft.raw;
+          allowSave = false;
+          status = 'blocked';
+        } else if (draft.status === 'unavailable') status = 'error';
+        else saveNow();
+      }
+    } catch {
+      project = createInitialProject();
+      status = 'error';
+    }
   }
   function cleanSelection() {
     if (selectedGuestId && !project?.guests.some((g) => g.id === selectedGuestId))
@@ -149,6 +466,13 @@
     void tick().then(() => confirmDialog.showModal());
   }
   function mutate(action: ProjectAction, text = '', protectPlaces = false): boolean {
+    if (accountDraftCorrupt) {
+      announce(
+        'Baixe o rascunho preservado ou escolha explicitamente a versão da conta antes de editar.',
+        true,
+      );
+      return false;
+    }
     if (!project) return false;
     const start = performance.now();
     try {
@@ -224,6 +548,13 @@
     return ok;
   }
   function replaceProject(next: CeremonyProject, title: string) {
+    if (accountDraftCorrupt) {
+      announce(
+        'Recupere o rascunho ou escolha a versão da conta antes de substituir o planejamento.',
+        true,
+      );
+      return;
+    }
     if (restored || past.length || project?.guests.length)
       ask(
         next,
@@ -262,7 +593,8 @@
     try {
       const files = await import('../../lib/editor/files/images');
       if (kind === 'json') files.downloadProjectJson(snapshot);
-      else if (kind === 'recovery' && rawDraft) files.downloadRawDraft(rawDraft);
+      else if (kind === 'recovery' && (rawDraft || rawAccountDraft))
+        files.downloadRawDraft(rawDraft ?? rawAccountDraft!);
       else if (kind === 'individual') {
         if (!recipient) throw new Error('Selecione uma pessoa com cadeira definida.');
         await files.downloadMapPng(snapshot, recipient);
@@ -291,34 +623,40 @@
       selectedSeatId = null;
     }
   }
-  onMount(() => {
-    try {
-      const draft = loadDraft(window.localStorage);
-      if (draft.status === 'ready') {
-        project = draft.project;
-        restored = true;
-        status = 'saved';
-      } else {
-        project = createInitialProject();
-        if (draft.status === 'corrupt') {
-          rawDraft = draft.raw;
-          allowSave = false;
-          status = 'blocked';
-        } else if (draft.status === 'unavailable') status = 'error';
-        else saveNow();
-      }
-    } catch {
-      project = createInitialProject();
-      status = 'error';
+  function storageChanged(event: StorageEvent) {
+    if (!projectId || !accountSession || !event.key) return;
+    const userId = accountSession.user.id;
+    const draftRemoved =
+      event.key.startsWith(`enlace:draft:account:v1:${userId}:`) && event.newValue === null;
+    const loggedOut = event.key === `enlace:account-logout:v1:${userId}` && event.newValue !== null;
+    if (draftRemoved || loggedOut) {
+      clearTimeout(saveTimer);
+      project = null;
+      accountSession = null;
+      revision = null;
+      accountKey = null;
+      retryRequest = null;
+      conflictSnapshot = null;
+      remoteReady = false;
+      status = 'expired';
+      announce(
+        'A sessão desta conta foi encerrada em outra aba. Entre novamente para continuar.',
+        true,
+      );
     }
+  }
+  onMount(() => {
+    void initializeEditor();
     if (matchMedia('(max-width: 900px)').matches) zoom = 1;
     window.addEventListener('keydown', keyboard);
     window.addEventListener('pagehide', saveNow);
+    window.addEventListener('storage', storageChanged);
     return () => {
       clearTimeout(saveTimer);
       saveNow();
       window.removeEventListener('keydown', keyboard);
       window.removeEventListener('pagehide', saveNow);
+      window.removeEventListener('storage', storageChanged);
     };
   });
 </script>
@@ -340,18 +678,38 @@
     <div class="project-heading">
       <h1>{project?.title ?? 'Preparando seu espaço…'}</h1>
       <span
-        class:error={status === 'error' || status === 'blocked'}
+        class:error={status === 'error' ||
+          status === 'blocked' ||
+          status === 'conflict' ||
+          status === 'expired'}
         class="save-state"
         role="status"
         >{status === 'saved'
-          ? 'Rascunho salvo neste navegador'
+          ? projectId
+            ? 'Salvo na sua conta'
+            : 'Rascunho salvo neste navegador'
           : status === 'pending'
-            ? 'Salvando neste navegador…'
+            ? projectId
+              ? 'Sincronizando…'
+              : 'Salvando neste navegador…'
             : status === 'blocked'
               ? 'Rascunho anterior protegido'
-              : 'Não foi possível salvar neste navegador'}</span
+              : status === 'conflict'
+                ? 'Conflito de versões'
+                : status === 'expired'
+                  ? 'Sessão encerrada'
+                  : projectId
+                    ? project
+                      ? 'Não foi possível sincronizar'
+                      : 'Projeto indisponível'
+                    : 'Não foi possível salvar neste navegador'}</span
       >
     </div>
+    <nav class="account-tools" aria-label="Conta e projetos">
+      {#if projectId}<a href={resolve('/projetos')}>Meus projetos</a>{:else}<a
+          href={resolve('/conta')}>Entrar e salvar na conta</a
+        >{/if}
+    </nav>
     <div class="header-tools">
       <div class="history-tools">
         <button
@@ -411,6 +769,12 @@
         O rascunho anterior não pôde ser lido e está preservado. Baixe uma cópia antes de permitir
         um novo salvamento.
       </p>
+      {#if status === 'conflict' && conflictSnapshot}<p class="conflict-date">
+          Versão salva em {new Intl.DateTimeFormat('pt-BR', {
+            dateStyle: 'medium',
+            timeStyle: 'short',
+          }).format(new Date(conflictSnapshot.updatedAt))}.
+        </p>{/if}
       <button onclick={() => exportFile('recovery')}>Baixar para recuperação</button><button
         onclick={() => {
           if (project) {
@@ -426,12 +790,43 @@
         }}>Permitir novo salvamento</button
       >
     </div>
-  {:else if status === 'error'}
+  {:else if status === 'error' && !projectId}
     <div class="recovery-banner" role="alert">
       <p>Suas alterações estão apenas nesta sessão. Baixe o JSON para guardar uma cópia.</p>
       <button onclick={saveNow}>Tentar salvar novamente</button><button
         onclick={() => exportFile('json')}>Baixar JSON</button
       >
+    </div>
+  {/if}
+
+  {#if rawAccountDraft}
+    <div class="recovery-banner" role="alert">
+      <p>
+        O rascunho desta conta não pôde ser validado e continua intacto. Baixe uma cópia antes de
+        decidir usar a versão salva na conta.
+      </p>
+      <button onclick={() => exportFile('recovery')}>Baixar rascunho para recuperação</button>
+      <button onclick={acceptRemoteOverAccountDraft}
+        >Usar versão salva na conta e substituir este rascunho</button
+      >
+    </div>
+  {/if}
+
+  {#if project && projectId && (status === 'error' || status === 'conflict' || status === 'expired')}
+    <div class="recovery-banner" role="alert">
+      <p>
+        {status === 'conflict'
+          ? 'O rascunho local foi preservado. Carregar a versão salva descarta as mudanças locais; criar uma cópia mantém seu trabalho.'
+          : status === 'expired'
+            ? 'O rascunho local desta conta está guardado neste navegador. Entre novamente para retomar a sincronização.'
+            : 'As mudanças seguem no rascunho local desta conta e ainda não foram confirmadas pelo servidor.'}
+      </p>
+      {#if status === 'conflict'}<button onclick={loadRemoteVersion}>Carregar versão salva</button
+        ><button onclick={saveAsNewProject}>Salvar como novo projeto</button>
+      {:else}<button onclick={retryRemote}
+          >{status === 'expired' ? 'Entrar novamente' : 'Tentar sincronizar'}</button
+        >{/if}
+      <button onclick={() => exportFile('json')}>Baixar JSON</button>
     </div>
   {/if}
 
@@ -464,7 +859,11 @@
             onclick={() => replaceProject(createInitialProject(), 'Começar um novo planejamento?')}
             >Novo planejamento</button
           >
-          <p>Os arquivos JSON ficam com você. Este editor ainda não usa uma conta.</p>
+          <p>
+            {projectId
+              ? 'O projeto sincroniza com sua conta após cada alteração.'
+              : 'O rascunho fica neste navegador. Entre na conta para criar um projeto sincronizado.'}
+          </p>
         </div>
       </aside>
 
@@ -573,6 +972,19 @@
         />
       </aside>
     </div>
+  {:else if projectId && (status === 'error' || status === 'expired')}<main class="loading-editor">
+      <h1>{status === 'expired' ? 'Entre para abrir este projeto' : 'Projeto indisponível'}</h1>
+      <p>
+        {status === 'expired'
+          ? 'Este projeto pertence a uma conta. Entre com a conta proprietária para continuar.'
+          : 'Ele pode ter sido excluído, pertencer a outra conta ou o servidor pode estar indisponível.'}
+      </p>
+      <p>
+        {#if status === 'expired'}<a href={resolve('/conta')}>Entrar</a>{:else}<a
+            href={resolve('/projetos')}>Voltar para meus projetos</a
+          >{/if}
+      </p>
+    </main>
   {:else}<main class="loading-editor">
       <h1>Preparando seu espaço…</h1>
       <p>Carregando o planejamento deste navegador.</p>
