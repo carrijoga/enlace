@@ -21,6 +21,37 @@ describe('API base', () => {
     });
   });
 
+  it('logs only the normalized route and response metrics', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    try {
+      const app = createApp(config, {
+        checkReadiness: vi.fn(),
+        projectStore: {
+          list: vi.fn(async () => []),
+          get: vi.fn(),
+          create: vi.fn(),
+          save: vi.fn(),
+          delete: vi.fn(),
+        },
+        auth: { handler: vi.fn(), api: { getSession: vi.fn(async () => null) } },
+      });
+      await app.request('/api/projects/7a72c6e7-4290-4df0-9dc1-0ef2724a516b?invitee=private');
+      expect(info).toHaveBeenCalledOnce();
+      const event = JSON.parse(String(info.mock.calls[0]?.[0]));
+      expect(event).toMatchObject({
+        event: 'http_request',
+        method: 'GET',
+        route: '/api/projects/:id',
+        status: 401,
+      });
+      expect(JSON.stringify(event)).not.toContain('7a72c6e7');
+      expect(JSON.stringify(event)).not.toContain('private');
+      expect(event.durationMs).toEqual(expect.any(Number));
+    } finally {
+      info.mockRestore();
+    }
+  });
+
   it('reports ready when the injected database check succeeds', async () => {
     const app = createApp(config, { checkReadiness: async () => undefined });
     const response = await app.request('/ready');

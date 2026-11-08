@@ -10,9 +10,9 @@ Atualizado em 08/11/2026. Use ADRs numerados com contexto, decisão, status e co
 | 0004 — Landing, editor local e marcos no Git | Aceita; editor local implementado | [ADR-0004](0004-editor-local-e-marcos-git.md) |
 | 0005 — Comandos do domínio com compartilhamento estrutural | Aceita; implementada | [ADR-0005](0005-comandos-com-compartilhamento-estrutural.md) |
 | 0006 — Aparelhos de referência e aceite de desempenho da fase 2 | Aceita: decisão do usuário | [ADR-0006](0006-aparelhos-de-referencia-e-aceite-da-fase-2.md) |
-| Drizzle/`pg`; Better Auth para contas | Driver/pool implementados; autenticação ainda planejada | [Arquitetura](../arquitetura.md) |
+| Drizzle/`pg`; Better Auth para contas | Implementados e validados localmente | [Arquitetura](../arquitetura.md) |
 | Aplicação Next.js/React com Supabase | Proposta inicial descartada após orientação do usuário | [ADR-0002](0002-railway-postgres-e-stack-enxuta.md) |
-| Planta JSONB, convidados/atribuições relacionais e revisão transacional | Proposta técnica | [Modelo de dados](../modelo-de-dados.md) |
+| Planta JSONB, convidados/atribuições relacionais e revisão transacional | Implementados na fase 3 | [Modelo de dados](../modelo-de-dados.md) |
 | SVG e exportação de imagens no cliente | Implementados no editor local | [Validação fase 2](../validacao-fase2.md) |
 | Migração incremental com compatibilidade do JSON legado | Direção de planejamento | [Roadmap](../roadmap.md) |
 
@@ -23,3 +23,11 @@ Não decididos: região e recursos na Railway, orçamento, transporte de e-mail,
 ## 0007 — Contas e salvamento transacional
 
 [ADR-0007](0007-contas-e-salvamento-transacional.md): aceita para implementação local da fase 3. Better Auth, proxy same-origin, agregado relacional, revisões e recibos de operação. Validação remota e transporte de e-mail permanecem dependentes de ambiente.
+
+## 0008 — Importação CSV de convidados
+
+[ADR-0008](0008-importacao-csv-de-convidados.md): aceita e implementada na fase 4. Parser próprio carregado sob demanda, UTF-8/Windows-1252, prévia obrigatória, duplicidade só como aviso e lote numa única revisão.
+
+## 0009 — Preparação da primeira versão
+
+[ADR-0009](0009-preparacao-da-primeira-versao.md): implementação local da fase 5, privacidade, exclusão de conta e Moto G84 como referência; aceite hospedado pendente.

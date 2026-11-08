@@ -98,7 +98,7 @@
         </svg>
       </div>
       <div class="plan-caption">
-        <span class="legend-dot"></span><span>Prévia esquemática</span>
+        <span class="legend-dot" aria-hidden="true"></span><span>Prévia esquemática</span>
         <span class="orientation">Da entrada, olhando para o altar</span>
       </div>
     </div>
@@ -144,6 +144,9 @@
 <style>
   .header-link,
   .site-footer a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
     color: var(--green);
     font-size: 13px;
     font-weight: 600;
@@ -156,7 +159,10 @@
     margin-left: 20px;
   }
   .account-nav a {
-    color: #626e63;
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    color: var(--muted);
     font-size: 13px;
     text-underline-offset: 4px;
   }
@@ -216,7 +222,7 @@
     padding-bottom: 0;
   }
   .step-number {
-    color: #92774e;
+    color: #7a6240;
     font:
       14px Georgia,
       serif;

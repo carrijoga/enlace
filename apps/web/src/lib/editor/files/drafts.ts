@@ -70,6 +70,7 @@ export function clearAccountDraft(
     if (key?.startsWith(prefix)) storage.removeItem(key);
   }
   storage.removeItem(`enlace:pending-create:v1:${userId}`);
+  storage.removeItem(`enlace:pending-import:v1:${userId}`);
   try {
     storage.setItem(`enlace:account-logout:v1:${userId}`, String(Date.now()));
   } catch {

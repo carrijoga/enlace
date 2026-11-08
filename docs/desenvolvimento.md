@@ -20,6 +20,9 @@ Neste Windows, se o PATH apontar a um shim que tenta baixar Node, o runtime já 
 | `pnpm run measure:web` | Mede JS inicial produção; opção de rota conforme script |
 | `pnpm run db:up` / `db:check` / `db:down` | Sobe, verifica ou para PostgreSQL local, preservando volume |
 | `pnpm run db:generate` | Gera mudança SQL/metadata a partir do schema Drizzle; revisar antes de aplicar |
+| `pnpm run db:predeploy` | Verifica conexão e aplica migrações com credencial de migração explícita |
+| `pnpm run db:backup` | Backup lógico em arquivo novo, com `pg_dump` no PATH |
+| `pnpm run db:restore:drill` | Restaura somente em banco descartável explicitamente confirmado; ver [operação](operacao.md) |
 | `pnpm run db:migrate` | Aplica migrações versionadas com credencial explícita; nunca durante build/requisição |
 
 O adaptador Vercel exige symlinks que falham neste Windows. O sucesso de `build` local não comprova `build:vercel`; a CI exige o segundo.

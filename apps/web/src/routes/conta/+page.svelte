@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { resolve } from '$app/paths';
   import {
     authError,
@@ -21,11 +21,17 @@
   let error = $state(false);
   let resetAvailable = $state(false);
   let nextPath = $state('/projetos');
+  let deletePassword = $state('');
+  let deleteConfirmation = $state('');
 
   onMount(() => {
     const url = new URL(window.location.href);
     const requestedNext = url.searchParams.get('next');
-    if (requestedNext?.startsWith('/') && !requestedNext.startsWith('//')) nextPath = requestedNext;
+    if (requestedNext) {
+      const destination = new URL(requestedNext, window.location.origin);
+      if (destination.origin === window.location.origin)
+        nextPath = `${destination.pathname}${destination.search}${destination.hash}`;
+    }
     token = url.searchParams.get('token') ?? '';
     if (token) mode = 'reset';
     void Promise.all([
@@ -38,6 +44,17 @@
         .catch(() => (resetAvailable = false)),
     ]).finally(() => (checking = false));
   });
+
+  // Os botões de troca de modo são removidos da página; leva o foco ao primeiro campo do novo modo.
+  async function changeMode(next: typeof mode) {
+    mode = next;
+    message = '';
+    error = false;
+    await tick();
+    document
+      .getElementById(next === 'signup' ? 'name' : next === 'reset' ? 'password' : 'email')
+      ?.focus();
+  }
 
   async function submit(event: SubmitEvent) {
     event.preventDefault();
@@ -97,6 +114,32 @@
       loading = false;
     }
   }
+
+  async function deleteAccount(event: SubmitEvent) {
+    event.preventDefault();
+    if (!session || deleteConfirmation.trim() !== session.user.email) return;
+    loading = true;
+    message = '';
+    error = false;
+    try {
+      await authRequest('delete-user', { password: deletePassword });
+      const deletedUserId = session.user.id;
+      session = null;
+      try {
+        clearAccountDraft(window.localStorage, deletedUserId);
+      } catch {
+        message =
+          'Sua conta foi excluída, mas não foi possível remover os rascunhos deste navegador. Remova os dados do site manualmente.';
+        return;
+      }
+      window.location.assign(resolve('/editor'));
+    } catch (cause) {
+      message = authError(cause);
+      error = true;
+    } finally {
+      loading = false;
+    }
+  }
 </script>
 
 <svelte:head
@@ -112,9 +155,11 @@
       ><ellipse cx="14" cy="18" rx="8" ry="11" /><ellipse cx="23" cy="18" rx="8" ry="11" /></svg
     ><span>enlace</span></a
   >
-  <a class="header-link" href={resolve('/projetos')}
-    >Meus projetos <span aria-hidden="true">→</span></a
-  >
+  <nav aria-label="Principal">
+    <a class="header-link" href={resolve('/projetos')}
+      >Meus projetos <span aria-hidden="true">→</span></a
+    >
+  </nav>
 </header>
 
 <main class="account-page">
@@ -136,6 +181,45 @@
       <p class="account-email">{session.user.email}</p>
       <a class="button primary" href={resolve('/projetos')}>Abrir meus projetos</a>
       <button class="button secondary" disabled={loading} onclick={logout}>Sair da conta</button>
+      <p class="local-draft-note">
+        Ao sair, os rascunhos desta conta são removidos deste navegador. Exporte alterações ainda
+        não salvas antes de sair.
+      </p>
+      <section class="danger-zone" aria-labelledby="delete-title">
+        <h3 id="delete-title">Excluir conta</h3>
+        <p>Esta ação é permanente. Seus projetos, convidados, lugares e sessões serão apagados.</p>
+        <form onsubmit={deleteAccount}>
+          <label for="delete-password">Confirme sua senha</label>
+          <input
+            id="delete-password"
+            type="password"
+            bind:value={deletePassword}
+            autocomplete="current-password"
+            aria-describedby={message ? 'delete-message' : undefined}
+            required
+            minlength="12"
+            maxlength="128"
+          />
+          <label for="delete-confirmation">Digite {session.user.email} para confirmar</label>
+          <input
+            id="delete-confirmation"
+            type="email"
+            bind:value={deleteConfirmation}
+            autocomplete="off"
+            required
+            maxlength="254"
+          />
+          <div id="delete-message" role={error ? 'alert' : 'status'}>
+            {#if message}<p class:message-error={error} class="message">{message}</p>{/if}
+          </div>
+          <button
+            class="button destructive"
+            disabled={loading || deleteConfirmation.trim() !== session.user.email}
+          >
+            {loading ? 'Aguarde…' : 'Excluir minha conta permanentemente'}
+          </button>
+        </form>
+      </section>
     {:else}
       <h2 id="account-title">
         {mode === 'signup'
@@ -168,6 +252,7 @@
             type="email"
             bind:value={email}
             autocomplete="email"
+            aria-describedby={message ? 'account-message' : undefined}
             required
             maxlength="254"
           />{/if}
@@ -177,18 +262,15 @@
             id="password"
             type="password"
             bind:value={password}
-            autocomplete={mode === 'signup' ? 'new-password' : 'current-password'}
+            autocomplete={mode === 'login' ? 'current-password' : 'new-password'}
+            aria-describedby={message ? 'account-message' : undefined}
             required
-            minlength="8"
+            minlength={mode === 'login' ? 8 : 12}
             maxlength="128"
           />{/if}
-        {#if message}<p
-            class:message-error={error}
-            class="message"
-            role={error ? 'alert' : 'status'}
-          >
-            {message}
-          </p>{/if}
+        <div id="account-message" role={error ? 'alert' : 'status'}>
+          {#if message}<p class:message-error={error} class="message">{message}</p>{/if}
+        </div>
         <button class="button primary submit" disabled={loading}
           >{loading
             ? 'Aguarde…'
@@ -202,22 +284,12 @@
         >
       </form>
       <nav class="form-links" aria-label="Opções de conta">
-        {#if mode === 'login'}<button
-            onclick={() => {
-              mode = 'signup';
-              message = '';
-            }}>Criar conta</button
-          >{#if resetAvailable}<button
-              onclick={() => {
-                mode = 'recover';
-                message = '';
-              }}>Esqueci minha senha</button
+        {#if mode === 'login'}<button type="button" onclick={() => changeMode('signup')}
+            >Criar conta</button
+          >{#if resetAvailable}<button type="button" onclick={() => changeMode('recover')}
+              >Esqueci minha senha</button
             >{/if}
-        {:else}<button
-            onclick={() => {
-              mode = 'login';
-              message = '';
-            }}>Voltar para entrar</button
+        {:else}<button type="button" onclick={() => changeMode('login')}>Voltar para entrar</button
           >{/if}
       </nav>
     {/if}
@@ -250,6 +322,9 @@
   }
   .local-link,
   .header-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
     color: #295842;
     font-weight: 650;
     text-underline-offset: 4px;
@@ -274,6 +349,12 @@
   .account-email {
     overflow-wrap: anywhere;
   }
+  .local-draft-note {
+    margin: 8px 0 0;
+    color: #626e63;
+    font-size: 13px;
+    line-height: 1.55;
+  }
   form {
     display: grid;
     gap: 9px;
@@ -289,7 +370,7 @@
     padding: 10px 12px;
     color: #27342c;
     background: #fffefb;
-    border: 1px solid #bfc9bd;
+    border: 1px solid var(--field-line);
     border-radius: 8px;
   }
   .button {
@@ -313,6 +394,28 @@
     color: #295842;
     background: transparent;
   }
+  .danger-zone {
+    margin-top: 28px;
+    padding-top: 22px;
+    border-top: 1px solid #e5c9c3;
+  }
+  .danger-zone h3 {
+    margin: 0 0 8px;
+    color: #873d35;
+    font:
+      600 18px/1.3 Georgia,
+      serif;
+  }
+  .danger-zone > p {
+    color: #6f514c;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .destructive {
+    color: #fff;
+    background: #873d35;
+    border-color: #873d35;
+  }
   .submit {
     margin-top: 10px;
   }
@@ -323,6 +426,7 @@
     margin-top: 18px;
   }
   .form-links button {
+    min-height: 32px;
     padding: 0;
     color: #295842;
     background: none;
@@ -337,6 +441,11 @@
   }
   .message-error {
     color: #923d35 !important;
+  }
+  /* O erro não depende só da cor. */
+  .message-error::before {
+    content: 'Erro: ';
+    font-weight: 700;
   }
   @media (max-width: 720px) {
     .account-page {

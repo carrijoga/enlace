@@ -1,6 +1,6 @@
 # Arquitetura
 
-Atualizado em 08/11/2026. Fases 1–2 entregues; fase 3 em integração local. Frontend Vercel, API Hono/Node e PostgreSQL privado Railway conforme [ADR-0003](decisoes/0003-frontend-vercel-api-railway.md). Contas e persistência seguem o [ADR-0007](decisoes/0007-contas-e-salvamento-transacional.md). Nenhum deploy ou provisionamento remoto faz parte desta entrega.
+Atualizado em 08/11/2026. Fases 1–4 implementadas localmente; fase 5 prepara o aceite hospedado. Frontend Vercel, API Hono/Node e PostgreSQL privado Railway conforme [ADR-0003](decisoes/0003-frontend-vercel-api-railway.md). Contas e persistência seguem o [ADR-0007](decisoes/0007-contas-e-salvamento-transacional.md). Nenhum deploy ou provisionamento remoto faz parte desta entrega.
 
 ## Fronteiras
 
@@ -37,6 +37,8 @@ Metadados e planta ficam em `projects`; convidados em `guests`; lugares em `seat
 O recibo associa projeto, ator e operação ao hash da requisição e revisão resultante. Uma repetição idêntica retorna a confirmação original; reutilização com corpo diferente é conflito. Criação usa UUID de projeto fornecido pelo cliente e não sobrescreve identidade já existente. Exclusão confere proprietário e revisão e remove dependências. Detalhes em [modelo de dados](modelo-de-dados.md) e [contratos](contratos.md).
 
 ## Migrações e operação
+
+A fase 5 acrescenta exclusão de conta pelo Better Auth com senha obrigatória em hook no servidor e cascata das dependências no PostgreSQL. A interface exige confirmação pelo e-mail, sem usar esse campo para escolher o proprietário. Logs HTTP contêm apenas método, template de rota, status e duração; analytics elimina parâmetros e ignora conta/projetos. Backup lógico e ensaio de restauração isolada estão descritos em [operação](operacao.md). Decisões em [ADR-0009](decisoes/0009-preparacao-da-primeira-versao.md).
 
 Migrações SQL versionadas acompanham o schema Drizzle. São executadas explicitamente, com credencial de migração, fora do build e das requisições. Runtime em produção deve ser role sem DDL/superuser; o banco não é exposto ao navegador. O runner serializa aplicações e registra migrações aplicadas. Testes usam schemas isolados e dados fictícios.
 

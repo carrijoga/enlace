@@ -55,7 +55,9 @@ Aceite:
 
 Trabalho paralelo possível depois do contrato de persistência: autenticação; schema SQL/transações/autorização; integração do editor. O conjunto só está pronto após teste integrado entre contas e dispositivos.
 
-## Fase 4 — Importações e exportações do produto
+## Fase 4 — Importações e exportações do produto — concluída localmente
+
+Estado 08/11/2026 ([ADR-0008](decisoes/0008-importacao-csv-de-convidados.md), [validação](validacao-fase4.md)): CSV de convidados com prévia, detecção de separador/cabeçalho/codificação, mapeamento de colunas e categorias, aviso de duplicidade sem merge, erros por linha e confirmação explícita; lote numa única alteração/revisão. Importar JSON como novo projeto em `/projetos`. PNG sem mudanças nesta fase (cobertos pela fase 2). Pendentes: auditoria de acessibilidade/celular do diálogo CSV e medição da prévia com 1000 linhas (fase 5).
 
 Adicionar CSV com prévia, mapeamento de colunas, política de duplicidade e validação. Completar o round-trip JSON contra o novo modelo e refinar exportações gerais e individuais. Preservar recursos já migrados na fase 2.
 
@@ -67,9 +69,15 @@ Aceite:
 - Importar como novo projeto cria nova identidade e propriedade da conta atual; IDs de proprietário do arquivo nunca concedem acesso.
 - PNG geral não corta a planta; individual é gerado a partir da projeção permitida, sem textos/metadados dos demais convidados. Há alternativa de download quando compartilhar não está disponível.
 
-## Fase 5 — Preparar a primeira versão utilizável
+## Fase 5 — Preparar a primeira versão utilizável — implementação local; aceite final pendente
 
-Revisar acessibilidade, responsividade, estados vazios/erros, limites e desempenho com conjuntos sintéticos. Definir ambientes, recuperação de dados, observabilidade sem dados pessoais, exclusão de conta e publicação.
+Entrega local em 08/11/2026: revisão do diálogo CSV e estados de projetos, retentativa de importação JSON com identidade preservada, exclusão de conta com senha exigida no servidor, limpeza local documentada, logs sem conteúdo privado, saneamento de analytics e procedimentos de backup/restauração. O usuário definiu Moto G84 como celular de referência; navegador/versão e ensaio físico pendentes. [ADR-0009](decisoes/0009-preparacao-da-primeira-versao.md), [validação](validacao-fase5.md), [operação](operacao.md).
+
+Auditoria automatizada de acessibilidade (axe, WCAG 2.2 A/AA) feita em todas as telas, com lista alternativa à planta no editor; os alertas restantes estão explicados na [revisão](revisao-ui-fase5.md). UUID funciona em HTTP na rede local, o que destrava o ensaio no celular.
+
+O marco continua aberto até o aceite hospedado, SMTP real, pacote Linux/Vercel, medições no Moto G84, ensaio real de restauração, teste com leitor de tela e definição de retenção/recursos. Nenhum ambiente remoto foi criado ou publicado.
+
+Revisar acessibilidade (meta WCAG 2.2 AA, ver [PRODUCT.md](../PRODUCT.md)), responsividade, estados vazios/erros, limites e desempenho com conjuntos sintéticos. Definir ambientes, recuperação de dados, observabilidade sem dados pessoais, exclusão de conta e publicação.
 
 Inclui, conforme o [ADR-0006](decisoes/0006-aparelhos-de-referencia-e-aceite-da-fase-2.md): definir a classe de celular de referência (modelo identificado) e, se ela exigir, a otimização para aparelhos de entrada — atualização fina por cadeira/linha em troca e seleção, lista virtualizada se medida a necessidade e revisão das legendas da planta.
 

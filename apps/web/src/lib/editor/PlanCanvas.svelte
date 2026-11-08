@@ -37,6 +37,14 @@
     return untrack(() => geometry.seats);
   });
   const positions = $derived(new Map(geometry.seats.map((seat) => [seat.id, seat])));
+  // Uma única parada de Tab na planta (a seleção atual ou a primeira cadeira); as setas percorrem o resto.
+  const tabStopId = $derived.by(() => {
+    if (selectedSeatId && positions.has(selectedSeatId)) return selectedSeatId;
+    const guestSeat = selectedGuestId
+      ? assignmentList.find((a) => a.guestId === selectedGuestId)?.seatId
+      : undefined;
+    return guestSeat ?? geometry.seats[0]?.id;
+  });
   const transformOf = (id: string) => {
     const seat = positions.get(id);
     return seat
@@ -162,15 +170,17 @@
       <text x={geometry.center - 235} y="271" text-anchor="middle" class="side">ESQUERDA</text>
       <text x={geometry.center + 235} y="271" text-anchor="middle" class="side">DIREITA</text>
     </g>
-    {#each seatList as seat, i (seat.id)}
+    {#each seatList as seat (seat.id)}
       {@const guest = guests.get(assignments.get(seat.id) ?? '')}
       {@const category = guest ? GUEST_CATEGORIES[guest.category] : null}
       {@const active = selectedSeatId === seat.id || Boolean(guest && selectedGuestId === guest.id)}
       <g
         data-seat-id={seat.id}
         role="button"
-        tabindex={active || (!selectedSeatId && i === 0) ? 0 : -1}
-        aria-label={`${seat.label}: ${guest?.name ?? 'disponível'}`}
+        tabindex={tabStopId === seat.id ? 0 : -1}
+        aria-label={guest
+          ? `${guest.name}, ${seat.label}, ${category?.label}`
+          : `${seat.label}: disponível`}
         aria-pressed={active}
         transform={transformOf(seat.id)}
         onclick={() => onSeatSelect(seat.id)}
@@ -217,7 +227,7 @@
             >{seat.rowIndex + 1} · {seat.index + 1}</text
           >
         {:else}
-          <text x="0" y="5" text-anchor="middle" fill="#758473" class="empty-seat"
+          <text x="0" y="5" text-anchor="middle" fill="#626e63" class="empty-seat"
             >{String(seat.index + 1).padStart(2, '0')}</text
           >
         {/if}
@@ -274,12 +284,12 @@
     letter-spacing: 2px;
   }
   .aisle {
-    fill: #737e6c;
+    fill: #626e63;
     font-size: 10px;
     letter-spacing: 1.2px;
   }
   .side {
-    fill: #6d7b69;
+    fill: #626e63;
     font-size: 10px;
     letter-spacing: 2px;
   }
@@ -294,7 +304,7 @@
     font-size: 10px;
   }
   .entry {
-    fill: #737e6c;
+    fill: #626e63;
     font-size: 10px;
     letter-spacing: 2px;
   }

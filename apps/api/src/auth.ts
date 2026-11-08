@@ -1,4 +1,5 @@
 import { betterAuth } from 'better-auth';
+import { APIError, createAuthMiddleware } from 'better-auth/api';
 import { drizzleAdapter } from '@better-auth/drizzle-adapter';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type { Pool } from 'pg';
@@ -61,5 +62,21 @@ export function createAuth(pool: Pool, config: ApiConfig, mailSender = createMai
       ipAddress: { ipAddressHeaders: [] },
     },
     session: { cookieCache: { enabled: false } },
+    user: {
+      deleteUser: { enabled: true },
+    },
+    hooks: {
+      before: createAuthMiddleware(async (ctx) => {
+        if (
+          ctx.path === '/delete-user' &&
+          (!ctx.body || typeof ctx.body.password !== 'string' || ctx.body.password.length === 0)
+        ) {
+          throw APIError.from('BAD_REQUEST', {
+            code: 'PASSWORD_REQUIRED',
+            message: 'Password is required to delete the account',
+          });
+        }
+      }),
+    },
   });
 }

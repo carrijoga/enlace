@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { CeremonyProject } from '@enlace/contracts';
+  import { createUuid, type CeremonyProject } from '@enlace/contracts';
   import { getSeatLabels } from '@enlace/domain';
   import { GUEST_CATEGORIES, GUEST_CATEGORY_OPTIONS, type GuestCategory } from './guest-categories';
 
@@ -17,6 +17,7 @@
     onRemoveGuest,
     onAssignGuest,
     onUnassignSeat,
+    onImportCsv,
   }: {
     project: CeremonyProject;
     selectedGuestId: string | null;
@@ -27,6 +28,7 @@
     onRemoveGuest: (id: string) => void;
     onAssignGuest: (guestId: string, seatId: string) => void;
     onUnassignSeat: (seatId: string) => void;
+    onImportCsv?: (trigger: HTMLButtonElement) => void;
   } = $props();
 
   let search = $state('');
@@ -102,8 +104,7 @@
     }
     addError = '';
     if (
-      onAddGuest({ id: crypto.randomUUID(), name, category: newCategory, note: newNote.trim() }) ===
-      false
+      onAddGuest({ id: createUuid(), name, category: newCategory, note: newNote.trim() }) === false
     )
       return;
     newName = '';
@@ -152,12 +153,17 @@
   }
 </script>
 
-<aside class="guests-panel" aria-labelledby="guests-title">
+<div class="guests-panel">
   <header class="panel-header">
     <div>
       <h2 id="guests-title">Convidados</h2>
     </div>
-    <span class="total" aria-label={`${guests.length} convidados`}>{guests.length}</span>
+    {#if onImportCsv}<button
+        class="text-button"
+        type="button"
+        onclick={(event) => onImportCsv?.(event.currentTarget)}>Importar CSV</button
+      >{/if}
+    <span class="total">{guests.length}</span>
   </header>
 
   {#if selectedSeatId}
@@ -209,6 +215,7 @@
       maxlength="100"
       autocomplete="off"
       placeholder="Nome do convidado"
+      aria-invalid={addError ? true : undefined}
       aria-describedby={addError ? 'add-error' : undefined}
     />
     <label for="new-guest-category">Categoria</label>
@@ -224,7 +231,7 @@
       maxlength="1000"
       rows="2"
       placeholder="Uma informação útil"></textarea>
-    {#if addError}<p class="error" id="add-error" aria-live="polite">{addError}</p>{/if}
+    {#if addError}<p class="error" id="add-error" role="alert">{addError}</p>{/if}
     {#if guests.length >= 300}<p class="hint">O limite de 300 convidados foi atingido.</p>{/if}
     <button class="primary-button" type="submit" disabled={guests.length >= 300}
       >Adicionar convidado</button
@@ -244,7 +251,7 @@
       bind:value={search}
       placeholder="Buscar por nome ou anotação"
     />
-    <div class="filters" aria-label="Filtrar convidados">
+    <div class="filters" role="group" aria-label="Filtrar convidados">
       <button
         type="button"
         aria-pressed={filter === 'all'}
@@ -319,7 +326,7 @@
                     bind:value={editNote}
                     maxlength="1000"
                     rows="2"></textarea>
-                  {#if editError}<p class="error" aria-live="polite">{editError}</p>{/if}
+                  {#if editError}<p class="error" role="alert">{editError}</p>{/if}
                   <div class="row-actions">
                     <button class="primary-button" type="submit">Salvar</button><button
                       type="button"
@@ -367,7 +374,7 @@
       {/if}
     {/each}
   </section>
-</aside>
+</div>
 
 <style>
   .guests-panel {
@@ -443,7 +450,7 @@
     box-sizing: border-box;
     width: 100%;
     min-height: 38px;
-    border: 1px solid var(--guest-line);
+    border: 1px solid var(--field-line);
     border-radius: 7px;
     padding: 8px 9px;
     background: #fff;

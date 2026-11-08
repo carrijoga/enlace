@@ -93,7 +93,7 @@ O adaptador não transporta a lógica de avisos familiares fixos nem interpreta 
 
 ## CSV de convidados
 
-Contrato inicial sugerido: `nome` obrigatório; `categoria` e `observacao` opcionais, com mapeamento na prévia. Usar parsing de CSV real, UTF-8 com suporte a BOM e separador selecionável. Categorias desconhecidas pedem correção ou mapeamento; campo vazio pode usar `convidado` conforme escolha mostrada na prévia.
+Implementado conforme [ADR-0008](decisoes/0008-importacao-csv-de-convidados.md) (o lote é aplicado no editor e salvo pela revisão normal do projeto, sem rota própria). Contrato inicial sugerido: `nome` obrigatório; `categoria` e `observacao` opcionais, com mapeamento na prévia. Usar parsing de CSV real, UTF-8 com suporte a BOM e separador selecionável. Categorias desconhecidas pedem correção ou mapeamento; campo vazio pode usar `convidado` conforme escolha mostrada na prévia.
 
 Não usar nome como chave de deduplicação. Cada linha válida recebe novo ID. Mostrar possíveis duplicações como aviso, respeitar convidados com o mesmo nome e confirmar o lote antes de gravar. Aplicar o lote em uma transação com a revisão do projeto, sem mudanças na planta e sem atribuir lugares automaticamente. Reenviar a mesma operação não pode criar convidados em dobro.
 

@@ -18,6 +18,8 @@ O resultado esperado é abrir o projeto rapidamente, editar a planta sem esperar
 
 ## Metas iniciais
 
+Referência móvel definida pelo usuário em 08/11/2026: **Moto G84**. Navegador/versão, sistema, condições térmicas/rede e medições reais ainda precisam ser registrados. A escolha não equivale a aprovação de desempenho; permanece a meta p95 ≤ 50 ms. Resultados de emulação ou Edge desktop são evidência complementar.
+
 As metas abaixo são orçamentos de engenharia ajustáveis, não resultados obtidos nem garantias de tempo em qualquer aparelho. Fixar aparelhos e condições de referência na primeira medição; mudanças de orçamento devem ser justificadas no registro de decisões.
 
 | Área | Meta inicial | Como verificar |

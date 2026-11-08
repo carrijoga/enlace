@@ -149,15 +149,16 @@
   }
 
   function seed(kind = 'max') {
-    localStorage.setItem(
-      'enlace:draft:anonymous:v1',
-      JSON.stringify({
-        format: 'enlace-project',
-        schemaVersion: 1,
-        exportedAt: new Date().toISOString(),
-        project: project(kind),
-      }),
-    );
+    const key = 'enlace:draft:anonymous:v1';
+    const draft = JSON.stringify({
+      format: 'enlace-project',
+      schemaVersion: 1,
+      exportedAt: new Date().toISOString(),
+      project: project(kind),
+    });
+    localStorage.setItem(key, draft);
+    // O editor grava o rascunho em `pagehide`; este ouvinte roda depois e preserva o sintético.
+    window.addEventListener('pagehide', () => localStorage.setItem(key, draft));
     return 'Rascunho sintético gravado; recarregue a página.';
   }
 

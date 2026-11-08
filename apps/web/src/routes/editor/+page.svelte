@@ -2,6 +2,7 @@
   import { onMount, tick } from 'svelte';
   import { resolve } from '$app/paths';
   import {
+    createUuid,
     parseProjectFile,
     MAX_PROJECT_FILE_BYTES,
     projectSnapshotSchema,
@@ -21,6 +22,7 @@
     removeRow,
     setRowCount,
     addGuest,
+    addGuests,
     updateGuest,
     removeGuest,
     assignGuest,
@@ -29,6 +31,7 @@
   import PlanCanvas from '../../lib/editor/PlanCanvas.svelte';
   import StructurePanel from '../../lib/editor/StructurePanel.svelte';
   import GuestsPanel from '../../lib/editor/GuestsPanel.svelte';
+  import SeatList from '../../lib/editor/SeatList.svelte';
   import { GUEST_CATEGORIES, type GuestCategory } from '../../lib/editor/guest-categories';
   import {
     accountDraftKey,
@@ -57,6 +60,10 @@
   let status = $state<'pending' | 'saved' | 'error' | 'blocked' | 'conflict' | 'expired'>(
     'pending',
   );
+  let csvDialog = $state<typeof import('../../lib/editor/CsvImportDialog.svelte').default | null>(
+    null,
+  );
+  let csvTrigger: HTMLButtonElement | null = null;
   let feedback = $state('');
   let feedbackError = $state(false);
   let rawDraft = $state<string | null>(null);
@@ -166,7 +173,7 @@
       return;
     const request = selectWriteRequest<CeremonyProject>(retryRequest, () => ({
       expectedRevision: revision!,
-      operationId: crypto.randomUUID(),
+      operationId: createUuid(),
       project: project!,
     }));
     retryRequest = request;
@@ -280,12 +287,12 @@
     if (!project || !accountSession) return;
     const copy = { ...project, title: `${project.title} (cópia)`.slice(0, 120) };
     try {
-      const id = crypto.randomUUID();
+      const id = createUuid();
       const response = await fetch('/api/projects', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ id, operationId: crypto.randomUUID(), project: copy }),
+        body: JSON.stringify({ id, operationId: createUuid(), project: copy }),
       });
       if (!response.ok) throw new Error('Não foi possível criar uma cópia. Tente novamente.');
       const snapshot = projectSnapshotSchema.parse(await response.json());
@@ -566,6 +573,24 @@
       announce('Planejamento aberto.');
     }
   }
+  async function openCsvImport(trigger: HTMLButtonElement) {
+    csvTrigger = trigger;
+    try {
+      csvDialog = (await import('../../lib/editor/CsvImportDialog.svelte')).default;
+    } catch {
+      announce('Não foi possível abrir a importação. Verifique a conexão e tente novamente.', true);
+    }
+  }
+  function closeCsvImport() {
+    csvDialog = null;
+    void tick().then(() => csvTrigger?.focus());
+  }
+  function importGuests(guests: CeremonyProject['guests']): boolean {
+    return mutate(
+      (p) => addGuests(p, guests),
+      `${guests.length} ${guests.length === 1 ? 'convidado adicionado' : 'convidados adicionados'} pelo CSV. Você pode desfazer.`,
+    );
+  }
   async function importFile(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
@@ -669,6 +694,7 @@
 >
 
 <div class="editor-page">
+  {#if project && geometry}<a class="skip-link" href="#planta">Pular para a planta</a>{/if}
   <header class="editor-header">
     <a href={resolve('/')} class="editor-brand" aria-label="Enlace, voltar à página inicial"
       ><svg viewBox="0 0 36 36" aria-hidden="true"
@@ -868,6 +894,8 @@
       </aside>
 
       <main
+        id="planta"
+        tabindex="-1"
         class="plan-workspace"
         aria-label="Planta da cerimônia"
         data-edit-times={JSON.stringify(editTimes)}
@@ -957,6 +985,15 @@
         class="guests-sidebar"
         aria-label="Convidados e lugares"
       >
+        <SeatList
+          {project}
+          {selectedGuestId}
+          {selectedSeatId}
+          onSeatSelect={selectSeat}
+          onAssignGuest={placeGuest}
+          onUnassignSeat={(id) =>
+            mutate((p) => unassignSeat(p, id), 'Lugar liberado. O convidado continua na lista.')}
+        />
         <GuestsPanel
           {project}
           {selectedGuestId}
@@ -969,6 +1006,7 @@
           onAssignGuest={placeGuest}
           onUnassignSeat={(id) =>
             mutate((p) => unassignSeat(p, id), 'Lugar liberado. O convidado continua na lista.')}
+          onImportCsv={openCsvImport}
         />
       </aside>
     </div>
@@ -990,6 +1028,15 @@
       <p>Carregando o planejamento deste navegador.</p>
     </main>{/if}
 
+  {#if csvDialog && project}
+    {@const CsvDialog = csvDialog}
+    <CsvDialog
+      existingNames={project.guests.map((guest) => guest.name)}
+      capacity={300 - project.guests.length}
+      onImport={importGuests}
+      onClose={closeCsvImport}
+    />
+  {/if}
   <div class:error={feedbackError} class="editor-feedback" role="status" aria-live="polite">
     {exporting ? 'Preparando seu arquivo…' : feedback}
   </div>
@@ -1054,6 +1101,30 @@
     fill: none;
     stroke: #295842;
     stroke-width: 1.6;
+  }
+  .skip-link {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 100;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: #295842;
+    color: #fffefb;
+    font-size: 13px;
+    font-weight: 600;
+    transform: translateY(-200%);
+  }
+  .skip-link:focus {
+    transform: none;
+  }
+  .plan-workspace:focus {
+    outline: none;
+  }
+  .account-tools a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
   }
   .editor-brand svg ellipse:last-child {
     stroke: #b89364;
@@ -1241,7 +1312,7 @@
     flex-shrink: 0;
   }
   .zoom-tools button {
-    font-size: 10px;
+    font-size: 11px;
     min-height: 32px;
   }
   .plan-stats {
@@ -1286,7 +1357,7 @@
     line-height: 1.6;
   }
   .keyboard-note {
-    font-size: 9px;
+    font-size: 11px;
     color: #626e63;
     white-space: nowrap;
   }
@@ -1296,7 +1367,7 @@
     align-items: center;
     gap: 11px;
     flex-wrap: wrap;
-    font-size: 9px;
+    font-size: 11px;
     color: #626e63;
   }
   .map-legend span {
@@ -1559,9 +1630,6 @@
     .project-heading h1 {
       font-size: 12px;
     }
-    .save-state {
-      font-size: 9px;
-    }
     .header-tools {
       width: 100%;
       justify-content: flex-end;
@@ -1576,15 +1644,9 @@
     .plan-toolbar h2 {
       font-size: 20px;
     }
-    .plan-toolbar p {
-      font-size: 10px;
-    }
     .plan-stats {
       gap: 11px;
-      font-size: 9px;
-    }
-    .map-legend {
-      font-size: 8px;
+      font-size: 11px;
     }
     .personal-map {
       padding: 7px 12px;

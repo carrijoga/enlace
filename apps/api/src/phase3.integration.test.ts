@@ -220,4 +220,85 @@ describe.skipIf(!databaseUrl)('API integrada com sessões reais e PostgreSQL', (
       ).status,
     ).toBe(200);
   });
+  it('exclui apenas a conta autenticada após confirmar a senha e elimina seus dados em cascata', async () => {
+    const loginA = await request('/api/auth/sign-in/email', 'POST', '', {
+      email: 'lia@example.test',
+      password: 'Nova-senha-ficticia-456!',
+    });
+    const activeCookieA = cookies(loginA);
+    const loginB = await request('/api/auth/sign-in/email', 'POST', '', {
+      email: 'noah@example.test',
+      password,
+    });
+    const activeCookieB = cookies(loginB);
+    const guestId = randomUUID();
+    const seatId = project.layout.rows[0]!.leftSeatIds[0]!;
+    const projectWithGuest = {
+      ...project,
+      guests: [
+        { id: guestId, name: 'Convidada fictícia', category: 'convidado' as const, note: '' },
+      ],
+      assignments: [{ seatId, guestId }],
+    };
+    const beforeDelete = projectSnapshotSchema.parse(
+      await (await request(`/api/projects/${id}`, 'GET', activeCookieA)).json(),
+    );
+    const saved = await request(`/api/projects/${id}`, 'PUT', activeCookieA, {
+      expectedRevision: beforeDelete.revision,
+      operationId: randomUUID(),
+      project: projectWithGuest,
+    });
+    expect(saved.status).toBe(200);
+    const otherProjectId = randomUUID();
+    const otherProject = { ...project, title: 'Projeto de Noah' };
+    expect(
+      (
+        await request('/api/projects', 'POST', activeCookieB, {
+          id: otherProjectId,
+          operationId: randomUUID(),
+          project: otherProject,
+        })
+      ).status,
+    ).toBe(201);
+
+    const rejected = await request('/api/auth/delete-user', 'POST', activeCookieA, {
+      password: 'senha-incorreta-ficticia',
+    });
+    expect(rejected.status).toBe(400);
+    expect((await pool.query('SELECT id FROM "user" WHERE id=$1', [userA])).rowCount).toBe(1);
+    const missingPassword = await request('/api/auth/delete-user', 'POST', activeCookieA, {});
+    expect(missingPassword.status).toBe(400);
+    expect((await pool.query('SELECT id FROM "user" WHERE id=$1', [userA])).rowCount).toBe(1);
+
+    const deleted = await request('/api/auth/delete-user', 'POST', activeCookieA, {
+      password: 'Nova-senha-ficticia-456!',
+    });
+    expect(deleted.status).toBe(200);
+    expect(await deleted.json()).toMatchObject({ success: true, message: 'User deleted' });
+    expect((await pool.query('SELECT id FROM "user" WHERE id=$1', [userA])).rowCount).toBe(0);
+    expect((await pool.query('SELECT id FROM session WHERE user_id=$1', [userA])).rowCount).toBe(0);
+    expect((await pool.query('SELECT id FROM account WHERE user_id=$1', [userA])).rowCount).toBe(0);
+    expect((await pool.query('SELECT id FROM projects WHERE id=$1', [id])).rowCount).toBe(0);
+    expect((await pool.query('SELECT id FROM guests WHERE project_id=$1', [id])).rowCount).toBe(0);
+    expect(
+      (await pool.query('SELECT project_id FROM seat_assignments WHERE project_id=$1', [id]))
+        .rowCount,
+    ).toBe(0);
+    expect(
+      (await pool.query('SELECT project_id FROM project_write_receipts WHERE project_id=$1', [id]))
+        .rowCount,
+    ).toBe(0);
+    expect(
+      (
+        await pool.query('SELECT id FROM projects WHERE id=$1 AND owner_id<>$2', [
+          otherProjectId,
+          userA,
+        ])
+      ).rowCount,
+    ).toBe(1);
+    expect((await request('/api/projects', 'GET', activeCookieA)).status).toBe(401);
+    expect((await request(`/api/projects/${otherProjectId}`, 'GET', activeCookieB)).status).toBe(
+      200,
+    );
+  }, 30_000);
 });

@@ -7,6 +7,8 @@
   --green: #295842;
   --muted: #626e63;
   --line: #dfe3da;
+  /* Contorno de campos: 3:1 sobre marfim e papel (WCAG 1.4.11). --line é só para divisores. */
+  --field-line: #7f8e7b;
 }
 * {
   box-sizing: border-box;
@@ -273,6 +275,9 @@ dd {
   font-variant-numeric: tabular-nums;
 }
 .text-button {
+  display: inline-flex;
+  align-items: flex-end;
+  min-height: 24px; /* WCAG 2.5.8: alvo mínimo sem mudar o visual */
   padding: 0 0 3px;
   background: none;
   border: 0;

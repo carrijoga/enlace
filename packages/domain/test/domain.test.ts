@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   addGuest,
+  addGuests,
   addRow,
   assignGuest,
   createInitialProject,
@@ -182,5 +183,22 @@ describe('structural sharing and seat labels', () => {
     const labels = getSeatLabels(p.layout);
     expect(labels.size).toBe(seats(p).length);
     for (const id of seats(p)) expect(labels.get(id)).toBe(getSeatLabel(p, id));
+  });
+
+  it('adds a guest batch in one change without touching layout or seats, within limits', () => {
+    const p = createInitialProject();
+    const batch = [guest('Ana Fictícia'), guest('Ana Fictícia'), guest('Bruno')];
+    const next = addGuests(p, batch);
+    expect(next.guests.map((g) => g.name)).toEqual(['Ana Fictícia', 'Ana Fictícia', 'Bruno']);
+    expect(next.layout).toBe(p.layout);
+    expect(next.assignments).toEqual([]);
+    expect(addGuests(p, [])).toBe(p);
+    const full = addGuests(
+      p,
+      Array.from({ length: 300 }, () => guest()),
+    );
+    expect(() => addGuests(full, [guest()])).toThrow(/300/);
+    const dup = guest();
+    expect(() => addGuests(p, [dup, dup])).toThrow();
   });
 });

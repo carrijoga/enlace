@@ -22,6 +22,11 @@ export async function authRequest(
   const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
   if (!response.ok) {
     const message = typeof data.message === 'string' ? data.message : '';
+    if (
+      path === 'delete-user' &&
+      (data.code === 'INVALID_PASSWORD' || message.toLowerCase() === 'invalid password')
+    )
+      throw new Error('A senha não confere. Confira e tente novamente.');
     if (response.status === 401) throw new Error('Confira seu e-mail e sua senha.');
     if (response.status === 429)
       throw new Error('Muitas tentativas. Aguarde um pouco e tente novamente.');

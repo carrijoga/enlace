@@ -2,6 +2,26 @@
 
 Atualizado em 08/11/2026, America/Sao_Paulo.
 
+## Contexto de produto atualizado (Impeccable init) — 08/11/2026
+
+`PRODUCT.md` da raiz, compartilhado com `apps/web`, ganhou posicionamento ("a planta é o produto"), contexto de uso, voz, evidências e acessibilidade, todos confirmados pelo usuário: celular tanto quanto computador no fluxo completo; afeto na landing e clareza na ferramenta; meta WCAG 2.2 AA em todas as telas, incluindo alternativa à planta para leitor de tela, ainda não auditada. Tensão a resolver na fase 5: paridade no celular versus limite conhecido do ADR-0006. `DESIGN.md` não foi alterado. Live mode configurado em `apps/web/.impeccable/live/config.json` (sem CSP), ainda não exercitado.
+
+## Fase 5 em execução — 08/11/2026
+
+Iniciada após conferência do código e Git: fase 4 presente no working tree, ainda sem commit. Preservar essas alterações e arquivos paralelos do usuário. Frentes independentes com subagents gpt-6-luna: interface/editor/CSV; exclusão autenticada de conta; operação e ensaio de restauração. Coordenador integra projetos/importação idempotente, validações e documentação. Sem publicação ou provisionamento. Aceite remoto e celular físico identificado continuam dependentes de ambiente; não declarar a fase concluída apenas com validação local.
+
+Continuação em 08/11 (Claude Opus coordenando; subagent Sonnet em landing/conta/projetos, arquivos exclusivos). Auditoria axe-core 4.14 (fora do repo) em todas as telas, 1280×900 e 390×844: nenhuma violação em landing, conta, projetos e CSV. No editor restam `label-content-name-mismatch` nas cadeiras ocupadas (aceito, ADR-0009) e `target-size` causado pela faixa fixa de aviso. Novo: `SeatList.svelte` ("Ver lugares em lista", montado só ao abrir), link de pular para a planta, Tab único na planta, token `--field-line`, textos mínimos de 11 px no editor móvel, `minlength` 12 no cadastro/redefinição, `createUuid` em `@enlace/contracts` (substitui `crypto.randomUUID` em web/domain/contracts; adicionar convidado em HTTP na rede local deixou de falhar). `bench-editor.js` corrigido (o `pagehide` sobrescrevia o seed).
+
+Validação: check 0 erros, lint/format ok, 131 testes com PostgreSQL (`--maxWorkers=2 --testTimeout=30000`; sem isso 4 integrados estouram 5 s), landing 39,31 e editor 85,03 KiB gzip. Benchmark headless ruidoso: rodada limpa com pior p95 de 27,3 ms, outras com picos; não é aceite. O `minlength` 12 na exclusão de conta está correto: o servidor exige 12.
+
+## Fase 4 concluída localmente — 08/11/2026
+
+ADR-0008. CSV de convidados: `apps/web/src/lib/editor/files/csv.ts` (parser RFC 4180 próprio, UTF-8/Windows-1252, limites 1 MiB/1000 registros/30 colunas) e `CsvImportDialog.svelte` (carregado sob demanda pelo botão "Importar CSV" do painel de convidados). Prévia com separador, cabeçalho, mapeamento de colunas e de categorias desconhecidas, aviso de duplicidade sem merge, erros por linha bloqueando a confirmação. Lote via `addGuests` (domínio): um passo de desfazer e uma revisão na conta. `/projetos` ganhou "Importar JSON como novo projeto" (novos IDs de projeto/operação, dono pela sessão).
+
+Subagents Claude Sonnet (econômicos): parser+testes e importação JSON em `/projetos`, arquivos exclusivos; coordenador fez contrato, domínio, diálogo, integração, testes no navegador e docs. Revisão encontrou: `matchCategory` aceitava chaves de protótipo (corrigido pelo subagent) e CSV sem cabeçalho com "convidada" virava cabeçalho (corrigido pelo coordenador, com inferência da coluna de categoria).
+
+Validação: 117 testes (com PostgreSQL), check/lint/format ok, editor 83,73 KiB gzip inicial, CSV em chunk separado. Navegador: fluxo completo local e na conta (docs/validacao-fase4.md). Pendentes: acessibilidade/celular do diálogo CSV, prévia com 1000 linhas medida, idempotência do import JSON em queda de rede.
+
 ## Fase 3 concluída localmente — 08/11/2026
 
 Implementação (agent anterior, tokens esgotados antes de fechar) revisada e validada nesta sessão por Claude. Better Auth e-mail/senha, proxy same-origin `/api/*`, Drizzle schema + migrações SQL (0000 baseline, 0001 remove índice de recibos — estava vazia, corrigida), roles `enlace_runtime`/`enlace_migrator`, API de projetos por proprietário com `expectedRevision` + `operationId`, telas `/conta` e `/projetos`, editor remoto em `/editor?project=UUID` com conflito visível e rascunho por conta/projeto. ADR-0007.
@@ -34,7 +54,7 @@ Branch `codex/ceremony-editor`. Commits locais: `91fab30` (base fase 1), `60f329
 
 40 testes passaram em 7 arquivos, tipos sem erros/avisos Svelte, lint/formatação/build local aprovados. Navegador confirmou atribuição/troca, confirmação/cancelamento/desfazer, setas/Enter, JSON/PNG reais, importação sintética e rejeição de versão inválida, reload do rascunho máximo. Capturas desktop 1170×900 e mobile 390×844 sem overflow. Mapa mobile em fluxo, evitando sobrepor controles.
 
-JS inicial produção (08/11): landing 39.812 bytes/38,88 KiB gzip; editor 81.159 bytes/79,26 KiB, abaixo de 150 KiB. Cenário 288/300, 20 amostras/ação: antes 46,9–120,7 ms (modo frame, com pintura); depois, modo layout (sem pintura, painel oculto): execução 1 formato 67,9 (2 picos), seleção 10,8–11,2, troca 27, filtro 33,5, busca 25; execução 2 todas ≤ 49,3; série de 40 formatos p95 23,1. 44 testes, check/lint/format ok. Modo frame (com pintura, painel visível), duas execuções: formato 29,1/31,5; cadeira 16,6/17,0; pessoa 18,2/17,4; troca 27,4/22,8; filtro 37,1/36,8; busca 33,6/32,9. Falta caracterizar hardware e celular físico. No IP da rede local (http) `crypto.randomUUID` não existe: adicionar convidado/fileira falha ali (produção https e localhost ok). Relatório completo em docs/validacao-fase2.md; artefatos sintéticos/capturas ignorados em .impeccable/review.
+JS inicial produção (08/11): landing 39.812 bytes/38,88 KiB gzip; editor 81.159 bytes/79,26 KiB, abaixo de 150 KiB. Cenário 288/300, 20 amostras/ação: antes 46,9–120,7 ms (modo frame, com pintura); depois, modo layout (sem pintura, painel oculto): execução 1 formato 67,9 (2 picos), seleção 10,8–11,2, troca 27, filtro 33,5, busca 25; execução 2 todas ≤ 49,3; série de 40 formatos p95 23,1. 44 testes, check/lint/format ok. Modo frame (com pintura, painel visível), duas execuções: formato 29,1/31,5; cadeira 16,6/17,0; pessoa 18,2/17,4; troca 27,4/22,8; filtro 37,1/36,8; busca 33,6/32,9. Falta caracterizar hardware e celular físico. Relatório completo em docs/validacao-fase2.md; artefatos sintéticos/capturas ignorados em .impeccable/review.
 
 Subagents econômicos gpt-6-luna: domínio, arquivos, painéis, landing, medição, revisão e documentação. Revisor aprovou interface/código no escopo de capturas e confirmou integridade das otimizações. Inspeção do PNG geral revelou sobreposição de nomes; correção em duas linhas incluída nesta entrega. Motor/detector Impeccable indisponível por cache/permissões; fallback manual, sem auditoria completa de acessibilidade. Ver relatório para alcance exato da revisão.
 
@@ -48,7 +68,7 @@ Neste ambiente o `node` do PATH pode ser shim pnpm que tenta baixar runtime. Par
 
 ## Próximo passo concreto
 
-Fase 4: CSV com prévia, mapeamento de colunas, política de duplicidade e erros por linha (nada gravado antes de confirmar); round-trip JSON contra o modelo atual; importar como novo projeto na conta. Fase 3 commitada (feat(fase3)). Não provisionar recursos pagos nem publicar como efeito colateral. Para repetir ensaios de desempenho: `scripts/bench-editor.js` e `scripts/bench-phone.html` (ver docs/desempenho.md).
+Fase 5, parte local praticamente fechada. Fases 4 e 5 commitadas juntas em `codex/ceremony-editor`, sem push; Docker, VS Code e `.claude/` seguem fora dos commits. Próximo, em ordem: (1) ensaio no Moto G84 pela rede local (`web-preview-lan` e `scripts/bench-phone.html`), registrando navegador/versão; (2) ensaio real de restauração, que exige `pg_dump`/`pg_restore` 17 no PATH; (3) teste com leitor de tela (NVDA/TalkBack); (4) ambiente de teste Vercel/Railway para cookies/origem, SMTP, `build:vercel`, migrações e privilégios — provisionamento só com aprovação explícita do usuário. Não provisionar recursos pagos nem publicar como efeito colateral. Para repetir ensaios de desempenho: `scripts/bench-editor.js` e `scripts/bench-phone.html` (ver docs/desempenho.md).
 
 Questões futuras: colaboração entre contas, cenários alternativos, medidas reais/altar livre, regras familiares configuráveis, e-mail, domínio, região/recursos/orçamento. ADR-0004 registra rotas, editor local e commits por entrega coesa; fases são marcos.
 

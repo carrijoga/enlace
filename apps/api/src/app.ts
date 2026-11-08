@@ -38,6 +38,21 @@ export interface ProjectStore {
 
 export function createApp(config: ApiConfig, dependencies: AppDependencies) {
   const app = new Hono();
+  app.use('*', async (c, next) => {
+    const startedAt = performance.now();
+    await next();
+    const route = c.req.routePath || '/unmatched';
+    // Route templates only: never log identifiers, query strings, headers, or request bodies.
+    console.info(
+      JSON.stringify({
+        event: 'http_request',
+        method: c.req.method,
+        route,
+        status: c.res.status,
+        durationMs: Math.round((performance.now() - startedAt) * 10) / 10,
+      }),
+    );
+  });
   app.use('*', secureHeaders());
   app.use('*', bodyLimit({ maxSize: 2 * 1024 * 1024 }));
   app.use('/api/*', async (c, next) => {

@@ -1,6 +1,36 @@
 import { describe, expect, it } from 'vitest';
 import { createDemoDocument } from '@enlace/contracts';
-import { DRAFT_KEY, loadDraft, saveDraft } from './drafts.js';
+import { DRAFT_KEY, clearAccountDraft, loadDraft, saveDraft } from './drafts.js';
+
+it('ao sair remove só dados da conta atual, incluindo importação ambígua, e avisa outras abas', () => {
+  const store = new Map([
+    [DRAFT_KEY, 'anônimo'],
+    ['enlace:draft:account:v1:alice:project', 'privado'],
+    ['enlace:draft:account:v1:bob:project', 'outra conta'],
+    ['enlace:pending-create:v1:alice', 'criação'],
+    ['enlace:pending-import:v1:alice', 'importação'],
+  ]);
+  clearAccountDraft(
+    {
+      get length() {
+        return store.size;
+      },
+      key: (index) => [...store.keys()][index] ?? null,
+      removeItem: (key) => {
+        store.delete(key);
+      },
+      setItem: (key, value) => {
+        store.set(key, value);
+      },
+    },
+    'alice',
+  );
+  expect([...store.keys()]).toEqual([
+    DRAFT_KEY,
+    'enlace:draft:account:v1:bob:project',
+    'enlace:account-logout:v1:alice',
+  ]);
+});
 
 describe('drafts locais anônimos', () => {
   it('distingue armazenamento vazio, indisponível e conteúdo corrompido', () => {

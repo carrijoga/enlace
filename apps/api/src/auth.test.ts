@@ -34,6 +34,7 @@ describe('Better Auth configuration', () => {
     expect(auth).toBeDefined();
     expect(auth?.handler).toEqual(expect.any(Function));
     expect(auth?.api.getSession).toEqual(expect.any(Function));
+    expect(auth?.options.user?.deleteUser?.enabled).toBe(true);
   });
 
   it('configures production cookies as Secure, HttpOnly and SameSite=Lax without cookie caching', () => {

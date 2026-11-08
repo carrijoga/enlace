@@ -1,4 +1,4 @@
-import { ceremonyProjectSchema, type CeremonyProject } from '@enlace/contracts';
+import { ceremonyProjectSchema, createUuid, type CeremonyProject } from '@enlace/contracts';
 
 export type SeatGeometry = {
   id: string;
@@ -20,7 +20,7 @@ export type LayoutGeometry = {
   seats: SeatGeometry[];
 };
 
-const uuid = () => globalThis.crypto.randomUUID();
+const uuid = createUuid;
 // Valida o projeto completo, mas devolve o próprio objeto recebido: o parse do Zod cria uma
 // cópia profunda, e a cópia faria a interface tratar todos os convidados/fileiras como novos a
 // cada comando. Os comandos montam objetos novos só nos trechos alterados (compartilhamento
@@ -173,6 +173,18 @@ export function addGuest(
   guest: CeremonyProject['guests'][number],
 ): CeremonyProject {
   return validate({ ...project, guests: [...project.guests, guest] });
+}
+/** Acrescenta um lote de convidados numa única alteração, sem mexer na planta nem atribuir lugares. */
+export function addGuests(
+  project: CeremonyProject,
+  guests: CeremonyProject['guests'],
+): CeremonyProject {
+  if (!guests.length) return project;
+  if (project.guests.length + guests.length > 300)
+    throw new Error(
+      `O projeto aceita até 300 convidados; há espaço para ${300 - project.guests.length}.`,
+    );
+  return validate({ ...project, guests: [...project.guests, ...guests] });
 }
 export function updateGuest(
   project: CeremonyProject,

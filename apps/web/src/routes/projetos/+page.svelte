@@ -1,9 +1,12 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { resolve } from '$app/paths';
   import {
+    MAX_PROJECT_FILE_BYTES,
     createDemoDocument,
     createProjectRequestSchema,
+    createUuid,
+    parseProjectFile,
     projectListResponseSchema,
     projectSnapshotSchema,
     projectWriteResponseSchema,
@@ -19,10 +22,20 @@
   let loading = $state(true);
   let busy = $state(false);
   let error = $state('');
+  let loaded = $state(false);
+  let importRequest = $state<CreateProjectRequest | null>(null);
   let titleDrafts = $state<Record<string, string>>({});
   let deleting = $state<ProjectSummary | null>(null);
   let deleteDialog: HTMLDialogElement;
   let createRequest: CreateProjectRequest | null = null;
+  let importInput: HTMLInputElement;
+  let pageHeading: HTMLHeadingElement;
+
+  // Botões ficam desabilitados durante a operação e o navegador pode soltar o foco no body.
+  async function restoreFocus(previous: Element | null) {
+    await tick();
+    if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
+  }
 
   onMount(() => {
     void initialize();
@@ -39,6 +52,12 @@
         return;
       }
       await loadProjects();
+      try {
+        const raw = localStorage.getItem(`enlace:pending-import:v1:${session.user.id}`);
+        if (raw) importRequest = createProjectRequestSchema.parse(JSON.parse(raw));
+      } catch {
+        error = 'Não foi possível recuperar a importação pendente neste navegador.';
+      }
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'Não foi possível carregar seus projetos.';
     } finally {
@@ -54,9 +73,12 @@
     if (!response.ok) throw new Error('Não foi possível carregar seus projetos. Tente novamente.');
     const data = projectListResponseSchema.parse(await response.json());
     projects = data.projects;
+    loaded = true;
     titleDrafts = Object.fromEntries(projects.map((item) => [item.id, item.title]));
   }
   async function createProject() {
+    if (busy) return;
+    const previous = document.activeElement;
     busy = true;
     error = '';
     try {
@@ -67,13 +89,17 @@
           const raw = window.localStorage.getItem(key);
           if (raw) createRequest = createProjectRequestSchema.parse(JSON.parse(raw));
         } catch {
-          window.localStorage.removeItem(key);
+          try {
+            window.localStorage.removeItem(key);
+          } catch {
+            /* Armazenamento indisponível. */
+          }
         }
       }
       if (!createRequest) {
         const document = createDemoDocument();
         const project: CeremonyProject = { ...document.project, title: 'Meu projeto' };
-        createRequest = { id: crypto.randomUUID(), operationId: crypto.randomUUID(), project };
+        createRequest = { id: createUuid(), operationId: createUuid(), project };
         try {
           window.localStorage.setItem(key, JSON.stringify(createRequest));
         } catch {
@@ -103,14 +129,88 @@
       error = cause instanceof Error ? cause.message : 'Não foi possível criar o projeto.';
     } finally {
       busy = false;
+      void restoreFocus(previous);
+    }
+  }
+  async function importProject(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file || busy || importRequest) return;
+    busy = true;
+    error = '';
+    try {
+      if (!session) throw new Error('Entre na sua conta para importar um projeto.');
+      if (file.size > MAX_PROJECT_FILE_BYTES)
+        throw new Error('O arquivo excede o limite de 2 MiB e não foi importado.');
+      let imported: CeremonyProject;
+      try {
+        imported = parseProjectFile(await file.text()).project;
+      } catch {
+        throw new Error('Arquivo inválido ou não reconhecido. Nenhum projeto foi criado.');
+      }
+      // A identidade é sempre nova; nenhum identificador do arquivo vira id ou proprietário.
+      importRequest = {
+        id: createUuid(),
+        operationId: createUuid(),
+        project: { ...imported, title: imported.title.trim() || 'Meu projeto' },
+      };
+      try {
+        localStorage.setItem(
+          `enlace:pending-import:v1:${session.user.id}`,
+          JSON.stringify(importRequest),
+        );
+      } catch {
+        // A identidade da operação permanece disponível enquanto esta página estiver aberta.
+      }
+      await submitImport();
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'Não foi possível importar o projeto.';
+    } finally {
+      busy = false;
+    }
+  }
+  async function submitImport() {
+    if (!session || !importRequest) return;
+    busy = true;
+    error = '';
+    try {
+      const response = await fetch('/api/projects', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(importRequest),
+      });
+      if (response.status === 401) {
+        window.location.assign(resolve('/conta'));
+        return;
+      }
+      if (!response.ok)
+        throw new Error(
+          'Não foi possível confirmar a importação. Tente novamente abaixo para evitar duplicar o projeto.',
+        );
+      const snapshot = projectSnapshotSchema.parse(await response.json());
+      try {
+        localStorage.removeItem(`enlace:pending-import:v1:${session.user.id}`);
+      } catch {
+        // Uma repetição mantém os mesmos IDs e retorna o projeto já criado.
+      }
+      importRequest = null;
+      window.location.assign(`${resolve('/editor')}?project=${encodeURIComponent(snapshot.id)}`);
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'Não foi possível importar o projeto.';
+    } finally {
+      busy = false;
     }
   }
   async function rename(item: ProjectSummary) {
+    if (busy) return;
     const title = (titleDrafts[item.id] ?? '').trim();
     if (!title || title === item.title) {
       titleDrafts[item.id] = item.title;
       return;
     }
+    const previous = document.activeElement;
     busy = true;
     error = '';
     try {
@@ -130,7 +230,7 @@
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           expectedRevision: snapshot.revision,
-          operationId: crypto.randomUUID(),
+          operationId: createUuid(),
           project,
         }),
       });
@@ -149,22 +249,25 @@
       error = cause instanceof Error ? cause.message : 'Não foi possível renomear o projeto.';
     } finally {
       busy = false;
+      void restoreFocus(previous);
     }
   }
   function askDelete(item: ProjectSummary) {
+    error = '';
     deleting = item;
     void Promise.resolve().then(() => deleteDialog.showModal());
   }
   async function deleteProject() {
-    if (!deleting) return;
+    if (!deleting || busy) return;
+    const target = deleting;
     busy = true;
     error = '';
     try {
-      const response = await fetch(`/api/projects/${encodeURIComponent(deleting.id)}`, {
+      const response = await fetch(`/api/projects/${encodeURIComponent(target.id)}`, {
         method: 'DELETE',
         credentials: 'same-origin',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ expectedRevision: deleting.revision }),
+        body: JSON.stringify({ expectedRevision: target.revision }),
       });
       if (response.status === 409)
         throw new Error(
@@ -176,9 +279,12 @@
       }
       if (!response.ok && response.status !== 204)
         throw new Error('Não foi possível excluir o projeto.');
-      projects = projects.filter((item) => item.id !== deleting?.id);
+      projects = projects.filter((item) => item.id !== target.id);
       deleteDialog.close();
       deleting = null;
+      // O botão que abriu o diálogo deixou de existir: leva o foco ao título da página.
+      await tick();
+      pageHeading?.focus();
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'Não foi possível excluir o projeto.';
     } finally {
@@ -189,7 +295,16 @@
     busy = true;
     try {
       await authRequest('sign-out', {});
-      if (session) clearAccountDraft(window.localStorage, session.user.id);
+      try {
+        if (session) clearAccountDraft(window.localStorage, session.user.id);
+      } catch {
+        session = null;
+        projects = [];
+        loaded = false;
+        error =
+          'Você saiu da conta, mas o navegador bloqueou a limpeza dos rascunhos. Limpe os dados deste site se estiver em um computador compartilhado.';
+        return;
+      }
       window.location.assign(resolve('/'));
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'Não foi possível sair da conta.';
@@ -212,7 +327,8 @@
       ><ellipse cx="14" cy="18" rx="8" ry="11" /><ellipse cx="23" cy="18" rx="8" ry="11" /></svg
     ><span>enlace</span></a
   >
-  <nav>
+  <nav aria-label="Principal">
+    <a href={resolve('/conta')}>Minha conta</a>
     <a href={resolve('/editor')}>Editor local</a>{#if session}<span>{session.user.email}</span
       >{/if}<button disabled={busy} onclick={logout}>Sair</button>
   </nav>
@@ -221,14 +337,52 @@
 <main class="projects-page">
   <div class="page-heading">
     <div>
-      <h1>Meus projetos</h1>
+      <h1 tabindex="-1" bind:this={pageHeading}>Meus projetos</h1>
       <p>Seus planejamentos salvos na conta.</p>
     </div>
-    <button class="primary" disabled={busy || loading} onclick={createProject}>Criar projeto</button
-    >
+    <div class="heading-actions">
+      <button
+        class="secondary"
+        disabled={busy || loading || !session || !!importRequest}
+        onclick={() => importInput.click()}>Importar JSON como novo projeto</button
+      ><input
+        bind:this={importInput}
+        class="sr-only"
+        type="file"
+        accept=".json,application/json"
+        tabindex="-1"
+        aria-label="Arquivo JSON do projeto"
+        onchange={importProject}
+      />
+      <button class="primary" disabled={busy || loading || !session} onclick={createProject}
+        >Criar projeto</button
+      >
+    </div>
   </div>
-  {#if error}<p class="notice" role="alert">{error}</p>{/if}
-  {#if loading}<p role="status">Carregando seus projetos…</p>
+  <p class="logout-note">
+    Ao sair, os rascunhos desta conta são removidos deste navegador. Exporte alterações ainda não
+    salvas antes de sair.
+  </p>
+  {#if error && !deleting}<p class="notice" role="alert">{error}</p>{/if}
+  {#if importRequest}
+    <section class="notice" aria-label="Importação pendente">
+      <p>
+        A importação de “{importRequest.project.title}” ainda precisa de confirmação. Repetir usa a
+        mesma operação, sem criar outra cópia.
+      </p>
+      <button class="secondary" disabled={busy} onclick={submitImport}
+        >Confirmar importação pendente</button
+      >
+    </section>
+  {/if}
+  <div role="status">
+    {#if loading}<p>Carregando seus projetos…</p>{/if}
+  </div>
+  {#if loading}
+    <!-- Estado anunciado pela região acima. -->
+  {:else if !loaded}<button class="secondary" disabled={busy} onclick={initialize}
+      >Tentar carregar novamente</button
+    >
   {:else if projects.length === 0}<section class="empty">
       <h2>Seu próximo planejamento começa aqui.</h2>
       <p>Crie um projeto para organizar a planta, os convidados e os lugares em sua conta.</p>
@@ -268,13 +422,21 @@
     </ul>{/if}
 </main>
 
-<dialog bind:this={deleteDialog} onclose={() => (deleting = null)} aria-labelledby="delete-title">
+<dialog
+  bind:this={deleteDialog}
+  oncancel={(event) => {
+    if (busy) event.preventDefault();
+  }}
+  onclose={() => (deleting = null)}
+  aria-labelledby="delete-title"
+>
   <h2 id="delete-title">Excluir este projeto?</h2>
   <p>
     {deleting?.title} e seu planejamento serão removidos da conta. Esta ação não pode ser desfeita.
   </p>
+  {#if error}<p class="notice" role="alert">{error}</p>{/if}
   <div class="dialog-actions">
-    <button onclick={() => deleteDialog.close()}>Cancelar</button><button
+    <button disabled={busy} onclick={() => deleteDialog.close()}>Cancelar</button><button
       class="delete-confirm"
       disabled={busy}
       onclick={deleteProject}>{busy ? 'Excluindo…' : 'Excluir projeto'}</button
@@ -290,12 +452,16 @@
   }
   .site-header nav {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 22px;
     color: #626e63;
     font-size: 14px;
   }
   .site-header nav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
     color: #295842;
   }
   .site-header nav button {
@@ -324,6 +490,13 @@
     margin: 9px 0 0;
     color: #626e63;
   }
+  .logout-note {
+    color: #626e63;
+    font-size: 14px;
+    line-height: 1.6;
+    max-width: 70ch;
+    margin-bottom: 24px;
+  }
   button {
     font: inherit;
     cursor: pointer;
@@ -340,6 +513,19 @@
     border-radius: 9px;
     font-weight: 650;
   }
+  .heading-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: end;
+    gap: 10px;
+  }
+  .secondary {
+    padding: 12px 17px;
+    color: #295842;
+    background: transparent;
+    border: 1px solid #aebead;
+    border-radius: 9px;
+  }
   .project-list {
     list-style: none;
     padding: 0;
@@ -355,7 +541,8 @@
     border-bottom: 1px solid #dfe3da;
   }
   .project-copy {
-    min-width: 180px;
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
   .project-title {
     color: #27342c;
@@ -382,7 +569,7 @@
     min-width: 130px;
     height: 39px;
     padding: 7px 10px;
-    border: 1px solid #bfc9bd;
+    border: 1px solid var(--field-line);
     border-radius: 7px;
     background: #fffefb;
   }
@@ -422,6 +609,11 @@
     border: 1px solid #e3c8c2;
     border-radius: 8px;
   }
+  /* O erro não depende só da cor. */
+  .notice[role='alert']::before {
+    content: 'Erro: ';
+    font-weight: 700;
+  }
   dialog {
     width: min(440px, calc(100% - 32px));
     padding: 27px;
@@ -458,6 +650,8 @@
   @media (max-width: 740px) {
     .site-header {
       min-height: 76px;
+      flex-wrap: wrap;
+      gap: 12px;
     }
     .site-header nav {
       gap: 11px;
