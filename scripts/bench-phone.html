@@ -1,0 +1,247 @@
+<!doctype html>
+<!-- Ensaio de desempenho em celular físico (fase 2). Dados fictícios. Uso: após `pnpm run build`, copiar para apps/web/.svelte-kit/output/client/bench.html, iniciar o preview com --host 0.0.0.0 e abrir http://<IP-do-PC>:4173/bench.html no celular. Ver docs/validacao-fase2.md. -->
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ensaio de desempenho · Enlace</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        font:
+          14px system-ui,
+          sans-serif;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+      }
+      #bar {
+        padding: 8px;
+        background: #295842;
+        color: #fff;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      #bar button {
+        font: inherit;
+        padding: 8px 12px;
+        border: 0;
+        border-radius: 6px;
+        background: #fff;
+        color: #295842;
+        font-weight: 600;
+      }
+      #status {
+        flex: 1 1 100%;
+      }
+      iframe {
+        flex: 1;
+        border: 0;
+        width: 100%;
+      }
+      #out {
+        display: none;
+        padding: 12px;
+        overflow: auto;
+        white-space: pre-wrap;
+        font:
+          13px ui-monospace,
+          monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="bar">
+      <button id="start">1. Carregar 288/300</button>
+      <button id="measure" disabled>2. Medir</button>
+      <button id="toggle" disabled>Ver editor/resultado</button>
+      <span id="status">Toque em “Carregar”. Depois teste o toque à mão e, por fim, “Medir”.</span>
+    </div>
+    <iframe id="editor" title="Editor" hidden></iframe>
+    <pre id="out"></pre>
+    <script>
+      const status = (t) => (document.getElementById('status').textContent = t);
+      const frame = document.getElementById('editor');
+      const out = document.getElementById('out');
+
+      function seed() {
+        // randomUUID só existe em contexto seguro (https/localhost); no IP da rede local, gerar v4 manualmente.
+        const uuid = () =>
+          crypto.randomUUID
+            ? crypto.randomUUID()
+            : '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, (c) =>
+                (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16),
+              );
+        const cats = ['familia', 'padrinho', 'madrinha', 'pajem', 'convidado'];
+        const rows = Array.from({ length: 12 }, () => ({
+          id: uuid(),
+          leftSeatIds: Array.from({ length: 12 }, uuid),
+          rightSeatIds: Array.from({ length: 12 }, uuid),
+        }));
+        const guests = Array.from({ length: 300 }, (_, i) => ({
+          id: uuid(),
+          name: `Pessoa fictícia ${String(i + 1).padStart(3, '0')} de Araújo e Nascimento`,
+          category: cats[i % 5],
+          note: '',
+        }));
+        const seats = rows.flatMap((r) => [...r.leftSeatIds, ...r.rightSeatIds]);
+        localStorage.setItem(
+          'enlace:draft:anonymous:v1',
+          JSON.stringify({
+            format: 'enlace-project',
+            schemaVersion: 1,
+            exportedAt: new Date().toISOString(),
+            project: {
+              title: 'Ensaio sintético — 288 cadeiras',
+              couple: { first: 'Alex', second: 'Ravi' },
+              weddingDate: null,
+              layout: {
+                mode: 'straight',
+                curveStrength: 50,
+                aisleWidth: 1.8,
+                linkedCounts: true,
+                rows,
+              },
+              guests,
+              assignments: seats
+                .slice(0, 288)
+                .map((seatId, i) => ({ seatId, guestId: guests[i].id })),
+            },
+          }),
+        );
+      }
+
+      // Mesmo procedimento de scripts/bench-editor.js (modo 'frame'), executado dentro do iframe.
+      async function run(w, n = 20) {
+        const d = w.document;
+        const fr = () =>
+          new Promise((r) =>
+            w.requestAnimationFrame(() => {
+              const c = new w.MessageChannel();
+              c.port1.onmessage = () => r();
+              c.port2.postMessage(0);
+            }),
+          );
+        const idle = () => new Promise((r) => setTimeout(r, 60));
+        const p95 = (v) => {
+          const s = [...v].sort((a, b) => a - b);
+          return s[Math.ceil(s.length * 0.95) - 1];
+        };
+        const now = () => w.performance.now();
+        const button = (t) =>
+          [...d.querySelectorAll('button')].find((b) => b.textContent.trim() === t);
+        const seats = () => [...d.querySelectorAll('[data-seat-id]')];
+        const guests = () => d.querySelectorAll('.guest-choice');
+        const esc = () =>
+          d.body.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        const click = (el) => el.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+        async function sample(name, action) {
+          status(`Medindo ${name}…`);
+          const v = [];
+          for (let i = 0; i < n; i++) {
+            await idle();
+            const s = now();
+            action(i);
+            await fr();
+            v.push(+(now() - s).toFixed(1));
+          }
+          return v;
+        }
+        const all = seats().length,
+          res = {};
+        res.format = await sample('formato', (i) =>
+          button(i % 2 ? 'Tradicional' : 'Meia-lua').click(),
+        );
+        button('Tradicional').click();
+        await idle();
+        res.selectSeat = await sample('cadeira', (i) => click(seats()[(i * 7 + 1) % all]));
+        esc();
+        await idle();
+        res.selectGuest = await sample('pessoa', (i) =>
+          guests()[(i * 11) % guests().length].click(),
+        );
+        esc();
+        await idle();
+        status('Medindo troca…');
+        const sw = [];
+        for (let i = 0; i < n; i++) {
+          guests()[(i * 13) % Math.min(all, guests().length)].click();
+          await idle();
+          const s = now();
+          click(seats()[(i * 17 + 5) % all]);
+          await fr();
+          sw.push(+(now() - s).toFixed(1));
+          esc();
+        }
+        res.swap = sw;
+        await idle();
+        res.filter = await sample('filtro', () => button('Sem lugar').click());
+        if (button('Todas')?.getAttribute('aria-pressed') !== 'true') button('Todas').click();
+        await idle();
+        const q = d.getElementById('guest-search');
+        res.search = await sample('busca', (i) => {
+          q.value = i % 2 ? '' : 'fictícia 1';
+          q.dispatchEvent(new w.Event('input', { bubbles: true }));
+        });
+        q.value = '';
+        q.dispatchEvent(new w.Event('input', { bubbles: true }));
+        const lines = [
+          `Aparelho: ${navigator.userAgent}`,
+          `Tela: ${screen.width}×${screen.height} @${devicePixelRatio}x · janela ${w.innerWidth}×${w.innerHeight}`,
+          `Cadeiras: ${all} · convidados: ${guests().length}`,
+          `Memória JS: ${w.performance.memory ? (w.performance.memory.usedJSHeapSize / 1048576).toFixed(1) + ' MiB' : 'indisponível neste navegador'}`,
+          '',
+          'p95 (ms) — meta ≤ 50',
+        ];
+        for (const [k, v] of Object.entries(res))
+          lines.push(
+            `${k.padEnd(12)} p95 ${String(p95(v)).padStart(6)}  mediana ${[...v].sort((a, b) => a - b)[Math.floor(v.length / 2)]}  máx ${Math.max(...v)}  ${p95(v) <= 50 ? 'OK' : 'ACIMA'}`,
+          );
+        lines.push('', 'Amostras:', JSON.stringify(res));
+        return lines.join('\n');
+      }
+
+      document.getElementById('start').onclick = () => {
+        seed();
+        frame.hidden = false;
+        out.style.display = 'none';
+        frame.src = '/editor';
+        status('Abrindo editor…');
+        frame.onload = () => {
+          const check = setInterval(() => {
+            const n = frame.contentDocument?.querySelectorAll('[data-seat-id]').length ?? 0;
+            if (n === 288) {
+              clearInterval(check);
+              status(
+                'Pronto: 288 cadeiras. Teste tocar, selecionar e trocar; depois toque em “Medir”.',
+              );
+              document.getElementById('measure').disabled = false;
+            }
+          }, 200);
+        };
+      };
+      document.getElementById('measure').onclick = async () => {
+        document.getElementById('measure').disabled = true;
+        try {
+          out.textContent = await run(frame.contentWindow);
+        } catch (e) {
+          out.textContent = 'Erro: ' + e;
+        }
+        frame.hidden = true;
+        out.style.display = 'block';
+        document.getElementById('toggle').disabled = false;
+        document.getElementById('measure').disabled = false;
+        status('Concluído. Copie ou fotografe o resultado.');
+      };
+      document.getElementById('toggle').onclick = () => {
+        frame.hidden = !frame.hidden;
+        out.style.display = frame.hidden ? 'block' : 'none';
+      };
+    </script>
+  </body>
+</html>

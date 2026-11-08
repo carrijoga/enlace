@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import type { CeremonyProject } from '@enlace/contracts';
   import type { LayoutGeometry, SeatGeometry } from '@enlace/domain';
   import { GUEST_CATEGORIES } from './guest-categories';
@@ -23,8 +23,26 @@
   } = $props();
   let viewport: HTMLDivElement;
   let svg: SVGSVGElement;
-  const guests = $derived(new Map(project.guests.map((guest) => [guest.id, guest])));
-  const assignments = $derived(new Map(project.assignments.map((a) => [a.seatId, a.guestId])));
+  // Intermediários por referência: trocar só o formato não reconstrói os mapas (ADR-0005).
+  const guestList = $derived(project.guests);
+  const assignmentList = $derived(project.assignments);
+  const guests = $derived(new Map(guestList.map((guest) => [guest.id, guest])));
+  const assignments = $derived(new Map(assignmentList.map((a) => [a.seatId, a.guestId])));
+  // Lista de cadeiras estável enquanto as fileiras não mudam: id, rótulo e índices não dependem
+  // de formato, curvatura ou corredor. Assim trocar o formato só reexecuta o `transform` de cada
+  // cadeira (via `positions`), em vez de todas as expressões das 288 cadeiras.
+  const rows = $derived(project.layout.rows);
+  const seatList = $derived.by(() => {
+    void rows;
+    return untrack(() => geometry.seats);
+  });
+  const positions = $derived(new Map(geometry.seats.map((seat) => [seat.id, seat])));
+  const transformOf = (id: string) => {
+    const seat = positions.get(id);
+    return seat
+      ? `translate(${seat.x.toFixed(2)} ${seat.y.toFixed(2)}) rotate(${seat.angle.toFixed(1)})`
+      : undefined;
+  };
   let hovered = $state<string | null>(null);
   // Valor primitivo: o efeito só roda quando a largura muda de fato, não a cada nova geometria
   // (trocar o formato gera outro objeto com a mesma largura e forçaria layout síncrono).
@@ -53,7 +71,9 @@
     });
   });
 
-  function seatKey(event: KeyboardEvent, seat: SeatGeometry) {
+  function seatKey(event: KeyboardEvent, listed: SeatGeometry) {
+    // Posição atual (a de `seatList` pode ser de outro formato).
+    const seat = positions.get(listed.id) ?? listed;
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       onSeatSelect(seat.id);
@@ -142,7 +162,7 @@
       <text x={geometry.center - 235} y="271" text-anchor="middle" class="side">ESQUERDA</text>
       <text x={geometry.center + 235} y="271" text-anchor="middle" class="side">DIREITA</text>
     </g>
-    {#each geometry.seats as seat, i (seat.id)}
+    {#each seatList as seat, i (seat.id)}
       {@const guest = guests.get(assignments.get(seat.id) ?? '')}
       {@const category = guest ? GUEST_CATEGORIES[guest.category] : null}
       {@const active = selectedSeatId === seat.id || Boolean(guest && selectedGuestId === guest.id)}
@@ -152,7 +172,7 @@
         tabindex={active || (!selectedSeatId && i === 0) ? 0 : -1}
         aria-label={`${seat.label}: ${guest?.name ?? 'disponível'}`}
         aria-pressed={active}
-        transform={`translate(${seat.x.toFixed(2)} ${seat.y.toFixed(2)}) rotate(${seat.angle.toFixed(1)})`}
+        transform={transformOf(seat.id)}
         onclick={() => onSeatSelect(seat.id)}
         onkeydown={(event) => seatKey(event, seat)}
         ondragover={(event) => {
