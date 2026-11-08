@@ -1,0 +1,30 @@
+# Dependências e saídas de desenvolvimento
+node_modules/
+.pnpm-store/
+.svelte-kit/
+.vercel/
+.impeccable/review/
+build/
+out/
+dist/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+*.log
+
+# Credenciais; exemplos sanitizados podem ser versionados
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Referência privada e artefatos pessoais de uso local
+prototypes/private/
+data/private/
+exports/
+
+# Arquivos locais do sistema/editor
+.DS_Store
+Thumbs.db
+.idea/

@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-07T23:53:13.086Z",
+  "title": "Design System: Enlace",
+  "extensions": {
+    "typographyMeta": {
+      "display": {
+        "displayName": "Georgia",
+        "purpose": "Título principal e títulos de seção serifados."
+      },
+      "body": {
+        "displayName": "Segoe UI",
+        "purpose": "Texto de interface, controles e rótulos da planta."
+      }
+    },
+    "breakpoints": [
+      {
+        "name": "compact",
+        "value": "900px"
+      },
+      {
+        "name": "mobile",
+        "value": "680px"
+      }
+    ],
+    "motion": [
+      {
+        "name": "button-background",
+        "value": "background 0.15s",
+        "purpose": "Transição de fundo dos botões; removida com prefers-reduced-motion."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Ação principal da tela bootstrap.",
+      "html": "<button class=\"ds-button-primary\">Explorar exemplo <span aria-hidden=\"true\">→</span></button>",
+      "css": ".ds-button-primary { background: #295842; color: #fffefb; border: 1px solid transparent; border-radius: 9px; padding: 13px 17px; font: 600 13px 'Segoe UI', system-ui, sans-serif; display: inline-flex; align-items: center; gap: 22px; transition: background 0.15s; cursor: pointer; } .ds-button-primary:hover { background: #1e4433; } .ds-button-primary:focus-visible { outline: 3px solid #6d936f; outline-offset: 5px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Ação alternativa para abrir arquivo JSON.",
+      "html": "<button class=\"ds-button-secondary\">Abrir arquivo JSON</button>",
+      "css": ".ds-button-secondary { background: transparent; color: #295842; border: 1px solid #bfcabd; border-radius: 9px; padding: 13px 17px; font: 600 13px 'Segoe UI', system-ui, sans-serif; cursor: pointer; transition: background 0.15s; } .ds-button-secondary:hover { background: #eaf1e9; } .ds-button-secondary:focus-visible { outline: 3px solid #6d936f; outline-offset: 5px; }"
+    },
+    {
+      "name": "Plan Panel",
+      "kind": "card",
+      "refersTo": "plan-panel",
+      "description": "Contêiner da visualização SVG da planta.",
+      "html": "<section class=\"ds-plan-panel\"><h2>Uma ideia para começar</h2><p>26 lugares</p></section>",
+      "css": ".ds-plan-panel { color: #27342c; background: #fffefb; border: 1px solid #dfe3da; border-radius: 14px; overflow: hidden; padding: 23px 24px; font: 15px 'Segoe UI', system-ui, sans-serif; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Papel e jardim",
+    "overview": "O bootstrap preserva a identidade do protótipo: papel claro, verde profundo, títulos serifados e uma planta ilustrada como foco visual. A composição é arejada e editorial, com controles discretos que deixam o exemplo da cerimônia em evidência.\n\nEste registro cobre somente a tela bootstrap atual. Não descreve o editor final nem funcionalidades planejadas.",
+    "keyCharacteristics": [
+      "Papel quente e superfícies quase brancas.",
+      "Contraste entre Georgia nos títulos e Segoe UI na interface.",
+      "Planta SVG como visual principal."
+    ],
+    "rules": [],
+    "dos": [
+      "Do manter o fundo papel e o verde como acento principal.",
+      "Do preservar o foco visível de 3px com afastamento de 5px.",
+      "Do empilhar a introdução e a planta em telas de até 680px.",
+      "Do respeitar movimento reduzido, removendo transições."
+    ],
+    "donts": [
+      "Don't introduzir sombras: a interface atual usa bordas e tonalidade para separar superfícies.",
+      "Don't tratar o bootstrap como especificação visual do editor final."
+    ]
+  }
+}

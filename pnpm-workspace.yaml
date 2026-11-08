@@ -1,0 +1,13 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Reduz links de dependências e melhora compatibilidade de empacotamento.
+nodeLinker: hoisted
+
+minimumReleaseAgeExclude:
+  - eslint-plugin-svelte@3.24.1
+  - hono@4.13.17
+
+allowBuilds:
+  esbuild: true

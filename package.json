@@ -1,0 +1,41 @@
+{
+  "name": "enlace",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.18.0",
+  "engines": {
+    "node": ">=24.22.1 <25",
+    "pnpm": "12.18.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @enlace/contracts run build && pnpm --parallel --filter @enlace/contracts --filter @enlace/api --filter @enlace/web run dev",
+    "dev:web": "pnpm --filter @enlace/contracts run build && pnpm --filter @enlace/web run dev",
+    "dev:api": "pnpm --filter @enlace/contracts run build && pnpm --filter @enlace/api run dev",
+    "build": "pnpm --filter @enlace/contracts run build && pnpm --filter @enlace/api run build && pnpm --filter @enlace/web run build",
+    "build:web": "pnpm --filter @enlace/contracts run build && pnpm --filter @enlace/web run build",
+    "build:vercel": "pnpm --filter @enlace/contracts run build && pnpm --filter @enlace/web run build:vercel",
+    "build:api": "pnpm --filter @enlace/contracts run build && pnpm --filter @enlace/api run build",
+    "check": "pnpm --filter @enlace/contracts run build && pnpm -r run check",
+    "lint": "eslint apps packages scripts --max-warnings=0",
+    "format": "prettier --write apps packages scripts package.json pnpm-workspace.yaml eslint.config.js vitest.config.ts .github/workflows/ci.yml",
+    "format:check": "prettier --check apps packages scripts package.json pnpm-workspace.yaml eslint.config.js vitest.config.ts .github/workflows/ci.yml",
+    "test": "pnpm --filter @enlace/contracts run build && vitest run",
+    "measure:web": "node scripts/measure-web.mjs",
+    "db:up": "docker compose -f docker-compose.yml up -d postgres",
+    "db:down": "docker compose -f docker-compose.yml stop postgres",
+    "db:check": "pnpm --filter @enlace/api db:check"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "22.20.5",
+    "eslint": "10.14.0",
+    "eslint-plugin-svelte": "3.24.1",
+    "globals": "17.14.0",
+    "prettier": "3.9.10",
+    "prettier-plugin-svelte": "4.1.1",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.1",
+    "vitest": "5.1.0"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "name": "@enlace/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev --host 127.0.0.1 --port 5173 --strictPort",
+    "build": "node ../../scripts/build-web.mjs",
+    "build:vercel": "vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
+    "check": "svelte-kit sync && svelte-check --tsconfig tsconfig.json"
+  },
+  "dependencies": {
+    "@enlace/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-vercel": "7.0.2",
+    "@sveltejs/kit": "3.1.1",
+    "@sveltejs/vite-plugin-svelte": "7.3.1",
+    "svelte": "5.57.3",
+    "svelte-check": "4.7.8",
+    "vite": "8.3.6"
+  }
+}
