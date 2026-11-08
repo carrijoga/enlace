@@ -1,6 +1,6 @@
 # Roadmap de implementação
 
-Atualizado em 07/11/2026, com frontend Vercel e backend/PostgreSQL Railway. Fases 0 e 1 concluídas no escopo local; limites de empacotamento Vercel e banco real estão na validação. Próximo passo: fase 2. Etapas posteriores são propostas, não funcionalidades entregues.
+Atualizado em 07/11/2026, com frontend Vercel e backend/PostgreSQL Railway. Fases 0 e 1 concluídas no escopo local. Fase 2 entregue funcionalmente, com aceite de desempenho e aparelhos reais ainda pendentes. Etapas posteriores são propostas, não funcionalidades entregues.
 
 ## Fase 0 — Diagnóstico e estrutura documental — concluída
 
@@ -18,9 +18,11 @@ Entregue: workspace pnpm, SvelteKit/Vercel, API Hono/Node, Drizzle/pg, contratos
 
 Aceite local: página/API/proxy responderam, exemplo e download foram verificados no navegador; 25 testes passaram, sem erros de tipos/lint. JavaScript inicial da tela base: 36,80 KiB gzip. Veja [validação](validacao-fase1.md). O pacote Vercel completo aguarda Linux/CI (symlinks bloqueados no Windows); o banco real aguarda daemon Docker/infraestrutura. Better Auth e migrações de negócio pertencem à fase 3, sem stubs que finjam esses recursos.
 
-## Fase 2 — Migrar o editor local — próximo passo
+## Fase 2 — Migrar o editor local — funcional, em validação
 
-Extrair a geometria e as operações do HTML para domínio testável; migrar a interface para componentes. Substituir dados pessoais por um exemplo fictício, retirar conselhos familiares fixos e manter os recursos existentes.
+Entregue: domínio testável, editor `/editor`, landing `/`, formatos/curvatura/corredor/fileiras, convidados/busca/categorias, atribuição/troca, desfazer/refazer, rascunho local protegido, JSON novo/v3, PNG geral/individual e impressão. Exemplos são fictícios e não incluem regras familiares pessoais. [Relatório](validacao-fase2.md).
+
+Pendências para fechar todo o aceite: reduzir p95 do cenário máximo (92,1 ms na troca de formato, meta 50 ms), ampliar medição para mover/selecionar/filtrar e verificar em celular físico. A medição atual é Windows/IAB desktop e emulação responsiva; não declarar a fase totalmente encerrada. Em seguida, fase 3: contas e persistência entre dispositivos.
 
 Aceite:
 

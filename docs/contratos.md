@@ -4,6 +4,8 @@ Status: implementados em `packages/contracts/src/index.ts`; testes de contrato e
 
 ## Pacote e exports
 
+Na fase 2, `@enlace/domain` consome estes contratos e oferece geometria, criação de projeto e comandos imutáveis para planta/convidados/atribuições. A interface nunca modifica arrays do projeto diretamente. Os contratos integram a entrada de `/editor`; somente exports de arquivos/imagens são carregados sob demanda. Persistência remota ainda não implementada.
+
 O pacote `@enlace/contracts` exporta:
 
 - `healthResponseSchema` e `readinessResponseSchema` para respostas de saúde da API;

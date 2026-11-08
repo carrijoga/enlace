@@ -1,6 +1,6 @@
 # Desempenho e facilidade de uso
 
-Atualizado em 07/11/2026. **Status: metas do produto e primeira medição da tela base.** Frontend SvelteKit/TypeScript na Vercel; API Hono/Node e PostgreSQL privado na Railway. A tela inicial mediu 36,80 KiB gzip; ainda não há benchmark do editor completo. Detalhes na [validação](validacao-fase1.md) e na [arquitetura](arquitetura.md).
+Atualizado em 07/11/2026. **Status: metas do produto e primeira medição do editor local.** Frontend SvelteKit/TypeScript na Vercel; API Hono/Node e PostgreSQL privado na Railway. Landing: 37,69 KiB gzip; editor: 77,55 KiB. Troca de formato no desktop local: p95 12,1 ms no cenário comum e 92,1 ms no limite, acima da meta de 50 ms. Condições, amostras e pendências na [validação da fase 2](validacao-fase2.md). Não ampliar o orçamento para acomodar o desvio.
 
 O resultado esperado é abrir o projeto rapidamente, editar a planta sem esperar a rede e encontrar as ações principais com facilidade. A escolha de framework ajuda a controlar o custo inicial, mas não comprova desempenho: tamanho entregue, renderização, consultas e comportamento em celular serão medidos na aplicação real.
 

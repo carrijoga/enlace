@@ -23,6 +23,8 @@ Uma pessoa entra na conta, cria um planejamento, configura a planta, cadastra ou
 - Trabalho paralelo com subagents, decisões documentadas e memória atualizada.
 - Frontend na Vercel; backend e PostgreSQL na Railway, sem Supabase.
 - Produto rápido, leve e fácil de usar, com preferência por frameworks e dependências enxutos.
+- A rota inicial `/` é a landing page; o planejador funciona separadamente em `/editor`.
+- Editor leve, intuitivo, fácil de usar e bonito, com identidade visual própria coerente com o Enlace.
 
 ## MVP proposto
 

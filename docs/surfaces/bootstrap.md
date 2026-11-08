@@ -1,5 +1,7 @@
 # Tela inicial da base
 
+Registro histórico da fase 1. Substituído pela landing `/` e pelo editor `/editor` na fase 2; a experiência atual está em [editor.md](editor.md).
+
 Modo: Operate. Escopo: primeira base executável, não o editor migrado nem uma landing page comercial.
 
 ## Direção

@@ -25,6 +25,8 @@ O adaptador Vercel exige links simbólicos de funções e falhou com EPERM neste
 
 ## Variáveis e PostgreSQL local
 
+O editor local está em `/editor`; `/` é a landing. Ambos funcionam sem banco e sem API para editar. O rascunho fica na chave `enlace:draft:anonymous:v1` do localStorage da origem; porta/domínio diferentes têm rascunhos diferentes. Use exportar/importar JSON para transportar dados até existir conta/sincronização. `packages/domain` precisa ser compilado junto com contracts; os scripts da raiz já incluem ambos. A geração de PNG carrega sob demanda e não faz upload.
+
 Os exemplos contêm apenas valores fictícios. Copie os exemplos somente se o destino ainda não existir:
 
 ```powershell

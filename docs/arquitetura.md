@@ -1,6 +1,6 @@
 # Arquitetura
 
-Atualizado em 07/11/2026. **Status: fase 1, base executável local concluída, com limites na validação.** Frontend Vercel e API + PostgreSQL Railway, conforme [ADR-0003](decisoes/0003-frontend-vercel-api-railway.md). Supabase descartado; o ADR-0002 preserva a proposta anterior. Evidências em [validacao-fase1.md](validacao-fase1.md), diagnóstico histórico em [diagnostico-prototipo.md](diagnostico-prototipo.md) e modelo em [modelo-de-dados.md](modelo-de-dados.md).
+Atualizado em 07/11/2026. **Status: base executável e editor local implementados; persistência remota ainda planejada.** Frontend Vercel e API + PostgreSQL Railway, conforme [ADR-0003](decisoes/0003-frontend-vercel-api-railway.md). Supabase descartado; o ADR-0002 preserva a proposta anterior. Evidências em [validacao-fase1.md](validacao-fase1.md) e [validacao-fase2.md](validacao-fase2.md), diagnóstico histórico em [diagnostico-prototipo.md](diagnostico-prototipo.md) e modelo em [modelo-de-dados.md](modelo-de-dados.md).
 
 ## Objetivo e primeiro recorte
 
@@ -12,7 +12,7 @@ No primeiro produto, cada projeto tem um único proprietário. A conta pode ser 
 
 | Parte | Recomendação | Motivo |
 | --- | --- | --- |
-| Frontend | SvelteKit 3, Svelte e TypeScript em `apps/web`, `@sveltejs/adapter-vercel` | Interface web hospedada na Vercel. O bootstrap atual é uma página de demonstração/contratos, não o editor completo. |
+| Frontend | SvelteKit 3, Svelte e TypeScript em `apps/web`, `@sveltejs/adapter-vercel` | Landing `/` e editor local `/editor`; hospedagem planejada na Vercel. |
 | API | Hono + `@hono/node-server` em Node.js na Railway | Serviço separado para endpoints; no bootstrap implementa somente `/health` e `/ready`. |
 | Persistência | PostgreSQL na Railway; Drizzle ORM + `pg` no servidor da API | Pool compartilhado por processo configurado, mas ainda sem tabelas nem migrations reais. |
 | Contas | Better Auth é uma opção planejada, ainda não instalada nem integrada | Sessões, autenticação e migrações próprias serão definidas na fase 3. |
@@ -22,7 +22,7 @@ No primeiro produto, cada projeto tem um único proprietário. A conta pode ser 
 | Validação | Contratos de execução compartilhados entre cliente, servidor e importadores | TypeScript sozinho não valida arquivos ou requisições; schemas executáveis ficam em `@enlace/contracts`. |
 | Verificação | Testes de domínio, integração do banco e fluxos críticos no navegador | Cobrir geometria/atribuições, isolamento de contas, concorrência e persistência real. |
 
-Vercel para frontend e Railway/PostgreSQL para API e banco são a direção vigente. Configuração Railway/Vercel e Compose local estão preparados; nenhum serviço remoto foi provisionado. Drizzle/`pg` integram a API, sem schema/migração ou Better Auth. A tela base mediu 36,80 KiB gzip; editor e banco real ainda não têm benchmark. Região, recursos, orçamento, domínio e transporte de e-mail permanecem pendentes.
+Vercel para frontend e Railway/PostgreSQL para API e banco são a direção vigente. Configuração Railway/Vercel e Compose local estão preparados; nenhum serviço remoto foi provisionado. Drizzle/`pg` integram a API, sem schema/migração ou Better Auth. A landing mede 37,69 KiB gzip e o editor 77,55 KiB; a medição local e suas pendências estão em [validação da fase 2](validacao-fase2.md). Banco real, região, recursos, orçamento, domínio e transporte de e-mail permanecem pendentes.
 
 Svelte compila componentes para JavaScript; SvelteKit oferece separação de código por rota e carregamento seletivo. Isso favorece a direção pretendida, mas não garante por si só um produto mais rápido que uma aplicação React bem implementada. A aceitação será pelas medições descritas em [desempenho.md](desempenho.md), com orçamento de JavaScript, tempo de resposta da edição e fluxo simples no celular.
 
@@ -33,7 +33,7 @@ O monorepo pnpm e a API separada foram adotados para permitir Vercel no frontend
 ```text
 apps/
   web/                     # SvelteKit 3 + adapter-vercel; /api/health proxy
-    src/routes/             # página inicial e endpoint de proxy
+    src/routes/             # landing /, editor /editor e endpoint de proxy
   api/                     # Hono Node + @hono/node-server
     src/app.ts              # factory de app e health/readiness
     src/server.ts           # listener, porta e encerramento gracioso
@@ -41,7 +41,7 @@ apps/
     src/config.ts           # env e validação de origem/produção
 packages/
   contracts/               # Zod schemas, parser JSON e migração v3
-  domain/                  # futuro: geometria e invariantes puras
+  domain/                  # geometria e comandos imutáveis implementados
 docker-compose.yml         # PostgreSQL local para desenvolvimento
 railway.toml               # build/start/healthcheck do serviço API
 prototypes/private/        # referência original local, ignorada pelo Git
@@ -51,7 +51,7 @@ prototypes/private/        # referência original local, ignorada pelo Git
 
 ## Responsabilidades
 
-**Navegador (responsabilidade planejada para o editor):** manter o rascunho editável, executar comandos de domínio, calcular a geometria, renderizar SVG, selecionar pessoas/cadeiras, apresentar erros de arquivo, gerar imagens e solicitar salvamento. O editor ainda não está migrado. Estado temporário de interface — seleção, zoom, filtro, diálogos e histórico de desfazer — não compõe o documento persistido. Usar texto escapado no HTML/SVG; nunca tratar nomes ou arquivos importados como marcação executável.
+**Navegador (implementado no editor local):** manter o rascunho editável, executar comandos de domínio, calcular geometria, renderizar SVG, selecionar pessoas/cadeiras, apresentar erros de arquivo e gerar imagens. Snapshots imutáveis usam `$state.raw`; histórico limitado a 35 entradas, autosave local com debounce de 250 ms e flush em pagehide. Arquivo inválido preserva o projeto aberto; rascunho corrompido tem download de recuperação e sobrescrita somente explícita. Estado temporário — seleção, zoom, filtro, diálogos e histórico — não compõe o documento persistido. Textos são escapados no HTML/SVG. Salvamento remoto ainda não existe.
 
 **Web Vercel:** renderizar a interface e encaminhar chamadas pelo próprio domínio do frontend. O proxy atual `/api/health` encaminha somente para `API_ORIGIN/health`, sem regra de negócio. Planejar o transporte same-origin também para autenticação/projetos; isso evita depender de cookies third-party entre domínios Vercel e Railway. Credenciais da API e do banco nunca vão ao cliente.
 
@@ -72,7 +72,7 @@ prototypes/private/        # referência original local, ignorada pelo Git
 
 ## Salvamento, falhas e múltiplos dispositivos — desenho futuro
 
-Nenhum desses fluxos está implementado no bootstrap: ainda não há sessão, projeto persistido, autosave ou API de projeto.
+Os fluxos remotos acima ainda não estão implementados: não há sessão, projeto persistido no banco ou API de projeto. O autosave da fase 2 é exclusivamente local ao navegador.
 
 O editor carrega um snapshot consistente do agregado e sua `revision`. Cada alteração válida atualiza imediatamente o rascunho. O autosave agrupa alterações com um pequeno intervalo e envia `expectedRevision`, um identificador de operação e o documento validado. O tempo de espera será calibrado na implementação.
 

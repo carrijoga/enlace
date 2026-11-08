@@ -4,9 +4,9 @@ Planejamento visual de cerimônias de casamento: visualizar altar, corredor, fil
 
 ## Estado atual
 
-Base executável da fase 1, criada em 07/11/2026: frontend SvelteKit para Vercel, API Hono/Node para Railway e contratos JSON compartilhados. O protótipo HTML permanece como referência privada.
+Base executável e editor local da fase 2, criados em 07/11/2026: frontend SvelteKit para Vercel, API Hono/Node para Railway, contratos JSON e domínio compartilhados. O protótipo HTML permanece como referência privada.
 
-A tela inicial permite explorar um exemplo fictício, conferir JSON novo ou legado v3, baixar o novo formato e verificar a conexão com a API. A prévia mostra quantidades por fileira; o editor completo, as contas e o salvamento na nuvem continuam nas próximas etapas. Nenhum deploy foi realizado.
+A rota `/` é a landing page; `/editor` configura a planta, organiza convidados e lugares, desfaz/refaz, salva um rascunho neste navegador e importa/exporta JSON novo ou legado v3. Exporta PNG completo e individual e oferece impressão. Contas, salvamento na nuvem e CSV são próximos passos. Nenhum deploy foi realizado. Evidências e pendências em [validação do editor](docs/validacao-fase2.md).
 
 ## Executar localmente
 
@@ -42,6 +42,7 @@ No Windows, `build` gera o build de produção para preview local. O pacote Verc
 | [Contratos executáveis](docs/contratos.md) | Formato JSON e compatibilidade com o v3 |
 | [Desenvolvimento](docs/desenvolvimento.md) | Comandos, ambientes e preparação Vercel/Railway |
 | [Validação da base](docs/validacao-fase1.md) | Evidências, medições e limites desta entrega |
+| [Validação do editor](docs/validacao-fase2.md) | Fluxos locais, imagens e medições da fase 2 |
 | [Design](DESIGN.md) | Tokens e direção herdados do protótipo |
 | [Desempenho](docs/desempenho.md) | Metas de leveza, resposta da edição e facilidade de uso |
 | [Roadmap](docs/roadmap.md) | Ordem de implementação e critérios de aceite |
@@ -62,6 +63,6 @@ O arquivo é independente e abre no navegador; o armazenamento pertence ao naveg
 
 ## Direção técnica
 
-Workspace pnpm com `apps/web` (SvelteKit/Vercel), `apps/api` (Hono/Node/Railway) e `packages/contracts` (TypeScript/Zod). Drizzle e `pg` integram a API; PostgreSQL será privado ao backend. Better Auth permanece recomendado para a etapa de contas, sem implementação ainda. Supabase foi descartado.
+Workspace pnpm com `apps/web` (SvelteKit/Vercel), `apps/api` (Hono/Node/Railway), `packages/contracts` (TypeScript/Zod) e `packages/domain` (geometria e comandos puros). Drizzle e `pg` integram a API; PostgreSQL será privado ao backend. Better Auth permanece recomendado para a etapa de contas, sem implementação ainda. Supabase foi descartado.
 
-Importação/contratos são carregados sob demanda. A medição inicial da tela base está na validação; ainda não há benchmark do editor completo. Direção e tradeoffs na [arquitetura](docs/arquitetura.md) e no [ADR-0003](docs/decisoes/0003-frontend-vercel-api-railway.md).
+Contratos e domínio integram a entrada do editor para validar cada operação; geração/download de imagens carregam sob demanda. A landing não importa o editor. Medições na [validação da fase 2](docs/validacao-fase2.md). Direção e tradeoffs na [arquitetura](docs/arquitetura.md), [ADR-0003](docs/decisoes/0003-frontend-vercel-api-railway.md) e [ADR-0004](docs/decisoes/0004-editor-local-e-marcos-git.md).

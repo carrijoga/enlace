@@ -1,57 +1,51 @@
 # Memória do projeto — Enlace
 
-Última atualização: 07/11/2026 (America/Sao_Paulo).
+Atualizado em 07/11/2026, America/Sao_Paulo.
 
 ## Estado atual
 
-Fase 1 — base executável e contratos concluída no escopo local. Próximo passo: fase 2 — migrar o editor. Frontend SvelteKit na Vercel; API Hono/Node e PostgreSQL privado na Railway, por decisão do usuário. Direção vigente no ADR-0003; ele substitui a proposta de aplicação única/adapter-node do ADR-0002. Sem Supabase.
+Fase 2 funcional: landing `/` e editor local `/editor`. Aceite de desempenho no limite e celular físico ainda pendentes; não declarar a fase totalmente concluída. Frontend Vercel, API Hono/Node e PostgreSQL privado Railway. Sem Supabase, push, deploy ou provisionamento.
 
-O repositório começou vazio, com apenas Git e sem commits. Remoto configurado: https://github.com/carrijoga/enlace.git. Não foram feitos commits, push, deploy ou provisionamento.
+Branch `codex/ceremony-editor`. Commits locais: `91fab30` (base fase 1), `60f3298` (domínio); a entrega integrada do editor e seus documentos é registrada nesta branch por commit funcional. Remoto https://github.com/carrijoga/enlace.git. Conferir Git antes de retomar. Arquivos Docker/VS Code paralelos do usuário permanecem fora dos commits dos agents.
 
-## Regras permanentes
+## Implementado
 
-Usar subagents para tarefas independentes, com modelos básicos/econômicos conforme pedido mais recente do usuário; foram usados subagents gpt-6-luna. Definir arquivos e contratos antes de delegar. Coordenador integra os resultados e é o único escritor desta memória. Documentar decisões relevantes e conferir código/Git antes de retomar. Regras completas em AGENTS.md.
-
-## Implementado nesta entrega
-
-- Workspace pnpm com apps/web, apps/api e packages/contracts. Node 24.22.1, pnpm 12.18.0, TypeScript 6 e versões compatíveis no lockfile.
-- Web: SvelteKit 3, Svelte 5, adapter-vercel, CSS/SVG/reatividade nativos; exemplo fictício, prévia esquemática por fileira, leitura de JSON e download no formato atual. Contratos carregados sob demanda.
-- API: Hono, listener separado da factory, configuração de ambiente, health/readiness, CORS restrito, cabeçalhos, limite de 2 MiB e erros públicos genéricos.
-- PostgreSQL: driver pg/Drizzle e pool lazy limitado, timeout e shutdown; Compose PostgreSQL 17 local preparado. Sem schema ou migrações de negócio ainda.
-- Contratos Zod estritos: envelope enlace-project/schemaVersion 1, UUIDs, limites, datas e integridade de atribuições; migração explícita v3 com defaults neutros e IDs remapeados.
-- Transporte implementado na web apenas GET /api/health → GET /health da API. API_ORIGIN é configuração privada do servidor.
-- Scripts de dev, tipos, lint, formato, testes, builds e medição; CI GitHub Actions, railway.toml e apps/web/vercel.json preparados, sem execução remota.
-- Documentos atualizados: arquitetura, modelo de dados, contratos, desenvolvimento, validação, roadmap, ADR-0003 e produto; DESIGN.md e .impeccable/design.json extraem a identidade herdada.
-
-## Como retomar e executar
-
-Leia README.md e docs/desenvolvimento.md. Pela raiz, com Node/pnpm corretos: pnpm install --frozen-lockfile; depois pnpm run dev. Frontend em http://localhost:5173, API em http://localhost:3001. Ctrl+C encerra os processos. Os servidores de QA desta sessão foram encerrados; não presumir que ainda estejam ativos.
-
-O comando conjunto compila/observa contracts antes dos consumidores. Separadamente, recompile/observe contracts ao alterá-los. O build Windows é para preview local; build:vercel exige o pacote completo na CI Linux/Vercel. Não confundir compilação local com deploy validado.
+- pnpm workspace, Node 24.22.1 / pnpm 12.18.0 / TS 6, SvelteKit 3 / Svelte 5 / Vite 8, Hono, Drizzle/pg. Configuração Vercel/Railway, health/readiness, proxy GET /api/health, pool lazy e Compose PostgreSQL 17 preparados. Sem schema/migrações de negócio, autenticação ou API de projeto.
+- Contratos Zod estritos, JSON enlace-project/schemaVersion 1, parser/migração v3, limites/UUIDs/referências validados.
+- packages/domain: geometria tradicional/meia-lua, corredor, fileiras e assentos; comandos puros imutáveis, atribuir/mover/trocar sem duplicar ocupantes, remover lugares preservando convidados.
+- Editor: estrutura, casal/data, convidados/categorias/busca, clique/toque/teclado e implementação de arrastar; zoom/ajuste, desfazer/refazer 35 entradas, confirmação de mudanças estruturais com perda de lugares.
+- Rascunho anônimo local por origem, debounce 250 ms, erro/quota e recuperação explícita de rascunho corrompido; snapshots sem proxies profundos. Não existe sincronização entre dispositivos.
+- JSON novo/v3, PNG geral/individual lazy e impressão. Individual mostra só destinatário/cadeira e geometria neutra. Mapa geral abrevia nome/sobrenome em duas linhas para não sobrepor vizinhos.
+- Landing direciona ao editor, sem login/nuvem/CSV fictícios. Identidade Papel e jardim, SVG/CSS nativos e nenhuma nova biblioteca visual/de estado.
 
 ## Validações e limites
 
-- 25 testes passaram em quatro arquivos; check sem erros/avisos Svelte, lint e format:check aprovados.
-- Contratos, API e frontend compilados para preview local. JavaScript inicial da tela base: 37.679 bytes, 36,80 KiB gzip; meta inicial 150 KiB. Editor completo e p95 ainda não medidos.
-- HTTP 200 confirmado na página, API /health e proxy /api/health. Navegador confirmou exemplo, download JSON real e estado de conexão.
-- Capturas desktop 1440 px/mobile 390 px; mobile sem overflow horizontal. Revisor independente econômico retornou ship sem achados materiais; revisão estática, sem auditoria completa de teclado ou contraste calculado.
-- Pacote Vercel não concluiu no Windows por EPERM nos symlinks de funções, inclusive fora do sandbox. Há comando dedicado/CI Linux para validar esse pacote. Não alterar permissões do Windows para contornar.
-- Docker daemon não estava ativo. Compose foi validado estaticamente, sem executar banco, migrações ou conexão PostgreSQL real.
-- Nenhuma autenticação, sessão, API de projeto, salvamento remoto, CSV ou PNG novo implementados. Better Auth permanece recomendado para fase 3, não instalado.
-- Motor/detector Impeccable não executou por cache/permissões; fallback manual de código/capturas e revisão independente. Evidências e limites em docs/validacao-fase1.md.
+40 testes passaram em 7 arquivos, tipos sem erros/avisos Svelte, lint/formatação/build local aprovados. Navegador confirmou atribuição/troca, confirmação/cancelamento/desfazer, setas/Enter, JSON/PNG reais, importação sintética e rejeição de versão inválida, reload do rascunho máximo. Capturas desktop 1170×900 e mobile 390×844 sem overflow. Mapa mobile em fluxo, evitando sobrepor controles.
 
-## Alterações paralelas preservadas
+JS inicial produção: landing 38.592 bytes/37,69 KiB gzip; editor 79.416 bytes/77,55 KiB, ambos abaixo de 150 KiB. 20 trocas de formato por conjunto no Windows/IAB: comum 55 cadeiras/10 convidados p95=12,1 ms; limite 288 cadeiras/300 convidados p95=92,1 ms (meta 50 ms não atingida). Medição comando→tick→rAF, não INP. Falta caracterizar hardware, ampliar ações e medir celular físico. Relatório completo em docs/validacao-fase2.md; artefatos sintéticos/capturas ignorados em .impeccable/review.
 
-Durante a execução surgiram Dockerfile, .dockerignore, compose.yaml, compose.debug.yaml e .vscode/launch.json e tasks.json, não criados pelos agents desta entrega. Foram preservados. Os scripts db:up/db:down apontam explicitamente para docker-compose.yml para não selecionar compose.yaml por engano. Antes de publicar na Railway, revisar a detecção do Dockerfile raiz, que não descreve o build da API preparado nesta entrega.
+Subagents econômicos gpt-6-luna: domínio, arquivos, painéis, landing, medição, revisão e documentação. Revisor aprovou interface/código no escopo de capturas e confirmou integridade das otimizações. Inspeção do PNG geral revelou sobreposição de nomes; correção em duas linhas incluída nesta entrega. Motor/detector Impeccable indisponível por cache/permissões; fallback manual, sem auditoria completa de acessibilidade. Ver relatório para alcance exato da revisão.
 
-## Referência privada preservada
+Windows bloqueia symlinks do pacote Vercel: build local gera preview; `build:vercel` aguarda Linux/CI. Docker daemon não estava ativo; sem banco real testado. Impressora física, arrastar automatizado, offline, export repetido/memória e celular físico não verificados. Better Auth é recomendação fase 3, não instalada. CSV fase 4.
 
-Origem: C:\Users\gabri\Downloads\Planejador-da-Cerimonia-v3.html. Cópia local ignorada: prototypes/private/Planejador-da-Cerimonia-v3.html, 62.046 bytes. SHA-256: 7d9f86a0b89b33f6113efa4ff14f8765882a1351b0e727476866d93d813d2426. Não publicar dados pessoais/regras familiares do modelo nem usá-los como fixtures.
+## Como retomar
 
-O protótipo já possui planta, convidados, atribuições, salvamento local, JSON, PNG geral/individual e impressão. Altar fixo e planta esquemática. Diagnóstico histórico em docs/diagnostico-prototipo.md permanece válido.
+Ler README, PRODUCT, roadmap e documentos técnicos pertinentes. `pnpm install --frozen-lockfile`, `pnpm run dev`; web 5173 / API 3001. Scripts compilam contracts/domain antes de consumidores e observam no dev conjunto. Ver docs/desenvolvimento.md. Servidores de QA são encerrados ao concluir, não presumir ativos. A origem/porta separa os rascunhos; JSON transporta dados manualmente.
+
+Neste ambiente o `node` do PATH pode ser shim pnpm que tenta baixar runtime. Para comandos locais usar primeiro no PATH: C:/Users/gabri/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin. Runtime já disponível 24.22.1.
 
 ## Próximo passo concreto
 
-Extrair geometria e comandos puros para packages/domain, com IDs do contrato já implementado. Migrar controles, planta interativa, posicionamento/troca, convidados e desfazer para a web, preservando o trabalho local e a importação v3. Medir editor com 55/288 cadeiras e até 300 convidados. Depois implementar contas, schema/transações e sincronização da fase 3.
+Perfilar o custo de renderização/validação no máximo 288/300 para p95 <= 50 ms sem aumentar o orçamento, ampliar benchmark a mover/trocar/filtrar/selecionar e testar num celular real. Depois fase 3: PostgreSQL real, schema/migrações, contas/sessões, consultas por proprietário, transações/revisões e integração do editor com conflitos/falhas verificáveis. Não provisionar recursos pagos nem publicar como efeito colateral.
 
-Nenhum agent com trabalho pendente. Questões futuras: colaboração entre contas, cenários alternativos, regras familiares configuráveis, medidas reais/altar livre, transporte de e-mail, região/recursos/orçamento e domínio.
+Questões futuras: colaboração entre contas, cenários alternativos, medidas reais/altar livre, regras familiares configuráveis, e-mail, domínio, região/recursos/orçamento. ADR-0004 registra rotas, editor local e commits por entrega coesa; fases são marcos.
+
+## Regras e alterações preservadas
+
+AGENTS.md contém as regras permanentes. Usar subagents econômicos para tarefas independentes, arquivos exclusivos e contratos prévios; só coordenador escreve MEMORY em paralelo. Atualizar documentação/roadmap/memória; não publicar dados pessoais nem descrever planejado como implementado. Autorização sempre no servidor e nenhuma sobrescrita concorrente silenciosa na futura nuvem.
+
+Preservados sem incluir nos commits: Dockerfile, .dockerignore, compose.yaml, compose.debug.yaml, .vscode/launch.json e tasks.json. Scripts db usam explicitamente docker-compose.yml. Antes de Railway revisar Dockerfile raiz acrescentado em paralelo, que não descreve o build de API desta entrega.
+
+Original privado ignorado: prototypes/private/Planejador-da-Cerimonia-v3.html, 62.046 bytes, SHA256 7d9f86a0b89b33f6113efa4ff14f8765882a1351b0e727476866d93d813d2426. Fonte Downloads; não publicar, nem usar dados pessoais como fixture. Diagnóstico histórico permanece separado das melhorias novas.
+
+Nenhum subagent com implementação pendente ao encerrar.

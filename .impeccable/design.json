@@ -1,27 +1,24 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-07T23:53:13.086Z",
+  "generatedAt": "2026-11-07T23:59:00.000Z",
   "title": "Design System: Enlace",
   "extensions": {
     "typographyMeta": {
       "display": {
         "displayName": "Georgia",
-        "purpose": "Título principal e títulos de seção serifados."
+        "purpose": "Títulos de destaque da landing e títulos editoriais do planejador."
       },
       "body": {
         "displayName": "Segoe UI",
-        "purpose": "Texto de interface, controles e rótulos da planta."
+        "purpose": "Texto da interface, controles, campos e rótulos da planta."
       }
     },
     "breakpoints": [
-      {
-        "name": "compact",
-        "value": "900px"
-      },
-      {
-        "name": "mobile",
-        "value": "680px"
-      }
+      { "name": "landing-compact", "value": "900px" },
+      { "name": "landing-mobile", "value": "680px" },
+      { "name": "editor-columns", "value": "1200px" },
+      { "name": "editor-tabs", "value": "980px" },
+      { "name": "editor-narrow", "value": "540px" }
     ],
     "motion": [
       {
@@ -33,48 +30,74 @@
   },
   "components": [
     {
-      "name": "Primary Button",
+      "name": "Landing Primary Button",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "Ação principal da tela bootstrap.",
-      "html": "<button class=\"ds-button-primary\">Explorar exemplo <span aria-hidden=\"true\">→</span></button>",
-      "css": ".ds-button-primary { background: #295842; color: #fffefb; border: 1px solid transparent; border-radius: 9px; padding: 13px 17px; font: 600 13px 'Segoe UI', system-ui, sans-serif; display: inline-flex; align-items: center; gap: 22px; transition: background 0.15s; cursor: pointer; } .ds-button-primary:hover { background: #1e4433; } .ds-button-primary:focus-visible { outline: 3px solid #6d936f; outline-offset: 5px; }"
+      "description": "Ação principal para começar o planejamento, com seta inline.",
+      "html": "<a class=\"ds-button-primary\" href=\"#\">Planejar minha cerimônia <svg viewBox=\"0 0 20 20\" aria-hidden=\"true\"><path d=\"M3 10h13m-5-5 5 5-5 5\"/></svg></a>",
+      "css": ".ds-button-primary { color: #fffefb; background: #295842; border: 1px solid transparent; border-radius: 9px; padding: 13px 17px; font: 600 13px 'Segoe UI', system-ui, sans-serif; display: inline-flex; align-items: center; gap: 22px; text-decoration: none; transition: background 0.15s; } .ds-button-primary svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.6; } .ds-button-primary:hover { background: #1e4433; } .ds-button-primary:focus-visible { outline: 3px solid #6d936f; outline-offset: 5px; }"
     },
     {
-      "name": "Secondary Button",
+      "name": "Editor Primary Button",
       "kind": "button",
-      "refersTo": "button-secondary",
-      "description": "Ação alternativa para abrir arquivo JSON.",
-      "html": "<button class=\"ds-button-secondary\">Abrir arquivo JSON</button>",
-      "css": ".ds-button-secondary { background: transparent; color: #295842; border: 1px solid #bfcabd; border-radius: 9px; padding: 13px 17px; font: 600 13px 'Segoe UI', system-ui, sans-serif; cursor: pointer; transition: background 0.15s; } .ds-button-secondary:hover { background: #eaf1e9; } .ds-button-secondary:focus-visible { outline: 3px solid #6d936f; outline-offset: 5px; }"
+      "refersTo": "editor-primary",
+      "description": "Ação compacta do editor, como adicionar pessoa ou confirmar operação.",
+      "html": "<button class=\"ds-editor-primary\">Adicionar convidado</button>",
+      "css": ".ds-editor-primary { min-height: 34px; padding: 9px 13px; border: 1px solid #295842; border-radius: 8px; background: #295842; color: #fffefb; font: 600 12px 'Segoe UI', system-ui, sans-serif; cursor: pointer; } .ds-editor-primary:hover { background: #eaf1e9; color: #295842; } .ds-editor-primary:focus-visible { outline: 3px solid #6d936f; outline-offset: 5px; }"
     },
     {
-      "name": "Plan Panel",
-      "kind": "card",
-      "refersTo": "plan-panel",
-      "description": "Contêiner da visualização SVG da planta.",
-      "html": "<section class=\"ds-plan-panel\"><h2>Uma ideia para começar</h2><p>26 lugares</p></section>",
-      "css": ".ds-plan-panel { color: #27342c; background: #fffefb; border: 1px solid #dfe3da; border-radius: 14px; overflow: hidden; padding: 23px 24px; font: 15px 'Segoe UI', system-ui, sans-serif; }"
+      "name": "Editor Secondary Button",
+      "kind": "button",
+      "refersTo": "editor-button",
+      "description": "Ação alternativa contornada para abrir arquivos e controles do editor.",
+      "html": "<button class=\"ds-editor-button\">Abrir JSON</button>",
+      "css": ".ds-editor-button { min-height: 34px; padding: 9px 13px; border: 1px solid #c4d0c0; border-radius: 8px; background: transparent; color: #295842; font: 600 12px 'Segoe UI', system-ui, sans-serif; cursor: pointer; } .ds-editor-button:hover { background: #eaf1e9; } .ds-editor-button:focus-visible { outline: 3px solid #6d936f; outline-offset: 5px; }"
+    },
+    {
+      "name": "Guest Field",
+      "kind": "input",
+      "description": "Campo de texto do formulário de convidados, com rótulo externo.",
+      "html": "<label class=\"ds-field-label\">Nome<input class=\"ds-input\" placeholder=\"Nome do convidado\" /></label>",
+      "css": ".ds-field-label { display: grid; gap: 6px; color: #27342c; font: 600 11px 'Segoe UI', system-ui, sans-serif; } .ds-input { width: 100%; min-height: 38px; padding: 9px 10px; border: 1px solid #dfe3da; border-radius: 8px; background: #fffefb; color: #27342c; font: 13px 'Segoe UI', system-ui, sans-serif; } .ds-input:focus-visible { outline: 3px solid #6d936f; outline-offset: 2px; }"
+    },
+    {
+      "name": "Mobile Editor Tabs",
+      "kind": "nav",
+      "description": "Abas de estrutura e pessoas que aparecem no editor em telas menores.",
+      "html": "<nav class=\"ds-tabs\"><button aria-pressed=\"true\">Estrutura</button><button aria-pressed=\"false\">Pessoas <span>10</span></button></nav>",
+      "css": ".ds-tabs { display: flex; border-bottom: 1px solid #cbd7c6; font: 12px 'Segoe UI', system-ui, sans-serif; } .ds-tabs button { flex: 1; min-height: 42px; padding: 12px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #626e63; font: inherit; } .ds-tabs button[aria-pressed='true'] { color: #295842; border-color: #295842; font-weight: 650; } .ds-tabs span { margin-left: 5px; font-size: 10px; }"
+    },
+    {
+      "name": "Plan Canvas Panel",
+      "kind": "custom",
+      "refersTo": "editor-plan",
+      "description": "Superfície principal que enquadra a planta vetorial, toolbar e contexto.",
+      "html": "<section class=\"ds-plan-panel\"><h2>O cenário do seu sim</h2><p>55 cadeiras · 8 pessoas posicionadas</p><div class=\"ds-map\"><span>Planta SVG da cerimônia</span></div></section>",
+      "css": ".ds-plan-panel { overflow: hidden; border: 1px solid #dfe3da; border-radius: 12px; background: #fffefb; color: #27342c; padding: 19px 22px 13px; font-family: 'Segoe UI', system-ui, sans-serif; } .ds-plan-panel h2 { margin: 0 0 5px; color: #27342c; font: 400 23px/1.2 Georgia, serif; letter-spacing: -0.025em; } .ds-plan-panel p { margin: 0; color: #626e63; font-size: 11px; } .ds-map { min-height: 130px; display: grid; place-items: center; margin: 12px -4px; color: #626e63; background: #fffefb; border-top: 1px solid #eef0e9; border-bottom: 1px solid #eef0e9; font-size: 11px; }"
     }
   ],
   "narrative": {
     "northStar": "Papel e jardim",
-    "overview": "O bootstrap preserva a identidade do protótipo: papel claro, verde profundo, títulos serifados e uma planta ilustrada como foco visual. A composição é arejada e editorial, com controles discretos que deixam o exemplo da cerimônia em evidência.\n\nEste registro cobre somente a tela bootstrap atual. Não descreve o editor final nem funcionalidades planejadas.",
+    "overview": "O Enlace combina a calma do papel quente com verdes de jardim e uma ilustração própria da cerimônia. Georgia dá um tom afetivo aos títulos; Segoe UI mantém controles e dados fáceis de percorrer. A planta é desenhada em SVG nativo e continua sendo o foco visual do produto.\n\nA landing em `/` apresenta a proposta e uma prévia esquemática; o editor em `/editor` transforma a mesma identidade numa ferramenta densa e prática. A interface usa superfícies claras, contornos leves e cor para indicar ações, orientação e estado. A geometria e as categorias da planta acrescentam o caráter visual sem uma biblioteca gráfica.",
     "keyCharacteristics": [
-      "Papel quente e superfícies quase brancas.",
-      "Contraste entre Georgia nos títulos e Segoe UI na interface.",
-      "Planta SVG como visual principal."
+      "Papel quente, superfícies marfim e verde floresta.",
+      "Georgia editorial combinada com sans-serif de sistema.",
+      "Planta da cerimônia em SVG como assinatura visual.",
+      "Controles compactos no editor e espaço de leitura na landing."
     ],
     "rules": [],
     "dos": [
-      "Do manter o fundo papel e o verde como acento principal.",
-      "Do preservar o foco visível de 3px com afastamento de 5px.",
-      "Do empilhar a introdução e a planta em telas de até 680px.",
+      "Do manter o papel quente e o verde floresta como base reconhecível.",
+      "Do preservar Georgia nos títulos e Segoe UI nos controles e dados.",
+      "Do manter o anel de foco de 3px com afastamento de 5px.",
+      "Do preservar a planta SVG nativa como foco e assinatura visual.",
+      "Do adaptar a composição do editor nos limites de 1200px, 980px e 540px observados.",
       "Do respeitar movimento reduzido, removendo transições."
     ],
     "donts": [
-      "Don't introduzir sombras: a interface atual usa bordas e tonalidade para separar superfícies.",
-      "Don't tratar o bootstrap como especificação visual do editor final."
+      "Don't introduzir sombras nas superfícies comuns; a hierarquia existente usa bordas e tonalidades.",
+      "Don't substituir a geometria de assentos por uma biblioteca gráfica ou um visual genérico.",
+      "Don't usar as cores de categoria como substitutas do verde principal para ações globais."
     ]
   }
 }

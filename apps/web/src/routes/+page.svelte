@@ -1,14 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import type { CeremonyProject } from '@enlace/contracts';
 
-  let project = $state<CeremonyProject | null>(null);
-  let busy = $state(false);
-  let message = $state('');
-  let messageIsError = $state(false);
-  let connection = $state<'idle' | 'checking' | 'ok' | 'error'>('idle');
-  let fileInput: HTMLInputElement;
-  const initialRows = [
+  const rows = [
     [3, 3],
     [4, 4],
     [6, 6],
@@ -16,101 +9,19 @@
     [7, 8],
   ].map(([left, right], row) => ({
     id: `preview-${row}`,
-    leftSeatIds: Array.from({ length: left }, (_, seat) => `L-${row}-${seat}`),
-    rightSeatIds: Array.from({ length: right }, (_, seat) => `R-${row}-${seat}`),
+    left: Array.from({ length: left! }, (_, seat) => `L-${row}-${seat}`),
+    right: Array.from({ length: right! }, (_, seat) => `R-${row}-${seat}`),
   }));
-  const rows = $derived(project?.layout.rows ?? initialRows);
-  const totalSeats = $derived(
-    rows.reduce((total, row) => total + row.leftSeatIds.length + row.rightSeatIds.length, 0),
-  );
-  const occupied = $derived(
-    new Set(project?.assignments.map((assignment) => assignment.seatId) ?? []),
-  );
-  const mapWidth = $derived(
-    Math.max(
-      620,
-      ...rows.map((row) => Math.max(row.leftSeatIds.length, row.rightSeatIds.length) * 52 + 200),
-    ),
-  );
-  const mapHeight = $derived(rows.length * 45 + 155);
-
-  async function useExample() {
-    busy = true;
-    try {
-      const { createDemoDocument } = await import('@enlace/contracts');
-      project = createDemoDocument().project;
-      message = 'Exemplo aberto. Você pode baixar uma cópia em JSON.';
-      messageIsError = false;
-    } finally {
-      busy = false;
-    }
-  }
-
-  async function openFile(event: Event) {
-    const input = event.currentTarget as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
-    busy = true;
-    try {
-      const { MAX_PROJECT_FILE_BYTES, parseProjectFile } = await import('@enlace/contracts');
-      if (file.size > MAX_PROJECT_FILE_BYTES) throw new Error('O arquivo deve ter até 2 MiB.');
-      const document = parseProjectFile(await file.text());
-      project = document.project;
-      message = 'Projeto aberto para conferência. Nenhuma alteração foi feita no arquivo original.';
-      messageIsError = false;
-    } catch (error) {
-      message =
-        error instanceof Error && !('issues' in error)
-          ? error.message
-          : 'O arquivo contém dados inválidos. Confira a versão, os nomes e os lugares e tente novamente.';
-      messageIsError = true;
-    } finally {
-      busy = false;
-      input.value = '';
-    }
-  }
-
-  async function downloadProject() {
-    if (!project) return;
-    const { projectDocumentSchema } = await import('@enlace/contracts');
-    const document = projectDocumentSchema.parse({
-      format: 'enlace-project',
-      schemaVersion: 1,
-      exportedAt: new Date().toISOString(),
-      project,
-    });
-    const url = URL.createObjectURL(
-      new Blob([JSON.stringify(document, null, 2)], { type: 'application/json' }),
-    );
-    const anchor = window.document.createElement('a');
-    anchor.href = url;
-    anchor.download = 'enlace-projeto.json';
-    anchor.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
-
-  async function checkConnection() {
-    connection = 'checking';
-    try {
-      const response = await fetch('/api/health', {
-        cache: 'no-store',
-        signal: AbortSignal.timeout(6000),
-      });
-      if (!response.ok) throw new Error('Serviço indisponível');
-      const { healthResponseSchema } = await import('@enlace/contracts');
-      healthResponseSchema.parse(await response.json());
-      connection = 'ok';
-    } catch {
-      connection = 'error';
-    }
-  }
+  const totalSeats = rows.reduce((total, row) => total + row.left.length + row.right.length, 0);
+  const mapWidth = 620;
+  const mapHeight = 380;
 </script>
 
 <svelte:head>
-  <title>Enlace · Cada pessoa no seu lugar</title>
+  <title>Enlace · Planeje sua cerimônia</title>
   <meta
     name="description"
-    content="Um espaço para imaginar e organizar os lugares da sua cerimônia de casamento."
+    content="Organize a planta da cerimônia, distribua os lugares e prepare um mapa para o grande dia."
   />
 </svelte:head>
 
@@ -121,11 +32,13 @@
     >
     <span>enlace</span>
   </a>
-  <span class="header-description">O começo da sua cerimônia.</span>
+  <a class="header-link" href={resolve('/editor')}
+    >Abrir meu planejamento <span aria-hidden="true">→</span></a
+  >
 </header>
 
 <main>
-  <section class="workspace" aria-label="Seu planejamento">
+  <section class="workspace" aria-label="Planeje sua cerimônia">
     <div class="intro">
       <h1>Cada pessoa.<br />Um lugar especial.</h1>
       <p class="lead">
@@ -133,142 +46,204 @@
         da sua história.
       </p>
       <div class="actions">
-        <button class="button primary" onclick={useExample} disabled={busy}
-          >Explorar exemplo <span aria-hidden="true">→</span></button
-        >
-        <button class="button secondary" onclick={() => fileInput.click()} disabled={busy}
-          >Abrir arquivo JSON</button
-        >
-        <input
-          bind:this={fileInput}
-          type="file"
-          accept=".json,application/json"
-          onchange={openFile}
-          aria-label="Abrir projeto JSON"
-          hidden
-        />
+        <a class="button primary" href={resolve('/editor')}>
+          Planejar minha cerimônia
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 10h13m-5-5 5 5-5 5" /></svg>
+        </a>
+        <a class="button secondary" href="#como-funciona">Como funciona</a>
       </div>
       <p class="small-note">
-        Esta é a primeira base do Enlace. Por enquanto, você pode conferir um projeto ou explorar um
-        exemplo com dados fictícios.
+        Comece sem cadastro. O rascunho fica neste navegador e você pode baixar JSON.
       </p>
-      <div class:has-error={messageIsError} class="feedback" role="status" aria-live="polite">
-        {busy ? 'Preparando seu projeto…' : message}
-      </div>
-      {#if project}
-        <div class="project-summary">
-          <h2>{project.title}</h2>
-          <dl>
-            <div>
-              <dt>Convidados</dt>
-              <dd>{project.guests.length}</dd>
-            </div>
-            <div>
-              <dt>Lugares definidos</dt>
-              <dd>{project.assignments.length}</dd>
-            </div>
-            <div>
-              <dt>Formato</dt>
-              <dd>{project.layout.mode === 'curve' ? 'Meia-lua' : 'Tradicional'}</dd>
-            </div>
-          </dl>
-          <button class="text-button" onclick={downloadProject}
-            >Baixar projeto em JSON <span aria-hidden="true">↓</span></button
-          >
-          <p class="small-note">
-            Aberto somente nesta sessão. Contas e salvamento na nuvem serão adicionados depois.
-          </p>
-        </div>
-      {/if}
     </div>
 
     <div class="plan-panel">
       <div class="plan-heading">
-        <h2>{project ? 'Estrutura do projeto' : 'Um espaço para o seu sim'}</h2>
-        <p>{rows.length} fileiras <span aria-hidden="true">·</span> {totalSeats} cadeiras</p>
+        <h2>Uma ideia para a sua planta</h2>
+        <p>5 fileiras <span aria-hidden="true">·</span> {totalSeats} cadeiras</p>
       </div>
       <div class="plan-canvas">
         <svg
           viewBox={`0 0 ${mapWidth} ${mapHeight}`}
           role="img"
-          aria-label={`Esquema de quantidades por fileira, com ${totalSeats} cadeiras e corredor central. Não representa medidas reais.`}
+          aria-label={`Prévia ilustrativa com ${totalSeats} cadeiras em cinco fileiras e corredor central. Não representa medidas reais.`}
         >
-          <rect x={mapWidth / 2 - 51} y="28" width="102" height="39" rx="12" fill="#eaf1e9" />
-          <text x={mapWidth / 2} y="53" text-anchor="middle" class="altar-label">ALTAR</text>
           <path
-            d={`M ${mapWidth / 2} 92 V ${mapHeight - 52}`}
-            stroke="#d6c8ad"
-            stroke-width="1.5"
-            stroke-dasharray="4 7"
+            d="M 310 25 Q 270 50 310 73 Q 350 50 310 25Z"
+            fill="none"
+            stroke="#a58557"
+            stroke-width="2"
           />
+          <path d="M 310 48 V 345" stroke="#d6c8ad" stroke-width="1.5" stroke-dasharray="4 7" />
           {#each rows as row, ri (row.id)}
-            <text x="17" y={126 + ri * 45} class="row-label">{ri + 1}</text>
-            {#each row.leftSeatIds as seat, si (seat)}
-              <g transform={`translate(${mapWidth / 2 - 72 - si * 26}, ${110 + ri * 45})`}>
-                <rect
-                  width="18"
-                  height="22"
-                  rx="4"
-                  fill={occupied.has(seat) ? '#bad4be' : '#fffefb'}
-                  stroke={occupied.has(seat) ? '#72977d' : '#b4bfb2'}
-                />
-                <path d="M 3 6 H 15" stroke={occupied.has(seat) ? '#72977d' : '#b4bfb2'} />
+            <text x="17" y={119 + ri * 48} class="row-label">{ri + 1}</text>
+            {#each row.left as seat, si (seat)}
+              <g transform={`translate(${310 - 61 - si * 26}, ${103 + ri * 48})`}>
+                <rect width="18" height="22" rx="4" fill="#fffefb" stroke="#b4bfb2" />
+                <path d="M 3 6 H 15" stroke="#b4bfb2" />
               </g>
             {/each}
-            {#each row.rightSeatIds as seat, si (seat)}
-              <g transform={`translate(${mapWidth / 2 + 54 + si * 26}, ${110 + ri * 45})`}>
-                <rect
-                  width="18"
-                  height="22"
-                  rx="4"
-                  fill={occupied.has(seat) ? '#bad4be' : '#fffefb'}
-                  stroke={occupied.has(seat) ? '#72977d' : '#b4bfb2'}
-                />
-                <path d="M 3 6 H 15" stroke={occupied.has(seat) ? '#72977d' : '#b4bfb2'} />
+            {#each row.right as seat, si (seat)}
+              <g transform={`translate(${354 + si * 26}, ${103 + ri * 48})`}>
+                <rect width="18" height="22" rx="4" fill="#fffefb" stroke="#b4bfb2" />
+                <path d="M 3 6 H 15" stroke="#b4bfb2" />
               </g>
             {/each}
           {/each}
-          <text x={mapWidth / 2} y={mapHeight - 21} text-anchor="middle" class="entrance-label"
-            >ENTRADA</text
-          >
+          <text x="310" y="365" text-anchor="middle" class="entrance-label">ENTRADA</text>
         </svg>
       </div>
       <div class="plan-caption">
-        <span class="legend-dot"></span><span>Prévia esquemática por fileira</span><span
-          class="orientation">Da entrada, olhando para o altar</span
-        >
+        <span class="legend-dot"></span><span>Prévia esquemática</span>
+        <span class="orientation">Da entrada, olhando para o altar</span>
       </div>
     </div>
   </section>
 
-  <section class="next-step" aria-label="Estado da versão">
-    <div>
-      <h2>Uma base para construir com cuidado.</h2>
-      <p>
-        O próximo passo é trazer a edição da planta. Depois, seus projetos poderão acompanhar você
-        em qualquer dispositivo.
-      </p>
+  <section class="steps" id="como-funciona" aria-labelledby="steps-title">
+    <div class="steps-intro">
+      <h2 id="steps-title">Da primeira ideia ao grande dia.</h2>
+      <p>Um espaço simples para visualizar a cerimônia e organizar quem estará ao seu lado.</p>
     </div>
-    <details class="connection-panel">
-      <summary>Conexão com o serviço</summary>
-      <p role="status" aria-live="polite">
-        {connection === 'ok'
-          ? 'Serviço conectado. O banco e as contas ainda não fazem parte deste fluxo.'
-          : connection === 'error'
-            ? 'Não foi possível conectar. Confira se o serviço está em execução e tente novamente.'
-            : connection === 'checking'
-              ? 'Verificando conexão…'
-              : 'Você pode conferir a conexão sem enviar dados do seu projeto.'}
-      </p>
-      <button class="text-button" disabled={connection === 'checking'} onclick={checkConnection}
-        >Verificar conexão</button
-      >
-    </details>
+    <ol>
+      <li>
+        <span class="step-number">01</span>
+        <div>
+          <h3>Desenhe o espaço</h3>
+          <p>Configure o formato, as cadeiras e a largura do corredor.</p>
+        </div>
+      </li>
+      <li>
+        <span class="step-number">02</span>
+        <div>
+          <h3>Encontre cada lugar</h3>
+          <p>Adicione seus convidados e posicione cada pessoa na planta.</p>
+        </div>
+      </li>
+      <li>
+        <span class="step-number">03</span>
+        <div>
+          <h3>Leve o plano com você</h3>
+          <p>Baixe o mapa geral, os mapas individuais ou uma cópia JSON do projeto.</p>
+        </div>
+      </li>
+    </ol>
   </section>
 </main>
 
 <footer class="site-footer">
   <span>enlace</span>
   <p>Planejar com clareza. Celebrar com presença.</p>
-  <span>Versão inicial</span>
+  <a href={resolve('/editor')}>Abrir meu planejamento <span aria-hidden="true">→</span></a>
 </footer>
+
+<style>
+  .header-link,
+  .site-footer a {
+    color: var(--green);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .header-link:hover,
+  .site-footer a:hover {
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
+  .button {
+    text-decoration: none;
+  }
+  .button svg {
+    width: 17px;
+    height: 17px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+  }
+  .steps {
+    border-top: 1px solid var(--line);
+    padding: 48px 0 62px;
+    display: grid;
+    grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.2fr);
+    gap: clamp(36px, 8vw, 120px);
+  }
+  .steps-intro h2 {
+    margin: 0 0 14px;
+    font:
+      400 clamp(25px, 3vw, 34px)/1.2 Georgia,
+      serif;
+    letter-spacing: -0.025em;
+    text-wrap: balance;
+  }
+  .steps-intro p {
+    max-width: 36ch;
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.8;
+  }
+  .steps ol {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .steps li {
+    display: grid;
+    grid-template-columns: 40px 1fr;
+    gap: 14px;
+    padding: 0 0 23px;
+  }
+  .steps li + li {
+    border-top: 1px solid var(--line);
+    padding-top: 21px;
+  }
+  .steps li:last-child {
+    padding-bottom: 0;
+  }
+  .step-number {
+    color: #92774e;
+    font:
+      14px Georgia,
+      serif;
+    padding-top: 2px;
+  }
+  .steps h3 {
+    margin: 0 0 5px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .steps li p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.7;
+  }
+  .site-footer a {
+    font-size: 11px;
+  }
+  @media (max-width: 680px) {
+    .header-link {
+      font-size: 11px;
+    }
+    .steps {
+      grid-template-columns: 1fr;
+      gap: 28px;
+      padding: 35px 0 42px;
+    }
+    .steps-intro h2 {
+      max-width: 18ch;
+    }
+    .steps li {
+      grid-template-columns: 34px 1fr;
+      gap: 10px;
+    }
+    .site-footer {
+      align-items: baseline;
+    }
+    .site-footer p {
+      order: 3;
+      width: 100%;
+      margin: 12px 0 0;
+    }
+  }
+</style>
