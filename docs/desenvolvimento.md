@@ -60,6 +60,8 @@ PostgreSQL 17 fica em `127.0.0.1:5432` com volume nomeado. Os scripts usam expli
 
 Vercel: selecionar `apps/web` como Root Directory e permitir fontes do workspace fora desse diretório. `apps/web/vercel.json` instala pela raiz e executa `build:vercel`. Definir `API_ORIGIN` como a origem HTTPS da API Railway. Não colocar `DATABASE_URL` na Vercel.
 
+Erro conhecido: `STATIC_BUILD_NO_OUT_DIR` ("No Output Directory named public") após o adaptador imprimir `✔ done` indica Root Directory na raiz do repositório. O adaptador grava `apps/web/.vercel/output`, mas a Vercel procura `.vercel/output` no Root Directory e cai no preset estático. Corrigir no painel: Root Directory `apps/web`, Framework Preset SvelteKit, Output Directory sem override; depois fazer redeploy sem cache.
+
 Railway: raiz do repositório como diretório de build; `railway.toml` declara Railpack, compila contracts + API, inicia somente a API e usa `/health`. Configurar Node 24, `NODE_ENV`, `WEB_ORIGIN` e a `DATABASE_URL` privada do PostgreSQL no mesmo ambiente/região. Antes de publicar, revisar a detecção do `Dockerfile` raiz acrescentado paralelamente: ele não faz parte da configuração da API desta entrega e pode influenciar a seleção de builder. Não aplicar a configuração Vercel à API. Região, orçamento e recursos seguem pendentes.
 
 O proxy da web implementa somente `/api/health` com destino fixo. Antes da fase de contas, desenhar/testar o transporte de autenticação e projetos com cookies de primeira parte, origem, limites e erros. Não expor um proxy para destinos arbitrários.
