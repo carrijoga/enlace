@@ -11,7 +11,8 @@
     "check": "svelte-kit sync && svelte-check --tsconfig tsconfig.json"
   },
   "dependencies": {
-    "@enlace/contracts": "workspace:*"
+    "@enlace/contracts": "workspace:*",
+    "@enlace/domain": "workspace:*"
   },
   "devDependencies": {
     "@sveltejs/adapter-vercel": "7.0.2",
