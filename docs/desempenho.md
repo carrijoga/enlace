@@ -11,6 +11,7 @@ O resultado esperado é abrir o projeto rapidamente, editar a planta sem esperar
 - Carregar parser CSV e código de geração de imagens sob demanda, quando a pessoa iniciar a operação. Esses recursos não devem aumentar o JavaScript inicial de quem apenas abre e edita um projeto.
 - Manter Drizzle, `node-postgres`, autenticação do Better Auth e credenciais no servidor. Não entregar o cliente do banco ao navegador.
 - Preferir CSS e componentes próprios simples. Avaliar cada dependência por necessidade, tamanho entregue e manutenção; não duplicar bibliotecas para a mesma função.
+- Vercel Web Analytics (`@vercel/analytics`) é a única medição de terceiros no navegador: `inject()` no layout raiz, só no browser. Não usar `@vercel/analytics/sveltekit`, que depende de `$app/environment`/`$app/stores`, removidos no SvelteKit 3. Coleta só ocorre com Web Analytics ativado no projeto Vercel.
 - Introduzir Redis, filas, Web Workers ou virtualização somente após medir um problema que os justifique.
 - Limitar snapshots de desfazer, rascunhos e arquivos de entrada. Revogar URLs temporárias e liberar recursos de exportação depois do uso.
 

@@ -16,6 +16,7 @@ Branch `codex/ceremony-editor`. Commits locais: `91fab30` (base fase 1), `60f329
 - Editor: estrutura, casal/data, convidados/categorias/busca, clique/toque/teclado e implementação de arrastar; zoom/ajuste, desfazer/refazer 35 entradas, confirmação de mudanças estruturais com perda de lugares.
 - Rascunho anônimo local por origem, debounce 250 ms, erro/quota e recuperação explícita de rascunho corrompido; snapshots sem proxies profundos. Não existe sincronização entre dispositivos.
 - JSON novo/v3, PNG geral/individual lazy e impressão. Individual mostra só destinatário/cadeira e geometria neutra. Mapa geral abrevia nome/sobrenome em duas linhas para não sobrepor vizinhos.
+- Vercel Web Analytics via `inject()` em `apps/web/src/routes/+layout.svelte` (helper SvelteKit incompatível com Kit 3; aviso de peer esperado). Ativação no painel Vercel e verificação em deploy pendentes. Instalação local usa `--store-dir .pnpm-store` (store do `node_modules` atual).
 - Landing direciona ao editor, sem login/nuvem/CSV fictícios. Identidade Papel e jardim, SVG/CSS nativos e nenhuma nova biblioteca visual/de estado.
 
 ## Validações e limites

@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "@enlace/contracts": "workspace:*",
-    "@enlace/domain": "workspace:*"
+    "@enlace/domain": "workspace:*",
+    "@vercel/analytics": "^2.0.1"
   },
   "devDependencies": {
     "@sveltejs/adapter-vercel": "7.0.2",
