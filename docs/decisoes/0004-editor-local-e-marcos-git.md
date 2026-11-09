@@ -6,7 +6,7 @@ Status: aceito. Data: 07/11/2026. Origem: orientação explícita do usuário ne
 
 `/` é a landing page; o trabalho de planejamento fica em `/editor`. A fase 2 migra a atividade real do protótipo para componentes Svelte, sem exigir conta. A identidade “Papel e jardim” continua, com planta SVG e controles nativos. Geometria, IDs e invariantes ficam em `packages/domain`, independentes da UI e da persistência.
 
-O editor usa snapshots imutáveis e histórico limitado a 35 alterações, rascunho anônimo por navegador e exportação JSON portátil. Estado transitório não entra no arquivo. Alterações estruturais que desocupam cadeiras exigem confirmação e preservam a lista de convidados. Rascunho inválido não é sobrescrito sem ação explícita de recuperação. A imagem individual usa apenas o nome do destinatário, sua cadeira e a geometria neutra, sem nomes, categorias ou ocupação dos demais.
+O editor usa snapshots imutáveis e histórico limitado a 35 alterações, rascunho anônimo por navegador e exportação JSON portátil. Estado transitório não entra no arquivo. Alterações estruturais que desocupam cadeiras exigem confirmação e preservam a lista de convidados. Rascunho inválido não é sobrescrito sem ação explícita de recuperação. A imagem individual usa apenas o nome do destinatário, sua cadeira e a geometria neutra, sem nomes, categorias ou ocupação dos demais. (Ampliado pela [ADR-0010](0010-cartao-de-exportacao-da-planta.md): a imagem individual também mostra o casal e a data.)
 
 Contas e acesso entre dispositivos serão implementados com autorização no servidor e PostgreSQL na fase 3. Rascunho local não satisfaz esse requisito e não é apresentado como nuvem. CSV fica na fase 4.
 

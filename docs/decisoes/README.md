@@ -31,3 +31,7 @@ Não decididos: região e recursos na Railway, orçamento, transporte de e-mail,
 ## 0009 — Preparação da primeira versão
 
 [ADR-0009](0009-preparacao-da-primeira-versao.md): implementação local da fase 5, privacidade, exclusão de conta e Moto G84 como referência; aceite hospedado pendente.
+
+## 0010 — Cartão de exportação da planta
+
+[ADR-0010](0010-cartao-de-exportacao-da-planta.md): aceita e implementada. PNG volta à composição do protótipo v3, com colisões de rótulos corrigidas e sem deformar nomes; mapa individual passa a mostrar casal e data, sem dados dos demais convidados.

@@ -81,14 +81,14 @@ export async function downloadMapPng(
     const scale = Math.min(
       2,
       3200 / Math.max(width, height),
-      Math.sqrt(8_000_000 / (width * height)),
+      Math.sqrt(10_000_000 / (width * height)),
     );
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.floor(width * scale));
     canvas.height = Math.max(1, Math.floor(height * scale));
-    const context = canvas.getContext('2d');
+    const context = canvas.getContext('2d', { alpha: false });
     if (!context) throw new Error('Não foi possível renderizar a planta.');
-    context.fillStyle = '#fbfaf7';
+    context.fillStyle = '#faf9f5';
     context.fillRect(0, 0, canvas.width, canvas.height);
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
     const png = await new Promise<Blob>((resolve, reject) => {
