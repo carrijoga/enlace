@@ -7,6 +7,17 @@
   --green: #295842;
   --muted: #626e63;
   --line: #dfe3da;
+  /* Contorno de campos: 3:1 sobre marfim e papel (WCAG 1.4.11). --line é só para divisores. */
+  --field-line: #7f8e7b;
+  /* Movimento: ver "Motion" em DESIGN.md. Distâncias zeram com movimento reduzido. */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+  --rise: 6px;
+  --pop-scale: 0.97;
+  --press-scale: 0.98;
+  --nudge: 4px;
 }
 * {
   box-sizing: border-box;
@@ -26,8 +37,91 @@ button:disabled {
   cursor: wait;
   opacity: 0.6;
 }
+button,
+summary,
+.button {
+  transition:
+    background-color var(--dur-fast) ease-out,
+    border-color var(--dur-fast) ease-out,
+    color var(--dur-fast) ease-out,
+    opacity var(--dur-fast) ease-out,
+    transform var(--dur-fast) var(--ease-out);
+}
+button:not(:disabled):active,
+summary:active,
+.button:active {
+  transform: scale(var(--press-scale));
+}
 a {
   color: inherit;
+  transition: color var(--dur-fast) ease-out;
+}
+dialog[open] {
+  animation: pop-in var(--dur-slow) var(--ease-out);
+}
+dialog[open]::backdrop {
+  animation: fade-in var(--dur-base) ease-out;
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--dur-base);
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--rise));
+  }
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--rise)) scale(var(--pop-scale));
+  }
+}
+@keyframes nudge {
+  25% {
+    transform: translateX(calc(var(--nudge) * -1));
+  }
+  75% {
+    transform: translateX(var(--nudge));
+  }
+}
+@keyframes breathe {
+  50% {
+    opacity: 0.35;
+  }
+}
+/* Marca de carregamento: as duas alianças se desenham em ciclo. */
+.rings-loader {
+  display: block;
+  width: 40px;
+  height: 40px;
+  fill: none;
+  stroke: var(--green);
+  stroke-width: 1.7px;
+  animation: fade-in var(--dur-slow) ease-out 200ms backwards;
+}
+.rings-loader ellipse {
+  stroke-dasharray: 1;
+  animation: ring-trace 1.6s ease-in-out infinite;
+}
+.rings-loader ellipse:last-child {
+  stroke: #a58557;
+  animation-delay: 180ms;
+}
+@keyframes ring-trace {
+  from {
+    stroke-dashoffset: 1;
+  }
+  55%,
+  to {
+    stroke-dashoffset: 0;
+  }
 }
 button,
 a,
@@ -129,7 +223,6 @@ h1 {
   display: inline-flex;
   align-items: center;
   gap: 22px;
-  transition: background 0.15s;
 }
 .primary {
   background: var(--green);
@@ -273,6 +366,9 @@ dd {
   font-variant-numeric: tabular-nums;
 }
 .text-button {
+  display: inline-flex;
+  align-items: flex-end;
+  min-height: 24px; /* WCAG 2.5.8: alvo mínimo sem mudar o visual */
   padding: 0 0 3px;
   background: none;
   border: 0;
@@ -431,10 +527,21 @@ dd {
     margin-top: 12px;
   }
 }
+/* Movimento reduzido: nada se desloca nem repete; cor e opacidade seguem confirmando o estado. */
 @media (prefers-reduced-motion: reduce) {
+  :root {
+    --rise: 0px;
+    --pop-scale: 1;
+    --press-scale: 1;
+    --nudge: 0px;
+  }
   *,
   *::before,
   *::after {
-    transition: none !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+  .rings-loader ellipse {
+    animation: none;
   }
 }

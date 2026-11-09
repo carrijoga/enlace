@@ -1,4 +1,4 @@
-import { ceremonyProjectSchema, type CeremonyProject } from '@enlace/contracts';
+import { ceremonyProjectSchema, createUuid, type CeremonyProject } from '@enlace/contracts';
 
 export type SeatGeometry = {
   id: string;
@@ -20,9 +20,15 @@ export type LayoutGeometry = {
   seats: SeatGeometry[];
 };
 
-const uuid = () => globalThis.crypto.randomUUID();
-const validate = (project: CeremonyProject): CeremonyProject =>
+const uuid = createUuid;
+// Valida o projeto completo, mas devolve o próprio objeto recebido: o parse do Zod cria uma
+// cópia profunda, e a cópia faria a interface tratar todos os convidados/fileiras como novos a
+// cada comando. Os comandos montam objetos novos só nos trechos alterados (compartilhamento
+// estrutural). Entradas externas continuam passando por parse completo nos contratos.
+const validate = (project: CeremonyProject): CeremonyProject => {
   ceremonyProjectSchema.parse(project);
+  return project;
+};
 const emptyRows = () =>
   [6, 5, 6, 5, 6].map((left) => ({
     id: uuid(),
@@ -168,6 +174,18 @@ export function addGuest(
 ): CeremonyProject {
   return validate({ ...project, guests: [...project.guests, guest] });
 }
+/** Acrescenta um lote de convidados numa única alteração, sem mexer na planta nem atribuir lugares. */
+export function addGuests(
+  project: CeremonyProject,
+  guests: CeremonyProject['guests'],
+): CeremonyProject {
+  if (!guests.length) return project;
+  if (project.guests.length + guests.length > 300)
+    throw new Error(
+      `O projeto aceita até 300 convidados; há espaço para ${300 - project.guests.length}.`,
+    );
+  return validate({ ...project, guests: [...project.guests, ...guests] });
+}
 export function updateGuest(
   project: CeremonyProject,
   guestId: string,
@@ -201,7 +219,7 @@ export function assignGuest(
   );
   if (!seatIds.has(seatId)) throw new Error('Cadeira inexistente.');
   const guestSeat = project.assignments.find((a) => a.guestId === guestId)?.seatId;
-  if (guestSeat === seatId) return validate(project);
+  if (guestSeat === seatId) return project;
   const seatGuest = project.assignments.find((a) => a.seatId === seatId)?.guestId;
   let assignments = project.assignments.filter((a) => a.guestId !== guestId && a.seatId !== seatId);
   if (guestSeat && seatGuest)
@@ -262,6 +280,20 @@ export function getLayoutGeometry(layout: CeremonyProject['layout']): LayoutGeom
     });
   });
   return { width, height, center, corridorHalf, seats };
+}
+
+/** Rótulos de todas as cadeiras, calculados uma vez por planta (evita busca linear por cadeira). */
+export function getSeatLabels(layout: CeremonyProject['layout']): Map<string, string> {
+  const labels = new Map<string, string>();
+  layout.rows.forEach((row, rowIndex) => {
+    row.leftSeatIds.forEach((id, index) =>
+      labels.set(id, `Fileira ${rowIndex + 1} · esquerda · cadeira ${index + 1}`),
+    );
+    row.rightSeatIds.forEach((id, index) =>
+      labels.set(id, `Fileira ${rowIndex + 1} · direita · cadeira ${index + 1}`),
+    );
+  });
+  return labels;
 }
 
 export function getSeatLabel(project: CeremonyProject, seatId: string): string {

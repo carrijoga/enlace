@@ -194,8 +194,22 @@ const legacyV3Schema = z
   .strict();
 type LegacyProject = z.infer<typeof legacyV3Schema>;
 
+/**
+ * UUID v4. `crypto.randomUUID` só existe em contexto seguro; em HTTP na rede local (ensaio em
+ * celular físico) cai em `getRandomValues`, disponível em qualquer contexto.
+ */
+export function createUuid(): string {
+  const webCrypto = globalThis.crypto;
+  if (typeof webCrypto.randomUUID === 'function') return webCrypto.randomUUID();
+  const bytes = webCrypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6]! & 0x0f) | 0x40;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 function migrateLegacy(value: LegacyProject): ProjectDocument {
-  const uuid = () => globalThis.crypto.randomUUID();
+  const uuid = createUuid;
   if (!Array.isArray(value.rows) || value.rows.length < 1 || value.rows.length > 12)
     throw new Error('Arquivo v3 inválido: quantidade de fileiras fora do limite.');
   const rows = value.rows.map((counts, rowIndex) => {
@@ -295,7 +309,7 @@ export function parseProjectFile(text: string): ProjectDocument {
 }
 
 export function createDemoDocument(): ProjectDocument {
-  const uuid = () => globalThis.crypto.randomUUID();
+  const uuid = createUuid;
   const counts = [
     [6, 5],
     [5, 6],
@@ -323,3 +337,39 @@ export function createDemoDocument(): ProjectDocument {
     project,
   });
 }
+const revisionSchema = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+export const projectSummarySchema = z
+  .object({
+    id: z.uuid(),
+    title: z.string().min(1).max(120),
+    revision: revisionSchema,
+    updatedAt: z.iso.datetime(),
+  })
+  .strict();
+export const projectWriteResponseSchema = projectSummarySchema.omit({ title: true });
+export const projectSnapshotSchema = projectWriteResponseSchema.extend({
+  project: ceremonyProjectSchema,
+});
+export const projectListResponseSchema = z
+  .object({ projects: z.array(projectSummarySchema) })
+  .strict();
+export const createProjectRequestSchema = z
+  .object({
+    id: z.uuid(),
+    operationId: z.uuid(),
+    project: ceremonyProjectSchema,
+  })
+  .strict();
+export const saveProjectRequestSchema = z
+  .object({
+    expectedRevision: revisionSchema,
+    operationId: z.uuid(),
+    project: ceremonyProjectSchema,
+  })
+  .strict();
+export const deleteProjectRequestSchema = z.object({ expectedRevision: revisionSchema }).strict();
+export type ProjectSummary = z.infer<typeof projectSummarySchema>;
+export type ProjectSnapshot = z.infer<typeof projectSnapshotSchema>;
+export type ProjectWriteResponse = z.infer<typeof projectWriteResponseSchema>;
+export type CreateProjectRequest = z.infer<typeof createProjectRequestSchema>;
+export type SaveProjectRequest = z.infer<typeof saveProjectRequestSchema>;

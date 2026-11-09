@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   addGuest,
+  addGuests,
   addRow,
   assignGuest,
   createInitialProject,
@@ -8,6 +9,7 @@ import {
   getGuestSeatId,
   getLayoutGeometry,
   getSeatLabel,
+  getSeatLabels,
   removeRow,
   setLayout,
   setRowCount,
@@ -147,5 +149,56 @@ describe('domain project commands', () => {
   it('rejects invalid runtime side values', () => {
     const p = createInitialProject();
     expect(() => setRowCount(p, p.layout.rows[0]!.id, 'center' as never, 2)).toThrow();
+  });
+});
+
+describe('structural sharing and seat labels', () => {
+  it('keeps unchanged guests, rows and assignments by reference after a command', () => {
+    const p = createSampleProject();
+    const next = setLayout(p, { mode: 'curve' });
+    expect(next).not.toBe(p);
+    expect(next.guests).toBe(p.guests);
+    expect(next.assignments).toBe(p.assignments);
+    expect(next.layout.rows).toBe(p.layout.rows);
+    const moved = assignGuest(p, p.guests[9]!.id, seats(p).at(-1)!);
+    expect(moved.guests).toBe(p.guests);
+    expect(moved.guests[0]).toBe(p.guests[0]);
+  });
+
+  it('returns the same project when a guest is assigned to the seat they already hold', () => {
+    const p = createSampleProject();
+    const { guestId, seatId } = p.assignments[0]!;
+    expect(assignGuest(p, guestId, seatId)).toBe(p);
+  });
+
+  it('still rejects invalid results even though it returns the input object', () => {
+    const p = createSampleProject();
+    expect(() => addGuest(p, { ...guest(), name: '   ' })).toThrow();
+    expect(() => addGuest(p, { ...guest(), id: p.guests[0]!.id })).toThrow();
+  });
+
+  it('labels every seat exactly like getSeatLabel', () => {
+    const base = createInitialProject();
+    const p = setRowCount(base, base.layout.rows[0]!.id, 'left', 3);
+    const labels = getSeatLabels(p.layout);
+    expect(labels.size).toBe(seats(p).length);
+    for (const id of seats(p)) expect(labels.get(id)).toBe(getSeatLabel(p, id));
+  });
+
+  it('adds a guest batch in one change without touching layout or seats, within limits', () => {
+    const p = createInitialProject();
+    const batch = [guest('Ana Fictícia'), guest('Ana Fictícia'), guest('Bruno')];
+    const next = addGuests(p, batch);
+    expect(next.guests.map((g) => g.name)).toEqual(['Ana Fictícia', 'Ana Fictícia', 'Bruno']);
+    expect(next.layout).toBe(p.layout);
+    expect(next.assignments).toEqual([]);
+    expect(addGuests(p, [])).toBe(p);
+    const full = addGuests(
+      p,
+      Array.from({ length: 300 }, () => guest()),
+    );
+    expect(() => addGuests(full, [guest()])).toThrow(/300/);
+    const dup = guest();
+    expect(() => addGuests(p, [dup, dup])).toThrow();
   });
 });

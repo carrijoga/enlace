@@ -1,6 +1,12 @@
 # Produto — Enlace
 
-Última atualização: 07/11/2026. Estado: definição inicial baseada no pedido do usuário; hipóteses adicionais estão identificadas abaixo.
+<!-- impeccable:product-schema 1 -->
+
+Última atualização: 09/11/2026. Estado: definição baseada no pedido do usuário, com posicionamento, contexto de uso, voz e meta de acessibilidade confirmados em 08/11/2026; hipóteses adicionais estão identificadas abaixo.
+
+## Platform
+
+web
 
 ## Problema e público
 
@@ -11,6 +17,17 @@ Público inicial: casais organizando a própria cerimônia. Uso por cerimonialis
 ## Resultado esperado
 
 Uma pessoa entra na conta, cria um planejamento, configura a planta, cadastra ou importa convidados, distribui lugares e retorna depois em outro dispositivo com os dados salvos. Pode exportar o projeto para backup e produzir uma imagem geral ou um mapa individual para orientar um participante.
+
+## Positioning
+
+A planta é o produto. A cerimônia é desenhada como planta (altar, corredor, fileiras tradicionais ou em meia-lua) e cada pessoa ganha uma cadeira nela. Checklists, planilhas e sites de convite organizam listas; no Enlace, a lista de convidados existe para servir à planta.
+
+## Operating Context
+
+- O casal usa o editor no celular tanto quanto no computador. O fluxo completo (montar a planta, cadastrar pessoas e distribuir lugares) precisa ser igualmente bom nos dois; o celular não é só consulta.
+- Dá para começar sem cadastro, com rascunho no navegador. A conta entra para salvar e reabrir o projeto em outro dispositivo.
+- Materiais que fazem parte do uso: CSV de convidados, JSON de backup, PNG geral, PNG individual e impressão.
+- Celular de referência: Moto G84 ([ADR-0009](docs/decisoes/0009-preparacao-da-primeira-versao.md)), ainda sem medição. O aparelho Android testado antes ficou com p95 de ~50–70 ms na maioria das ações, acima do orçamento de 50 ms, e está registrado como limite conhecido ([ADR-0006](docs/decisoes/0006-aparelhos-de-referencia-e-aceite-da-fase-2.md)); a eventual otimização depende da medição no Moto G84.
 
 ## Requisitos explícitos
 
@@ -43,7 +60,13 @@ O suporte a uma conta em vários dispositivos faz parte do MVP. Duas pessoas usa
 
 ## Limites iniciais
 
-A planta é uma ferramenta de visualização e organização, sem garantia de escala arquitetônica ou dimensionamento físico. O altar já é desenhado no protótipo, mas posicionamento livre de objetos, medidas reais do local e edição do altar precisam de descoberta antes de entrar no escopo.
+A planta da cerimônia é uma ferramenta de visualização e organização, sem garantia de escala arquitetônica ou dimensionamento físico. O altar já é desenhado no protótipo; posicionamento livre de objetos, medidas reais do local e edição do altar não fazem parte da cerimônia.
+
+## Planta da festa (proposta, fase 6)
+
+Pedido do usuário em 09/11/2026, ainda não implementado ([ADR-0012](docs/decisoes/0012-planta-da-festa.md)). No mesmo projeto e com a mesma lista de convidados, planejar a festa em salão fechado: salão com medidas reais informadas pela pessoa, em formato pronto ou criado manualmente; mesas com N cadeiras e convidados atribuídos por mesa; DJ, pista, mesa de bolo, mesa de doces e outras atrações posicionadas livremente. As medidas ajudam a imaginar o espaço, mas o espaçamento é indicativo e não substitui o projeto do local nem as normas de segurança.
+
+## Fora do escopo inicial
 
 Não entram inicialmente: edição simultânea em tempo real, 3D, RSVP, convites enviados automaticamente, pagamentos, marketplace, gestão financeira e aplicação móvel nativa. O botão de compartilhar imagem não autoriza o sistema a enviar mensagens a convidados.
 
@@ -57,6 +80,22 @@ Não entram inicialmente: edição simultânea em tempo real, 3D, RSVP, convites
 - Mapa individual não deve carregar nomes de outras pessoas; definir explicitamente se categorias e ocupação aparecem.
 - Selecionar e mover pessoas deve ter resposta local imediata, sem aguardar o salvamento remoto. Importações, exportações e ferramentas secundárias carregam quando usadas.
 - Manter o fluxo principal curto e controles claros em celular; medir leveza e tempo de resposta conforme [desempenho](docs/desempenho.md), sem presumir desempenho apenas pela escolha do framework.
+
+## Brand Commitments
+
+- Nome: Enlace, grafado em minúsculas na marca do cabeçalho.
+- Voz: afeto na vitrine, clareza na ferramenta. A landing fala com calor ("Cada pessoa. Um lugar especial."); editor, conta e mensagens de erro usam linguagem simples e direta.
+- A identidade visual está registrada em [DESIGN.md](DESIGN.md).
+
+## Evidence on Hand
+
+- O produto ainda não foi publicado. Não há clientes, depoimentos, imprensa ou números de uso, e nenhum deve ser inventado.
+- Exemplos e testes usam dados fictícios. O HTML original em `prototypes/private/` contém dados pessoais e não serve como conteúdo ou fixture.
+- Medições de desempenho e validações reais estão em `docs/desempenho.md` e `docs/validacao-fase*.md`, com seus limites.
+
+## Accessibility & Inclusion
+
+Meta: WCAG 2.2 AA em todas as telas (landing, conta, projetos, editor e diálogos), decidida em 08/11/2026. Inclui contraste, teclado, foco visível e alvos de toque, além de uma alternativa à planta visual para quem usa leitor de tela. A auditoria automatizada e a alternativa em lista foram feitas na fase 5 ([revisão](docs/revisao-ui-fase5.md)); sem teste com leitor de tela real, não declarar conformidade.
 
 ## Como avaliar a primeira versão
 

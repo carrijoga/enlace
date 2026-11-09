@@ -5,3 +5,4 @@ build
 .vercel
 pnpm-lock.yaml
 prototypes/private
+**/.impeccable/

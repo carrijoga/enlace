@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import type { CeremonyProject } from '@enlace/contracts';
   import type { LayoutGeometry, SeatGeometry } from '@enlace/domain';
   import { GUEST_CATEGORIES } from './guest-categories';
+  import { glideSeats, SEAT_MOTION_LIMIT, welcomeSeat, type SeatPose } from './plan-motion';
 
   let {
     project,
@@ -23,19 +24,93 @@
   } = $props();
   let viewport: HTMLDivElement;
   let svg: SVGSVGElement;
-  const guests = $derived(new Map(project.guests.map((guest) => [guest.id, guest])));
-  const assignments = $derived(new Map(project.assignments.map((a) => [a.seatId, a.guestId])));
+  // Intermediários por referência: trocar só o formato não reconstrói os mapas (ADR-0005).
+  const guestList = $derived(project.guests);
+  const assignmentList = $derived(project.assignments);
+  const guests = $derived(new Map(guestList.map((guest) => [guest.id, guest])));
+  const assignments = $derived(new Map(assignmentList.map((a) => [a.seatId, a.guestId])));
+  // Lista de cadeiras estável enquanto as fileiras não mudam: id, rótulo e índices não dependem
+  // de formato, curvatura ou corredor. Assim trocar o formato só reexecuta o `transform` de cada
+  // cadeira (via `positions`), em vez de todas as expressões das 288 cadeiras.
+  const rows = $derived(project.layout.rows);
+  const seatList = $derived.by(() => {
+    void rows;
+    return untrack(() => geometry.seats);
+  });
+  const positions = $derived(new Map(geometry.seats.map((seat) => [seat.id, seat])));
+  // Uma única parada de Tab na planta (a seleção atual ou a primeira cadeira); as setas percorrem o resto.
+  const tabStopId = $derived.by(() => {
+    if (selectedSeatId && positions.has(selectedSeatId)) return selectedSeatId;
+    const guestSeat = selectedGuestId
+      ? assignmentList.find((a) => a.guestId === selectedGuestId)?.seatId
+      : undefined;
+    return guestSeat ?? geometry.seats[0]?.id;
+  });
+  const transformOf = (id: string) => {
+    const seat = positions.get(id);
+    return seat
+      ? `translate(${seat.x.toFixed(2)} ${seat.y.toFixed(2)}) rotate(${seat.angle.toFixed(1)})`
+      : undefined;
+  };
   let hovered = $state<string | null>(null);
+  // Valor primitivo: o efeito só roda quando a largura muda de fato, não a cada nova geometria
+  // (trocar o formato gera outro objeto com a mesma largura e forçaria layout síncrono).
+  const mapWidth = $derived(geometry.width);
+  // Tamanho da planta em pixels, calculado a partir da área disponível (offset* não varia com
+  // barras de rolagem nem com o conteúdo). Com largura/altura percentuais o Chrome refaz o layout
+  // de todas as cadeiras do SVG a cada alteração; com tamanho definido, só o que mudou.
+  let viewportWidth = $state(0);
+  let viewportHeight = $state(0);
+  const mapSize = $derived.by(() => {
+    if (!viewportWidth || !viewportHeight) return null;
+    const ratio = geometry.height / geometry.width;
+    if (zoom === 0) {
+      const width = Math.min(viewportWidth, viewportHeight / ratio);
+      return { width: Math.floor(width), height: Math.floor(width * ratio) };
+    }
+    const width = Math.max(zoom * viewportWidth, 760 * zoom);
+    return { width: Math.round(width), height: Math.round(width * ratio) };
+  });
 
   $effect(() => {
     void zoom;
-    void geometry.width;
+    void mapWidth;
     void tick().then(() => {
       if (viewport) viewport.scrollLeft = (viewport.scrollWidth - viewport.clientWidth) / 2;
     });
   });
 
-  function seatKey(event: KeyboardEvent, seat: SeatGeometry) {
+  // Movimento fora do fluxo reativo das cadeiras: edições que não mexem em `layout` nem rodam isto.
+  const layout = $derived(project.layout);
+  const dense = $derived(geometry.seats.length > SEAT_MOTION_LIMIT);
+  let shownPoses: ReadonlyMap<string, SeatPose> | null = null;
+  let shownCurve: number | null = null;
+  $effect(() => {
+    const curve = layout.curveStrength;
+    untrack(() => {
+      const previous = shownPoses;
+      const curveDragged = shownCurve !== null && shownCurve !== curve;
+      shownPoses = positions;
+      shownCurve = curve;
+      // O controle de curvatura dispara a cada passo; ali a planta acompanha o dedo diretamente.
+      if (previous && !curveDragged) glideSeats(svg, previous, positions);
+    });
+  });
+
+  let arrivalHolder: SVGGElement;
+  let arrivalRing: SVGRectElement;
+  export function welcome(seatId: string) {
+    if (dense) return;
+    const seat = svg.querySelector<SVGGElement>(`[data-seat-id="${seatId}"]`);
+    const transform = transformOf(seatId);
+    if (!seat || !transform) return;
+    arrivalHolder.setAttribute('transform', transform);
+    welcomeSeat(seat, arrivalRing);
+  }
+
+  function seatKey(event: KeyboardEvent, listed: SeatGeometry) {
+    // Posição atual (a de `seatList` pode ser de outro formato).
+    const seat = positions.get(listed.id) ?? listed;
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       onSeatSelect(seat.id);
@@ -76,14 +151,21 @@
   }
 </script>
 
-<div class="map-viewport" bind:this={viewport}>
+<div
+  class="map-viewport"
+  bind:this={viewport}
+  bind:offsetWidth={viewportWidth}
+  bind:offsetHeight={viewportHeight}
+>
   <svg
     bind:this={svg}
     class="ceremony-map"
-    class:fit={zoom === 0}
+    class:fit={zoom === 0 && !mapSize}
+    class:dense
     viewBox={`0 0 ${geometry.width} ${geometry.height}`}
-    style:width={zoom ? `${zoom * 100}%` : '100%'}
-    style:min-width={zoom ? `${760 * zoom}px` : '0'}
+    style:width={mapSize ? `${mapSize.width}px` : zoom ? `${zoom * 100}%` : '100%'}
+    style:height={mapSize ? `${mapSize.height}px` : null}
+    style:min-width={mapSize ? null : zoom ? `${760 * zoom}px` : '0'}
     role="group"
     aria-label={`Planta ${project.layout.mode === 'curve' ? 'em meia-lua' : 'tradicional'} com ${geometry.seats.length} cadeiras`}
   >
@@ -118,17 +200,19 @@
       <text x={geometry.center - 235} y="271" text-anchor="middle" class="side">ESQUERDA</text>
       <text x={geometry.center + 235} y="271" text-anchor="middle" class="side">DIREITA</text>
     </g>
-    {#each geometry.seats as seat, i (seat.id)}
+    {#each seatList as seat (seat.id)}
       {@const guest = guests.get(assignments.get(seat.id) ?? '')}
       {@const category = guest ? GUEST_CATEGORIES[guest.category] : null}
       {@const active = selectedSeatId === seat.id || Boolean(guest && selectedGuestId === guest.id)}
       <g
         data-seat-id={seat.id}
         role="button"
-        tabindex={active || (!selectedSeatId && i === 0) ? 0 : -1}
-        aria-label={`${seat.label}: ${guest?.name ?? 'disponível'}`}
+        tabindex={tabStopId === seat.id ? 0 : -1}
+        aria-label={guest
+          ? `${guest.name}, ${seat.label}, ${category?.label}`
+          : `${seat.label}: disponível`}
         aria-pressed={active}
-        transform={`translate(${seat.x.toFixed(2)} ${seat.y.toFixed(2)}) rotate(${seat.angle.toFixed(1)})`}
+        transform={transformOf(seat.id)}
         onclick={() => onSeatSelect(seat.id)}
         onkeydown={(event) => seatKey(event, seat)}
         ondragover={(event) => {
@@ -173,12 +257,26 @@
             >{seat.rowIndex + 1} · {seat.index + 1}</text
           >
         {:else}
-          <text x="0" y="5" text-anchor="middle" fill="#758473" class="empty-seat"
+          <text x="0" y="5" text-anchor="middle" fill="#626e63" class="empty-seat"
             >{String(seat.index + 1).padStart(2, '0')}</text
           >
         {/if}
       </g>
     {/each}
+    <g bind:this={arrivalHolder} aria-hidden="true" class="arrival">
+      <rect
+        bind:this={arrivalRing}
+        x="-30"
+        y="-35"
+        width="60"
+        height="74"
+        rx="12"
+        fill="none"
+        stroke="#b89364"
+        stroke-width="2.5"
+        opacity="0"
+      />
+    </g>
     <text x={geometry.center} y={geometry.height - 15} text-anchor="middle" class="entry"
       >ENTRADA</text
     >
@@ -201,6 +299,13 @@
     max-height: none;
     margin: auto;
     user-select: none;
+    animation: fade-in var(--dur-slow) ease-out;
+  }
+  .ceremony-map:not(.dense) .selection-ring {
+    animation: fade-in var(--dur-fast) ease-out;
+  }
+  .arrival {
+    pointer-events: none;
   }
   .ceremony-map.fit {
     width: 100%;
@@ -230,12 +335,12 @@
     letter-spacing: 2px;
   }
   .aisle {
-    fill: #737e6c;
+    fill: #626e63;
     font-size: 10px;
     letter-spacing: 1.2px;
   }
   .side {
-    fill: #6d7b69;
+    fill: #626e63;
     font-size: 10px;
     letter-spacing: 2px;
   }
@@ -250,7 +355,7 @@
     font-size: 10px;
   }
   .entry {
-    fill: #737e6c;
+    fill: #626e63;
     font-size: 10px;
     letter-spacing: 2px;
   }
@@ -261,10 +366,12 @@
     }
     .ceremony-map {
       width: 100% !important;
+      height: auto !important;
       min-width: 0 !important;
       max-height: 230mm;
     }
-    .selection-ring {
+    .selection-ring,
+    .arrival {
       display: none;
     }
   }

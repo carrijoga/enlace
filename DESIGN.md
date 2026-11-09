@@ -8,6 +8,7 @@ colors:
   ink: "#27342c"
   muted: "#626e63"
   line: "#dfe3da"
+  field-line: "#7f8e7b"
   focus: "#6d936f"
   sidebar: "#f7f8f3"
   map-context: "#f3f6ee"
@@ -95,7 +96,8 @@ A paleta mantém o verde como acento principal e usa neutros quentes; oliva, dou
 - **Marfim** (`{colors.surface}`): painéis, planta e texto claro sobre ações verdes.
 - **Tinta verde** (`{colors.ink}`): texto principal.
 - **Verde suave** (`{colors.muted}`): metadados, instruções secundárias e rótulos.
-- **Linha névoa** (`{colors.line}`): bordas, divisores e estrutura dos painéis.
+- **Linha névoa** (`{colors.line}`): divisores e estrutura dos painéis.
+- **Contorno de campo** (`{colors.field-line}`): borda de `input`, `select` e `textarea`, com contraste de 3:1 sobre papel e marfim (`--field-line`).
 - **Verde de foco** (`{colors.focus}`): anel de foco visível.
 - **Papel de apoio** (`{colors.sidebar}`): painéis laterais do editor.
 - **Névoa de orientação** (`{colors.map-context}`): faixa com instrução contextual da planta.
@@ -143,7 +145,7 @@ Controles têm cantos moderadamente arredondados (6–9px); painéis da planta u
 
 ### Inputs / Fields
 - Campos do editor usam fundo claro, borda neutra e cantos moderados; seletores e caixas de texto mantêm aparência nativa e controles familiares.
-- Foco usa o anel verde global. Campos de busca e de cadastro são organizados com rótulos explícitos.
+- Contorno em `{colors.field-line}`. Foco usa o anel verde global. Campos de busca e de cadastro são organizados com rótulos explícitos.
 
 ### Cards / Containers
 - **Painel da planta na landing:** superfície marfim, borda de 1px, raio 14px, cabeçalho e legenda separados do desenho.
@@ -156,7 +158,17 @@ Controles têm cantos moderadamente arredondados (6–9px); painéis da planta u
 - Em até 980px, abas “Estrutura” e “Pessoas” selecionam o painel exibido abaixo da planta; o estado ativo usa texto e borda inferior verde.
 
 ### Signature Component
-- **Planta da cerimônia:** SVG nativo com altar, corredor, fileiras, assentos, orientação e legenda. No editor, zoom e enquadramento ficam junto ao título; seleção e ocupação aparecem diretamente nos lugares. As categorias usam acentos de cor próprios e a instrução contextual explica a próxima ação.
+- **Planta da cerimônia:** SVG nativo com altar, corredor, fileiras, assentos, orientação e legenda. No editor, zoom e enquadramento ficam junto ao título; seleção e ocupação aparecem diretamente nos lugares. As categorias usam acentos de cor próprios e a instrução contextual explica a próxima ação. "Ver lugares em lista", no painel de convidados, oferece a mesma planta em texto, com seleção e atribuição, para leitor de tela e para quem não alcança as cadeiras pequenas no celular.
+
+## Motion
+
+O movimento explica estado e continuidade; o fio dourado é o seu material. Decisão e limites no [ADR-0011](docs/decisoes/0011-movimento-da-interface.md).
+
+- **Tokens (`styles.css`):** `--ease-out` (`cubic-bezier(0.16, 1, 0.3, 1)`), `--dur-fast` 120 ms para resposta, `--dur-base` 200 ms para mudança de estado, `--dur-slow` 320 ms para diálogos e listas. Keyframes globais: `fade-in`, `rise-in`, `pop-in`, `nudge`, `breathe`.
+- **Momento autoral da landing:** a planta se arma e as primeiras pessoas chegam, uma única vez. O conteúdo fica visível sem esperar a sequência.
+- **Momentos da planta:** cadeiras deslizam entre as poses e a cadeira recebe a pessoa com um aro dourado. Até 120 cadeiras.
+- **Ferramenta:** resposta curta, sem coreografia de abertura. Saídas de diálogo são imediatas.
+- **Movimento reduzido:** as distâncias viram zero e nada repete; cor e opacidade permanecem.
 
 ## Do's and Don'ts
 
@@ -166,9 +178,10 @@ Controles têm cantos moderadamente arredondados (6–9px); painéis da planta u
 - **Do** manter o anel de foco de 3px com afastamento de 5px.
 - **Do** preservar a planta SVG nativa como foco e assinatura visual.
 - **Do** adaptar a composição do editor nos limites de 1200px, 980px e 540px observados.
-- **Do** respeitar movimento reduzido, removendo transições.
+- **Do** respeitar movimento reduzido, removendo deslocamento e repetição e mantendo cor e opacidade que confirmam o estado.
 
 ### Don't:
 - **Don't** introduzir sombras nas superfícies comuns; a hierarquia existente usa bordas e tonalidades.
 - **Don't** substituir a geometria de assentos por uma biblioteca gráfica ou um visual genérico.
 - **Don't** usar as cores de categoria como substitutas do verde principal para ações globais.
+- **Don't** animar dentro da planta acima de 120 cadeiras, nem usar `@keyframes` nas linhas da lista de convidados.

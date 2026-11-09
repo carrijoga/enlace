@@ -21,6 +21,37 @@ describe('API base', () => {
     });
   });
 
+  it('logs only the normalized route and response metrics', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    try {
+      const app = createApp(config, {
+        checkReadiness: vi.fn(),
+        projectStore: {
+          list: vi.fn(async () => []),
+          get: vi.fn(),
+          create: vi.fn(),
+          save: vi.fn(),
+          delete: vi.fn(),
+        },
+        auth: { handler: vi.fn(), api: { getSession: vi.fn(async () => null) } },
+      });
+      await app.request('/api/projects/7a72c6e7-4290-4df0-9dc1-0ef2724a516b?invitee=private');
+      expect(info).toHaveBeenCalledOnce();
+      const event = JSON.parse(String(info.mock.calls[0]?.[0]));
+      expect(event).toMatchObject({
+        event: 'http_request',
+        method: 'GET',
+        route: '/api/projects/:id',
+        status: 401,
+      });
+      expect(JSON.stringify(event)).not.toContain('7a72c6e7');
+      expect(JSON.stringify(event)).not.toContain('private');
+      expect(event.durationMs).toEqual(expect.any(Number));
+    } finally {
+      info.mockRestore();
+    }
+  });
+
   it('reports ready when the injected database check succeeds', async () => {
     const app = createApp(config, { checkReadiness: async () => undefined });
     const response = await app.request('/ready');
@@ -89,5 +120,97 @@ describe('API base', () => {
     });
     expect(allowed.headers.get('access-control-allow-origin')).toBe(config.webOrigin);
     expect(denied.headers.get('access-control-allow-origin')).toBeNull();
+  });
+
+  it('keeps auth unavailable explicit when the secret is absent', async () => {
+    const app = createApp(config, { checkReadiness: async () => undefined });
+    const auth = await app.request('/api/auth/sign-in/email', { method: 'POST' });
+    expect(auth.status).toBe(503);
+    expect(await auth.json()).toEqual({ error: 'auth_unavailable' });
+    const capabilities = await app.request('/api/auth-capabilities');
+    expect(await capabilities.json()).toEqual({ passwordReset: false });
+  });
+
+  it('requires exact same origin for project mutations and auth for reads', async () => {
+    const store = {
+      list: vi.fn(async () => []),
+      get: vi.fn(),
+      create: vi.fn(),
+      save: vi.fn(),
+      delete: vi.fn(),
+    };
+    const app = createApp(config, {
+      checkReadiness: async () => undefined,
+      projectStore: store,
+      auth: { handler: vi.fn(), api: { getSession: vi.fn(async () => null) } },
+    });
+    const missingOrigin = await app.request('/api/projects', { method: 'POST', body: '{}' });
+    expect(missingOrigin.status).toBe(403);
+    const unauthenticated = await app.request('/api/projects', {
+      headers: { origin: config.webOrigin },
+    });
+    expect(unauthenticated.status).toBe(401);
+    expect(await unauthenticated.json()).toEqual({ error: 'unauthenticated' });
+    expect(store.list).not.toHaveBeenCalled();
+  });
+
+  it('returns explicit 503 for password reset without SMTP', async () => {
+    const app = createApp(config, {
+      checkReadiness: async () => undefined,
+      auth: { handler: vi.fn(), api: { getSession: vi.fn(async () => null) } },
+    });
+    const response = await app.request('/api/auth/request-password-reset', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: config.webOrigin },
+      body: '{}',
+    });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: 'password_reset_unavailable' });
+  });
+
+  it('rejects cross-origin and fetch-metadata cross-site auth mutations before dispatch', async () => {
+    const handler = vi.fn(async () => new Response('{}', { status: 200 }));
+    const app = createApp(config, {
+      checkReadiness: async () => undefined,
+      auth: { handler, api: { getSession: vi.fn(async () => null) } },
+    });
+    const badOrigin = await app.request('/api/auth/sign-in/email', {
+      method: 'POST',
+      headers: { origin: 'https://attacker.example' },
+      body: '{}',
+    });
+    expect(badOrigin.status).toBe(403);
+    const noOriginCrossSite = await app.request('/api/auth/sign-in/email', {
+      method: 'POST',
+      headers: { 'sec-fetch-site': 'cross-site', 'content-type': 'application/json' },
+      body: '{}',
+    });
+    expect(noOriginCrossSite.status).toBe(403);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('marks direct API responses uncacheable and requires JSON for writes', async () => {
+    const store = {
+      list: vi.fn(async () => []),
+      get: vi.fn(),
+      create: vi.fn(),
+      save: vi.fn(),
+      delete: vi.fn(),
+    };
+    const app = createApp(config, {
+      checkReadiness: async () => undefined,
+      projectStore: store,
+      auth: { handler: vi.fn(), api: { getSession: vi.fn(async () => ({ user: { id: 'u1' } })) } },
+    });
+    const read = await app.request('/api/projects');
+    expect(read.headers.get('cache-control')).toBe('no-store');
+    const wrongType = await app.request('/api/projects', {
+      method: 'POST',
+      headers: { origin: config.webOrigin, 'content-type': 'text/plain' },
+      body: '{}',
+    });
+    expect(wrongType.status).toBe(400);
+    expect(await wrongType.json()).toEqual({ error: 'invalid_request' });
+    expect(store.create).not.toHaveBeenCalled();
   });
 });

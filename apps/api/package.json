@@ -12,17 +12,24 @@
     "check": "tsc -p tsconfig.json --noEmit",
     "start": "node dist/server.js",
     "test": "vitest run",
-    "db:check": "node --env-file-if-exists=.env --input-type=module -e \"const { Pool } = await import('pg'); if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL obrigatória'); const p = new Pool({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 5000 }); try { await p.query('SELECT 1'); console.log('PostgreSQL disponível'); } finally { await p.end(); }\""
+    "db:check": "node --env-file-if-exists=.env --input-type=module -e \"const { Pool } = await import('pg'); if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL obrigatória'); const p = new Pool({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 5000 }); try { await p.query('SELECT 1'); console.log('PostgreSQL disponível'); } finally { await p.end(); }\"",
+    "db:migrate": "node --env-file-if-exists=.env --import tsx/esm src/db/migrate.ts",
+    "db:generate": "node --env-file-if-exists=.env ./node_modules/drizzle-kit/bin.cjs generate"
   },
   "dependencies": {
+    "@better-auth/drizzle-adapter": "^1.7.18",
     "@enlace/contracts": "workspace:*",
     "@hono/node-server": "^2.1.6",
+    "better-auth": "^1.7.18",
     "drizzle-orm": "^0.45.4",
     "hono": "^4.13.17",
+    "nodemailer": "^10.3.1",
     "pg": "^8.23.1"
   },
   "devDependencies": {
+    "@types/nodemailer": "^8.0.2",
     "@types/pg": "^8.23.1",
+    "drizzle-kit": "^0.31.11",
     "tsx": "^4.23.15"
   }
 }

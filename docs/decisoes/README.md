@@ -1,6 +1,6 @@
 # Registro de decisões
 
-Atualizado em 07/11/2026. Use ADRs numerados com contexto, decisão, status e consequências. Status possíveis: proposta, aceita, substituída ou rejeitada. Um documento de arquitetura proposto não é uma implementação.
+Atualizado em 09/11/2026. Use ADRs numerados com contexto, decisão, status e consequências. Status possíveis: proposta, aceita, substituída ou rejeitada. Um documento de arquitetura proposto não é uma implementação.
 
 | Registro | Status | Referência |
 | --- | --- | --- |
@@ -8,12 +8,42 @@ Atualizado em 07/11/2026. Use ADRs numerados com contexto, decisão, status e co
 | 0002 — Railway, PostgreSQL e SvelteKit/TypeScript | Parcialmente substituída pelo ADR-0003 | [ADR-0002](0002-railway-postgres-e-stack-enxuta.md) |
 | 0003 — Frontend Vercel e API Railway | Aceita; base local implementada | [ADR-0003](0003-frontend-vercel-api-railway.md) |
 | 0004 — Landing, editor local e marcos no Git | Aceita; editor local implementado | [ADR-0004](0004-editor-local-e-marcos-git.md) |
-| Drizzle/`pg`; Better Auth para contas | Driver/pool implementados; autenticação ainda planejada | [Arquitetura](../arquitetura.md) |
+| 0005 — Comandos do domínio com compartilhamento estrutural | Aceita; implementada | [ADR-0005](0005-comandos-com-compartilhamento-estrutural.md) |
+| 0006 — Aparelhos de referência e aceite de desempenho da fase 2 | Aceita: decisão do usuário | [ADR-0006](0006-aparelhos-de-referencia-e-aceite-da-fase-2.md) |
+| Drizzle/`pg`; Better Auth para contas | Implementados e validados localmente | [Arquitetura](../arquitetura.md) |
 | Aplicação Next.js/React com Supabase | Proposta inicial descartada após orientação do usuário | [ADR-0002](0002-railway-postgres-e-stack-enxuta.md) |
-| Planta JSONB, convidados/atribuições relacionais e revisão transacional | Proposta técnica | [Modelo de dados](../modelo-de-dados.md) |
+| Planta JSONB, convidados/atribuições relacionais e revisão transacional | Implementados na fase 3 | [Modelo de dados](../modelo-de-dados.md) |
 | SVG e exportação de imagens no cliente | Implementados no editor local | [Validação fase 2](../validacao-fase2.md) |
 | Migração incremental com compatibilidade do JSON legado | Direção de planejamento | [Roadmap](../roadmap.md) |
 
 O ADR-0003 registra a direção atual. Antes de adicionar integrações, validar e fixar versões compatíveis; mudanças relevantes de direção exigem atualizar o registro. Não é necessário interromper o trabalho para escolhas rotineiras já autorizadas pelo escopo; documente a decisão e avance.
 
-Não decididos: região e recursos na Railway, orçamento, transporte de e-mail, versões das integrações, identidade visual final, domínio público, modelo comercial, colaboração entre contas e suporte a múltiplos cenários dentro do mesmo projeto.
+Não decididos: recursos na Railway, orçamento, transporte de e-mail, versões das integrações, identidade visual final, domínio público, modelo comercial, colaboração entre contas e suporte a múltiplos cenários dentro do mesmo projeto.
+
+## 0007 — Contas e salvamento transacional
+
+[ADR-0007](0007-contas-e-salvamento-transacional.md): aceita para implementação local da fase 3. Better Auth, proxy same-origin, agregado relacional, revisões e recibos de operação. Validação remota e transporte de e-mail permanecem dependentes de ambiente.
+
+## 0008 — Importação CSV de convidados
+
+[ADR-0008](0008-importacao-csv-de-convidados.md): aceita e implementada na fase 4. Parser próprio carregado sob demanda, UTF-8/Windows-1252, prévia obrigatória, duplicidade só como aviso e lote numa única revisão.
+
+## 0009 — Preparação da primeira versão
+
+[ADR-0009](0009-preparacao-da-primeira-versao.md): implementação local da fase 5, privacidade, exclusão de conta e Moto G84 como referência; aceite hospedado pendente.
+
+## 0010 — Cartão de exportação da planta
+
+[ADR-0010](0010-cartao-de-exportacao-da-planta.md): aceita e implementada. PNG volta à composição do protótipo v3, com colisões de rótulos corrigidas e sem deformar nomes; mapa individual passa a mostrar casal e data, sem dados dos demais convidados.
+
+## 0011 — Movimento da interface
+
+[ADR-0011](0011-movimento-da-interface.md): aceita e implementada. Movimento nativo, sem biblioteca; dentro da planta só até 120 cadeiras, para preservar o orçamento de 50 ms no cenário máximo. Falta medir no Moto G84.
+
+## 0012 — Planta da festa
+
+[ADR-0012](0012-planta-da-festa.md): proposta para a fase 6, não implementada. Salão com medidas reais (formato pronto ou manual), mesas com N cadeiras, convidados por mesa e atrações posicionadas livremente, na mesma lista de convidados da cerimônia.
+
+## 0013 — Infraestrutura Railway como código
+
+[ADR-0013](0013-infraestrutura-railway-como-codigo.md): aceita; validada em contêineres, provisionamento pendente. `.railway/railway.ts` substitui `railway.toml`, região US East, PostgreSQL 17, migração no pré-deploy com credencial própria e sem proxy Cloudflare na API.

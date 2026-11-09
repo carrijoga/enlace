@@ -1,6 +1,6 @@
 # Desempenho e facilidade de uso
 
-Atualizado em 07/11/2026. **Status: metas do produto e primeira medição do editor local.** Frontend SvelteKit/TypeScript na Vercel; API Hono/Node e PostgreSQL privado na Railway. Landing: 37,69 KiB gzip; editor: 77,55 KiB. Troca de formato no desktop local: p95 12,1 ms no cenário comum e 92,1 ms no limite, acima da meta de 50 ms. Condições, amostras e pendências na [validação da fase 2](validacao-fase2.md). Não ampliar o orçamento para acomodar o desvio.
+Atualizado em 08/11/2026. **Status: metas do produto e medições do editor local.** Frontend SvelteKit/TypeScript na Vercel; API Hono/Node e PostgreSQL privado na Railway. Landing: 38,88 KiB gzip; editor: 79,26 KiB. Cenário máximo (288 cadeiras/300 convidados) no desktop local, após a otimização de 08/11: trocar formato, selecionar cadeira/pessoa, trocar ocupantes, filtrar e buscar com p95 ≤ 50 ms sem incluir pintura (modo `layout` de `scripts/bench-editor.js`); antes, 46,9–120,7 ms com pintura. Com pintura (modo `frame`) o desktop ficou com pior p95 de 37,1 ms. Celular Android de entrada (modelo não identificado): ~50–70 ms de p95 na maioria das ações, registrado como limite conhecido; o aceite da fase 2 usa o desktop de referência e a classe de celular de referência será definida na fase 5 ([ADR-0006](decisoes/0006-aparelhos-de-referencia-e-aceite-da-fase-2.md)). Condições, amostras e limites na [validação da fase 2](validacao-fase2.md). Não ampliar o orçamento para acomodar desvios.
 
 O resultado esperado é abrir o projeto rapidamente, editar a planta sem esperar a rede e encontrar as ações principais com facilidade. A escolha de framework ajuda a controlar o custo inicial, mas não comprova desempenho: tamanho entregue, renderização, consultas e comportamento em celular serão medidos na aplicação real.
 
@@ -12,10 +12,14 @@ O resultado esperado é abrir o projeto rapidamente, editar a planta sem esperar
 - Manter Drizzle, `node-postgres`, autenticação do Better Auth e credenciais no servidor. Não entregar o cliente do banco ao navegador.
 - Preferir CSS e componentes próprios simples. Avaliar cada dependência por necessidade, tamanho entregue e manutenção; não duplicar bibliotecas para a mesma função.
 - Vercel Web Analytics (`@vercel/analytics`) é a única medição de terceiros no navegador: `inject()` no layout raiz, só no browser. Não usar `@vercel/analytics/sveltekit`, que depende de `$app/environment`/`$app/stores`, removidos no SvelteKit 3. Coleta só ocorre com Web Analytics ativado no projeto Vercel.
-- Introduzir Redis, filas, Web Workers ou virtualização somente após medir um problema que os justifique.
+- Introduzir Redis, filas, Web Workers ou virtualização somente após medir um problema que os justifique. No cenário máximo, `content-visibility: auto` nas linhas de convidados e SVG com tamanho em pixels bastaram; virtualização da lista não foi necessária. A lista fica sempre montada e busca/filtro só alternam `hidden` (recriar ~300 linhas custava ~50 ms no celular).
+- Comandos de domínio preservam referências do que não mudou (ADR-0005). Derivar mapas/listas de `project.guests`, `project.assignments` e `project.layout.rows` por `$derived` intermediários, para que trocar só o formato não os recalcule; na planta, só o `transform` deve depender da geometria nova. Não comparar projetos serializando tudo nem devolver cópias profundas a cada edição.
+- Movimento (ADR-0011): animação dentro do SVG repinta a planta inteira a cada quadro. Acima de `SEAT_MOTION_LIMIT` (120 cadeiras) ela fica desligada, assim como as animações disparadas a cada seleção. Não usar `@keyframes` nas linhas de convidados nem animar o que roda em toda edição. Comparar com um build de referência na mesma origem de host: `localhost` e `127.0.0.1` deram resultados diferentes no painel do navegador.
 - Limitar snapshots de desfazer, rascunhos e arquivos de entrada. Revogar URLs temporárias e liberar recursos de exportação depois do uso.
 
 ## Metas iniciais
+
+Referência móvel definida pelo usuário em 08/11/2026: **Moto G84**. Navegador/versão, sistema, condições térmicas/rede e medições reais ainda precisam ser registrados. A escolha não equivale a aprovação de desempenho; permanece a meta p95 ≤ 50 ms. Resultados de emulação ou Edge desktop são evidência complementar.
 
 As metas abaixo são orçamentos de engenharia ajustáveis, não resultados obtidos nem garantias de tempo em qualquer aparelho. Fixar aparelhos e condições de referência na primeira medição; mudanças de orçamento devem ser justificadas no registro de decisões.
 

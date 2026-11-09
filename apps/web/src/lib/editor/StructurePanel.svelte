@@ -66,9 +66,9 @@
   }
 </script>
 
-<aside class="structure-panel" aria-labelledby="structure-title">
+<div class="structure-panel">
   <header class="panel-header">
-    <h2 id="structure-title">Estrutura da cerimônia</h2>
+    <h2>Estrutura da cerimônia</h2>
   </header>
 
   <section class="section" aria-labelledby="format-title">
@@ -261,7 +261,7 @@
   </details>
 
   <p class="footnote">A planta é esquemática. Confira medidas reais com a cerimonialista.</p>
-</aside>
+</div>
 
 <style>
   .structure-panel {
@@ -319,6 +319,12 @@
     color: var(--structure-forest);
     font-weight: 700;
   }
+  .range-heading,
+  .range,
+  .row-card,
+  .details-section[open] form {
+    animation: rise-in var(--dur-base) var(--ease-out);
+  }
   .range-heading {
     display: flex;
     justify-content: space-between;
@@ -346,7 +352,7 @@
     width: 100%;
     min-height: 38px;
     padding: 7px 9px;
-    border: 1px solid var(--structure-line);
+    border: 1px solid var(--field-line);
     border-radius: 7px;
     background: #fff;
     color: var(--structure-ink);
@@ -457,7 +463,7 @@
     width: 100%;
     height: 36px;
     padding: 2px;
-    border: solid var(--structure-line);
+    border: solid var(--field-line);
     border-width: 1px 0;
     border-radius: 0;
     text-align: center;
@@ -524,6 +530,7 @@
     margin: 6px 0;
     color: #922f28;
     font-size: 12px;
+    animation: nudge 240ms ease-in-out;
   }
   .footnote {
     margin: 8px 0 0;

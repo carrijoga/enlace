@@ -1,18 +1,16 @@
 # Modelo de dados
 
-Atualizado em 07/11/2026. **Status: contratos compartilhados da fase 1 implementados em `packages/contracts` (Zod, documento JSON v1 e parser/migração v3); modelo relacional ainda é proposta. Não há tabelas, migrations ou autenticação implementadas.** A direção atual é frontend SvelteKit na Vercel e API Hono/Node + PostgreSQL Railway; Drizzle com `pg` está preparado na API. Better Auth não está instalado nem implementado. Ler junto de [arquitetura.md](arquitetura.md) e [ADR-0003](decisoes/0003-frontend-vercel-api-railway.md).
+Atualizado em 08/11/2026. Fase 3 em integração local: schema Drizzle, migrações SQL, Better Auth e serviço transacional PostgreSQL implementados. O formato portátil JSON v1 permanece o mesmo. Ver [ADR-0007](decisoes/0007-contas-e-salvamento-transacional.md), [arquitetura](arquitetura.md) e [validação fase 3](validacao-fase3.md).
 
-PostgreSQL deve ficar acessível somente pela API backend, preferencialmente pela rede privada Railway em produção. O browser usa rotas same-origin do frontend/proxy e nunca recebe credenciais ou conexão direta ao banco. O bootstrap contém pool `pg` lazy e Drizzle, sem schema ou migrations. A hospedagem do banco não fornece contas, sessões ou autorização por projeto.
-
-As entidades abaixo, autorização, transações e sincronização são contratos de implementação futura (fase 3), não capacidades disponíveis na API atual. Hoje a API expõe somente `/health` e `/ready`; a web encaminha `/api/health` para a saúde da API.
+PostgreSQL fica exclusivo ao backend. A interface usa o proxy same-origin; proprietário e sessão são determinados na API. Tabelas de autenticação seguem Better Auth: `user`, `session`, `account`, `verification` e `rateLimit`, com IDs textuais. Schema em `apps/api/src/auth-schema.ts` e `apps/api/src/db/schema.ts`; serviço em `apps/api/src/projects/store.ts`.
 
 ## Agregado de projeto
 
 Um projeto reúne metadados do casamento, planta, convidados e atribuições. É a unidade de autorização, leitura consistente e controle de concorrência. A conta pode possuir vários projetos. O primeiro recorte tem um proprietário por projeto; associação de outras contas será uma evolução explícita.
 
-| Entidade | Campos principais propostos | Observações |
+| Entidade | Campos principais | Observações |
 | --- | --- | --- |
-| Identidade e sessão | Futuro: entidades definidas pela biblioteca de autenticação escolhida (Better Auth ainda não instalado) | Gerar e revisar o esquema antes de criar migrações; não inventar hashes, tokens ou campos próprios. O ID pode ser string e não é presumido UUID. |
+| Identidade e sessão | Entidades da biblioteca Better Auth | Esquema revisado com a biblioteca; sem hashes/tokens próprios. O ID pode ser string e não é presumido UUID. |
 | `projects` | `id`, `owner_id`, `title`, `couple_first`, `couple_second`, `wedding_date`, `layout_schema_version`, `layout`, `revision`, `created_at`, `updated_at` | ID do projeto UUID; `owner_id` referencia o usuário da biblioteca com tipo compatível. Data do casamento sem fuso, timestamps em UTC. `revision` inteira positiva, incrementada pela transação de escrita. |
 | `guests` | `id`, `project_id`, `name`, `category`, `note`, `sort_order` | Nome não é único. Categorias iniciais preservam família, padrinho, madrinha, pajem e convidado. Notas são privadas. |
 | `seat_assignments` | `project_id`, `seat_id`, `guest_id` | No máximo um convidado por cadeira e uma cadeira por convidado no projeto. |
@@ -33,11 +31,11 @@ As listas de cadeiras são a fonte da quantidade por lado. Não persistir també
 - Trocar ordem, formato ou curvatura preserva os IDs e suas ocupações. Uma cadeira removida e posteriormente recriada recebe um novo ID; desfazer pode restaurar o snapshot anterior e seus IDs se ainda não houver conflito de revisão.
 - `linkedCounts` descreve como o próximo comando de edição é aplicado; não é uma exigência de simetria permanente. O modelo legado admite lados assimétricos com a opção vinculada ligada.
 
-Manter limites iniciais compatíveis com a capacidade observada do protótipo: 1–12 fileiras, 0–12 cadeiras por lado/fileira e até 300 convidados. Esses limites precisam ser aplicados também aos caminhos de cadastro e lote, não só à importação. Rever os números após testar desempenho e UX. Formalizar comprimentos de campos, valores de corredor, curvatura, tamanho máximo de arquivo e comprimento de notas antes de liberar os contratos; usar os mesmos limites no cliente/servidor/banco onde aplicável.
+Manter limites iniciais compatíveis com a capacidade observada do protótipo: 1–12 fileiras, 0–12 cadeiras por lado/fileira e até 300 convidados. Esses limites precisam ser aplicados também aos caminhos de cadastro e lote, não só à importação. Rever os números após testar desempenho e UX. Comprimentos de campos, corredor, curvatura, tamanho máximo e notas estão formalizados nos contratos executáveis; cliente e servidor validam o mesmo agregado.
 
-## Identidade, acesso e conexão — proposta para fase 3
+## Identidade, acesso e conexão
 
-Better Auth é uma alternativa ainda não instalada nem integrada. Se adotada, executará no servidor da API; a sessão será validada no backend e identificará o usuário por operação. Tabelas de autenticação devem seguir esquema gerado e revisado, com migrações versionadas. Não criar tabela paralela de senhas nem mecanismo próprio de tokens. O frontend deve encaminhar requisições autenticadas pelo seu domínio para API, evitando cookies third-party entre domínios Vercel/Railway. Validar origem/CSRF e cookies no desenho final; CORS não concede autorização. A integração de referência é a [documentação do adaptador Drizzle](https://www.better-auth.com/docs/adapters/drizzle).
+Better Auth executa no servidor da API; a sessão é validada no backend e identifica o usuário por operação. Tabelas de autenticação devem seguir esquema gerado e revisado, com migrações versionadas. Não criar tabela paralela de senhas nem mecanismo próprio de tokens. O frontend deve encaminhar requisições autenticadas pelo seu domínio para API, evitando cookies third-party entre domínios Vercel/Railway. Validar origem/CSRF e cookies no desenho final; CORS não concede autorização. A integração de referência é a [documentação do adaptador Drizzle](https://www.better-auth.com/docs/adapters/drizzle).
 
 Toda consulta de projeto deve incluir o ID autenticado, além do ID do projeto: carregamento, listagem, atualização, exclusão, importação, convidados, atribuições e recibos. Para consultar uma tabela filha, restringir o acesso pelo projeto e seu proprietário no mesmo acesso ao banco. Nunca aceitar `owner_id` ou `actor_id` do corpo da requisição como identidade. Um projeto inexistente e um projeto inacessível não devem expor dados para distinguir seus proprietários.
 
@@ -45,7 +43,7 @@ Toda consulta de projeto deve incluir o ID autenticado, além do ID do projeto: 
 
 Usar um pool `node-postgres` reutilizado pelo processo do servidor, com limite de conexões definido para a capacidade do banco e quantidade de instâncias. Credenciais ficam apenas no ambiente do servidor. Separar o papel de execução, sem superusuário nem permissões de DDL, do papel usado por migrações. A aplicação precisa das permissões de dados estritamente necessárias para seus próprios serviços e para a biblioteca de autenticação.
 
-O isolamento futuro será feito pela autorização centralizada na API e pelas restrições PostgreSQL; nem Railway nem PostgreSQL fornecem autorização de usuário automaticamente. Não há `auth.uid()` ou RLS automática neste desenho; RLS não é dependência do MVP. Se adotada como camada adicional, exige políticas próprias e contexto de usuário seguro na mesma transação/conexão, sem persistir identidade entre requisições que compartilham o pool. Testes de acesso cruzado serão obrigatórios independentemente de RLS. Atualmente não há rotas de projetos/autenticação para testar.
+O isolamento é feito pela autorização centralizada na API e pelas restrições PostgreSQL; nem Railway nem PostgreSQL fornecem autorização de usuário automaticamente. Não há `auth.uid()` ou RLS automática neste desenho; RLS não é dependência do MVP. Se adotada como camada adicional, exige políticas próprias e contexto de usuário seguro na mesma transação/conexão, sem persistir identidade entre requisições que compartilham o pool. Testes de acesso cruzado serão obrigatórios independentemente de RLS. As rotas `/api/projects` e `/api/auth/*` têm testes integrados com banco real.
 
 ## Escrita atômica e revisão
 
@@ -66,7 +64,7 @@ Os recibos precisam de retenção definida antes de liberar sincronização; sug
 
 ## Documento JSON portátil
 
-O formato implementado em `packages/contracts` começa em `schemaVersion: 1`, separado da `revision` do banco e do `version: 3` legado. `projectDocumentSchema` e `ceremonyProjectSchema` definem o envelope/nomes, limites, UUIDs, enums, datas reais e referências de cadeira/convidado. `parseProjectFile` valida JSON v1 e encaminha v3 ao adaptador explícito. Compile contracts antes dos consumidores (`dist` é o export de runtime). A API não persiste esse documento ainda.
+O formato implementado em `packages/contracts` começa em `schemaVersion: 1`, separado da `revision` do banco e do `version: 3` legado. `projectDocumentSchema` e `ceremonyProjectSchema` definem o envelope/nomes, limites, UUIDs, enums, datas reais e referências de cadeira/convidado. `parseProjectFile` valida JSON v1 e encaminha v3 ao adaptador explícito. Compile contracts antes dos consumidores (`dist` é o export de runtime). A API persiste o agregado validado; o envelope portátil não entra no banco.
 
 | Incluído no arquivo | Excluído do arquivo |
 | --- | --- |
@@ -95,7 +93,7 @@ O adaptador não transporta a lógica de avisos familiares fixos nem interpreta 
 
 ## CSV de convidados
 
-Contrato inicial sugerido: `nome` obrigatório; `categoria` e `observacao` opcionais, com mapeamento na prévia. Usar parsing de CSV real, UTF-8 com suporte a BOM e separador selecionável. Categorias desconhecidas pedem correção ou mapeamento; campo vazio pode usar `convidado` conforme escolha mostrada na prévia.
+Implementado conforme [ADR-0008](decisoes/0008-importacao-csv-de-convidados.md) (o lote é aplicado no editor e salvo pela revisão normal do projeto, sem rota própria). Contrato inicial sugerido: `nome` obrigatório; `categoria` e `observacao` opcionais, com mapeamento na prévia. Usar parsing de CSV real, UTF-8 com suporte a BOM e separador selecionável. Categorias desconhecidas pedem correção ou mapeamento; campo vazio pode usar `convidado` conforme escolha mostrada na prévia.
 
 Não usar nome como chave de deduplicação. Cada linha válida recebe novo ID. Mostrar possíveis duplicações como aviso, respeitar convidados com o mesmo nome e confirmar o lote antes de gravar. Aplicar o lote em uma transação com a revisão do projeto, sem mudanças na planta e sem atribuir lugares automaticamente. Reenviar a mesma operação não pode criar convidados em dobro.
 

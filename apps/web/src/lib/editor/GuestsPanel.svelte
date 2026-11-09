@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { CeremonyProject } from '@enlace/contracts';
-  import { getSeatLabel } from '@enlace/domain';
+  import { createUuid, type CeremonyProject } from '@enlace/contracts';
+  import { getSeatLabels } from '@enlace/domain';
   import { GUEST_CATEGORIES, GUEST_CATEGORY_OPTIONS, type GuestCategory } from './guest-categories';
 
   type Guest = CeremonyProject['guests'][number];
@@ -17,6 +17,7 @@
     onRemoveGuest,
     onAssignGuest,
     onUnassignSeat,
+    onImportCsv,
   }: {
     project: CeremonyProject;
     selectedGuestId: string | null;
@@ -27,6 +28,7 @@
     onRemoveGuest: (id: string) => void;
     onAssignGuest: (guestId: string, seatId: string) => void;
     onUnassignSeat: (seatId: string) => void;
+    onImportCsv?: (trigger: HTMLButtonElement) => void;
   } = $props();
 
   let search = $state('');
@@ -42,29 +44,52 @@
   let editError = $state('');
   let pendingRemoval = $state<string | null>(null);
 
-  const seatByGuest = $derived(new Map(project.assignments.map((a) => [a.guestId, a.seatId])));
+  // Derivados intermediários por referência (ADR-0005): trocar só o formato mantém fileiras,
+  // convidados e atribuições, então rótulos, mapas e grupos não são recalculados.
+  const guests = $derived(project.guests);
+  const assignments = $derived(project.assignments);
+  const rows = $derived(project.layout.rows);
+  const seatByGuest = $derived(new Map(assignments.map((a) => [a.guestId, a.seatId])));
+  const seatLabels = $derived(getSeatLabels({ ...project.layout, rows }));
   const labelByGuest = $derived(
-    new Map(project.assignments.map((a) => [a.guestId, getSeatLabel(project, a.seatId)])),
+    new Map(assignments.map((a) => [a.guestId, seatLabels.get(a.seatId)])),
   );
 
-  const selectedSeatLabel = $derived(selectedSeatId ? getSeatLabel(project, selectedSeatId) : null);
+  const selectedSeatLabel = $derived(selectedSeatId ? seatLabels.get(selectedSeatId) : null);
   const selectedSeatGuestId = $derived(
     selectedSeatId
       ? (project.assignments.find((assignment) => assignment.seatId === selectedSeatId)?.guestId ??
           '')
       : '',
   );
-  const unseatedCount = $derived(
-    project.guests.filter((guest) => !seatByGuest.has(guest.id)).length,
+  const unseatedCount = $derived(guests.filter((guest) => !seatByGuest.has(guest.id)).length);
+  // Todas as linhas ficam montadas; busca e filtro só alternam `hidden`. Recriar ~300 linhas a
+  // cada mudança de filtro custava ~50 ms num celular Android no cenário máximo.
+  const groups = $derived(
+    GUEST_CATEGORY_OPTIONS.map((category) => ({
+      category,
+      guests: guests.filter((guest) => guest.category === category.value),
+    })),
   );
-  const visibleGuests = $derived.by(() => {
+  const searchText = $derived(
+    new Map(guests.map((g) => [g.id, `${g.name} ${g.note}`.toLocaleLowerCase('pt-BR')])),
+  );
+  const visibleIds = $derived.by(() => {
     const needle = search.trim().toLocaleLowerCase('pt-BR');
-    return project.guests.filter((guest) => {
-      const matchesText =
-        !needle || `${guest.name} ${guest.note}`.toLocaleLowerCase('pt-BR').includes(needle);
-      return matchesText && (filter === 'all' || !seatByGuest.has(guest.id));
-    });
+    if (!needle && filter === 'all') return null;
+    return new Set(
+      guests
+        .filter(
+          (guest) =>
+            (!needle || searchText.get(guest.id)!.includes(needle)) &&
+            (filter === 'all' || !seatByGuest.has(guest.id)),
+        )
+        .map((guest) => guest.id),
+    );
   });
+  const visibleCount = (list: Guest[]) =>
+    visibleIds ? list.filter((guest) => visibleIds.has(guest.id)).length : list.length;
+  const visibleTotal = $derived(visibleIds ? visibleIds.size : guests.length);
 
   function addGuest(event: SubmitEvent) {
     event.preventDefault();
@@ -79,8 +104,7 @@
     }
     addError = '';
     if (
-      onAddGuest({ id: crypto.randomUUID(), name, category: newCategory, note: newNote.trim() }) ===
-      false
+      onAddGuest({ id: createUuid(), name, category: newCategory, note: newNote.trim() }) === false
     )
       return;
     newName = '';
@@ -129,14 +153,17 @@
   }
 </script>
 
-<aside class="guests-panel" aria-labelledby="guests-title">
+<div class="guests-panel">
   <header class="panel-header">
     <div>
       <h2 id="guests-title">Convidados</h2>
     </div>
-    <span class="total" aria-label={`${project.guests.length} convidados`}
-      >{project.guests.length}</span
-    >
+    {#if onImportCsv}<button
+        class="text-button"
+        type="button"
+        onclick={(event) => onImportCsv?.(event.currentTarget)}>Importar CSV</button
+      >{/if}
+    {#key guests.length}<span class="total">{guests.length}</span>{/key}
   </header>
 
   {#if selectedSeatId}
@@ -152,16 +179,14 @@
         id="seat-guest"
         value={selectedSeatGuestId}
         onchange={handleSeatChange}
-        disabled={project.guests.length === 0}
+        disabled={guests.length === 0}
       >
         <option value="">Sem pessoa</option>
-        {#each project.guests as guest (guest.id)}
+        {#each guests as guest (guest.id)}
           <option value={guest.id}>{guest.name}</option>
         {/each}
       </select>
-      {#if project.guests.length === 0}<p class="hint">
-          Adicione uma pessoa para ocupar este lugar.
-        </p>{/if}
+      {#if guests.length === 0}<p class="hint">Adicione uma pessoa para ocupar este lugar.</p>{/if}
     </section>
   {/if}
 
@@ -169,7 +194,7 @@
     <div class="selection-banner" role="status">
       <span
         >Toque em uma cadeira para posicionar <strong
-          >{project.guests.find((guest) => guest.id === selectedGuestId)?.name}</strong
+          >{guests.find((guest) => guest.id === selectedGuestId)?.name}</strong
         >.</span
       >
       <button
@@ -190,6 +215,7 @@
       maxlength="100"
       autocomplete="off"
       placeholder="Nome do convidado"
+      aria-invalid={addError ? true : undefined}
       aria-describedby={addError ? 'add-error' : undefined}
     />
     <label for="new-guest-category">Categoria</label>
@@ -205,11 +231,9 @@
       maxlength="1000"
       rows="2"
       placeholder="Uma informação útil"></textarea>
-    {#if addError}<p class="error" id="add-error" aria-live="polite">{addError}</p>{/if}
-    {#if project.guests.length >= 300}<p class="hint">
-        O limite de 300 convidados foi atingido.
-      </p>{/if}
-    <button class="primary-button" type="submit" disabled={project.guests.length >= 300}
+    {#if addError}<p class="error" id="add-error" role="alert">{addError}</p>{/if}
+    {#if guests.length >= 300}<p class="hint">O limite de 300 convidados foi atingido.</p>{/if}
+    <button class="primary-button" type="submit" disabled={guests.length >= 300}
       >Adicionar convidado</button
     >
   </form>
@@ -227,7 +251,7 @@
       bind:value={search}
       placeholder="Buscar por nome ou anotação"
     />
-    <div class="filters" aria-label="Filtrar convidados">
+    <div class="filters" role="group" aria-label="Filtrar convidados">
       <button
         type="button"
         aria-pressed={filter === 'all'}
@@ -241,117 +265,116 @@
         onclick={() => (filter = filter === 'unseated' ? 'all' : 'unseated')}>Sem lugar</button
       >
     </div>
-    {#if visibleGuests.length === 0}
+    {#if visibleTotal === 0}
       <p class="empty">
-        {project.guests.length ? 'Nenhuma pessoa encontrada.' : 'Seus convidados aparecerão aqui.'}
+        {guests.length ? 'Nenhuma pessoa encontrada.' : 'Seus convidados aparecerão aqui.'}
       </p>
-    {:else}
-      {#each GUEST_CATEGORY_OPTIONS as category (category.value)}
-        {@const group = visibleGuests.filter((guest) => guest.category === category.value)}
-        {#if group.length}
-          <section class="category-group" aria-label={category.label}>
-            <h4>{category.label}<span>{group.length}</span></h4>
-            {#each group as guest (guest.id)}
-              <article
-                class="guest-row"
-                draggable="true"
-                ondragstart={(event) => startDrag(event, guest)}
+    {/if}
+    {#each groups as { category, guests: group } (category.value)}
+      {@const shown = visibleCount(group)}
+      {#if group.length}
+        <section class="category-group" aria-label={category.label} hidden={shown === 0}>
+          <h4>{category.label}<span>{shown}</span></h4>
+          {#each group as guest (guest.id)}
+            <article
+              class="guest-row"
+              hidden={visibleIds !== null && !visibleIds.has(guest.id)}
+              draggable="true"
+              ondragstart={(event) => startDrag(event, guest)}
+            >
+              <button
+                class="guest-choice"
+                type="button"
+                aria-pressed={selectedGuestId === guest.id}
+                class:selected={selectedGuestId === guest.id}
+                onclick={() => onSelectGuest(selectedGuestId === guest.id ? null : guest.id)}
               >
-                <button
-                  class="guest-choice"
-                  type="button"
-                  aria-pressed={selectedGuestId === guest.id}
-                  class:selected={selectedGuestId === guest.id}
-                  onclick={() => onSelectGuest(selectedGuestId === guest.id ? null : guest.id)}
+                <span
+                  class="guest-dot"
+                  style={`--category-fill:${GUEST_CATEGORIES[guest.category].fill};--category-stroke:${GUEST_CATEGORIES[guest.category].stroke}`}
+                ></span>
+                <span class="guest-copy"
+                  ><strong>{guest.name}</strong>{#if guest.note}<small>{guest.note}</small
+                    >{/if}</span
                 >
-                  <span
-                    class="guest-dot"
-                    style={`--category-fill:${GUEST_CATEGORIES[guest.category].fill};--category-stroke:${GUEST_CATEGORIES[guest.category].stroke}`}
-                  ></span>
-                  <span class="guest-copy"
-                    ><strong>{guest.name}</strong>{#if guest.note}<small>{guest.note}</small
-                      >{/if}</span
+                {#if seatByGuest.has(guest.id)}<small class="seat-tag"
+                    >{labelByGuest.get(guest.id)}</small
+                  >{:else}<small class="seat-tag unseated">Sem lugar</small>{/if}
+              </button>
+              <button
+                class="edit-button"
+                type="button"
+                aria-label={`Editar ${guest.name}`}
+                onclick={() => beginEdit(guest)}>Editar</button
+              >
+              {#if editingId === guest.id}
+                <form class="edit-form" onsubmit={(event) => saveEdit(event, guest.id)}>
+                  <label for={`edit-name-${guest.id}`}>Nome</label><input
+                    id={`edit-name-${guest.id}`}
+                    bind:value={editName}
+                    maxlength="100"
+                  />
+                  <label for={`edit-category-${guest.id}`}>Categoria</label><select
+                    id={`edit-category-${guest.id}`}
+                    bind:value={editCategory}
+                    >{#each GUEST_CATEGORY_OPTIONS as option (option.value)}<option
+                        value={option.value}>{option.label}</option
+                      >{/each}</select
                   >
-                  {#if seatByGuest.has(guest.id)}<small class="seat-tag"
-                      >{labelByGuest.get(guest.id)}</small
-                    >{:else}<small class="seat-tag unseated">Sem lugar</small>{/if}
-                </button>
-                <button
-                  class="edit-button"
-                  type="button"
-                  aria-label={`Editar ${guest.name}`}
-                  onclick={() => beginEdit(guest)}>Editar</button
-                >
-                {#if editingId === guest.id}
-                  <form class="edit-form" onsubmit={(event) => saveEdit(event, guest.id)}>
-                    <label for={`edit-name-${guest.id}`}>Nome</label><input
-                      id={`edit-name-${guest.id}`}
-                      bind:value={editName}
-                      maxlength="100"
-                    />
-                    <label for={`edit-category-${guest.id}`}>Categoria</label><select
-                      id={`edit-category-${guest.id}`}
-                      bind:value={editCategory}
-                      >{#each GUEST_CATEGORY_OPTIONS as option (option.value)}<option
-                          value={option.value}>{option.label}</option
-                        >{/each}</select
-                    >
-                    <label for={`edit-note-${guest.id}`}>Anotação</label><textarea
-                      id={`edit-note-${guest.id}`}
-                      bind:value={editNote}
-                      maxlength="1000"
-                      rows="2"></textarea>
-                    {#if editError}<p class="error" aria-live="polite">{editError}</p>{/if}
-                    <div class="row-actions">
-                      <button class="primary-button" type="submit">Salvar</button><button
-                        type="button"
-                        class="secondary-button"
-                        onclick={() => (editingId = null)}>Cancelar</button
-                      >
-                    </div>
-                  </form>
-                {:else if pendingRemoval === guest.id}
-                  <div
-                    class="remove-confirm"
-                    role="group"
-                    aria-label={`Confirmar remoção de ${guest.name}`}
-                  >
-                    <p>
-                      Remover <strong>{guest.name}</strong> da lista? A pessoa também será retirada da
-                      cadeira.
-                    </p>
-                    <div class="row-actions">
-                      <button
-                        class="danger-button"
-                        type="button"
-                        onclick={() => {
-                          onRemoveGuest(guest.id);
-                          pendingRemoval = null;
-                        }}>Remover</button
-                      ><button
-                        class="secondary-button"
-                        type="button"
-                        onclick={() => (pendingRemoval = null)}>Cancelar</button
-                      >
-                    </div>
-                  </div>
-                {:else}
-                  <div class="row-actions compact-actions">
-                    <button
+                  <label for={`edit-note-${guest.id}`}>Anotação</label><textarea
+                    id={`edit-note-${guest.id}`}
+                    bind:value={editNote}
+                    maxlength="1000"
+                    rows="2"></textarea>
+                  {#if editError}<p class="error" role="alert">{editError}</p>{/if}
+                  <div class="row-actions">
+                    <button class="primary-button" type="submit">Salvar</button><button
                       type="button"
                       class="secondary-button"
-                      onclick={() => (pendingRemoval = guest.id)}>Remover</button
+                      onclick={() => (editingId = null)}>Cancelar</button
                     >
                   </div>
-                {/if}
-              </article>
-            {/each}
-          </section>
-        {/if}
-      {/each}
-    {/if}
+                </form>
+              {:else if pendingRemoval === guest.id}
+                <div
+                  class="remove-confirm"
+                  role="group"
+                  aria-label={`Confirmar remoção de ${guest.name}`}
+                >
+                  <p>
+                    Remover <strong>{guest.name}</strong> da lista? A pessoa também será retirada da cadeira.
+                  </p>
+                  <div class="row-actions">
+                    <button
+                      class="danger-button"
+                      type="button"
+                      onclick={() => {
+                        onRemoveGuest(guest.id);
+                        pendingRemoval = null;
+                      }}>Remover</button
+                    ><button
+                      class="secondary-button"
+                      type="button"
+                      onclick={() => (pendingRemoval = null)}>Cancelar</button
+                    >
+                  </div>
+                </div>
+              {:else}
+                <div class="row-actions compact-actions">
+                  <button
+                    type="button"
+                    class="secondary-button"
+                    onclick={() => (pendingRemoval = guest.id)}>Remover</button
+                  >
+                </div>
+              {/if}
+            </article>
+          {/each}
+        </section>
+      {/if}
+    {/each}
   </section>
-</aside>
+</div>
 
 <style>
   .guests-panel {
@@ -397,11 +420,19 @@
     border-radius: 50%;
     font-weight: 700;
     color: var(--guest-forest);
+    animation: pop-in var(--dur-base) var(--ease-out);
   }
   .seat-editor,
   .add-form {
     padding: 12px 0;
     border-top: 1px solid var(--guest-line);
+  }
+  /* Só o que surge por ação da pessoa. Linhas da lista não animam: `hidden` reiniciaria 300 delas. */
+  .seat-editor,
+  .selection-banner,
+  .edit-form,
+  .remove-confirm {
+    animation: rise-in var(--dur-base) var(--ease-out);
   }
   .seat-heading h3,
   .add-form h3,
@@ -427,7 +458,7 @@
     box-sizing: border-box;
     width: 100%;
     min-height: 38px;
-    border: 1px solid var(--guest-line);
+    border: 1px solid var(--field-line);
     border-radius: 7px;
     padding: 8px 9px;
     background: #fff;
@@ -508,6 +539,7 @@
     margin: 5px 0;
     color: #922f28;
     font-size: 12px;
+    animation: nudge 240ms ease-in-out;
   }
   .guest-list {
     padding-top: 12px;
@@ -561,6 +593,13 @@
     padding: 5px;
     border: 1px solid transparent;
     border-radius: 8px;
+    /* Linhas fora da área visível não entram em estilo/layout/pintura (300 convidados). */
+    content-visibility: auto;
+    contain-intrinsic-size: auto 52px;
+  }
+  .guest-row[hidden],
+  .category-group[hidden] {
+    display: none;
   }
   .guest-row:focus-within {
     border-color: var(--guest-line);

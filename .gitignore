@@ -4,6 +4,7 @@ node_modules/
 .svelte-kit/
 .vercel/
 .impeccable/review/
+**/.impeccable/live/
 build/
 out/
 dist/

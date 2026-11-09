@@ -2,8 +2,13 @@
   import { onMount, tick } from 'svelte';
   import { resolve } from '$app/paths';
   import {
+    createUuid,
     parseProjectFile,
     MAX_PROJECT_FILE_BYTES,
+    projectSnapshotSchema,
+    projectWriteResponseSchema,
+    type ProjectSnapshot,
+    type SaveProjectRequest,
     type CeremonyProject,
   } from '@enlace/contracts';
   import {
@@ -17,6 +22,7 @@
     removeRow,
     setRowCount,
     addGuest,
+    addGuests,
     updateGuest,
     removeGuest,
     assignGuest,
@@ -25,8 +31,23 @@
   import PlanCanvas from '../../lib/editor/PlanCanvas.svelte';
   import StructurePanel from '../../lib/editor/StructurePanel.svelte';
   import GuestsPanel from '../../lib/editor/GuestsPanel.svelte';
+  import SeatList from '../../lib/editor/SeatList.svelte';
+  import { SEAT_MOTION_LIMIT } from '../../lib/editor/plan-motion';
   import { GUEST_CATEGORIES, type GuestCategory } from '../../lib/editor/guest-categories';
-  import { loadDraft, saveDraft } from '../../lib/editor/files/drafts';
+  import {
+    accountDraftKey,
+    loadAccountDraft,
+    loadDraft,
+    saveAccountDraft,
+    saveDraft,
+    type AccountDraft,
+  } from '../../lib/editor/files/drafts';
+  import { readSession, type AccountSession } from '../../lib/account/client';
+  import {
+    selectWriteRequest,
+    stateAfterAcknowledgement,
+    writesBlocked,
+  } from '../../lib/editor/remote-sync';
 
   type ProjectAction = (current: CeremonyProject) => CeremonyProject;
   // Comandos de domínio substituem snapshots imutáveis: não observar cada campo.
@@ -37,7 +58,13 @@
   let selectedSeatId = $state<string | null>(null);
   let mobilePanel = $state<'structure' | 'guests'>('structure');
   let zoom = $state(0);
-  let status = $state<'pending' | 'saved' | 'error' | 'blocked'>('pending');
+  let status = $state<'pending' | 'saved' | 'error' | 'blocked' | 'conflict' | 'expired'>(
+    'pending',
+  );
+  let csvDialog = $state<typeof import('../../lib/editor/CsvImportDialog.svelte').default | null>(
+    null,
+  );
+  let csvTrigger: HTMLButtonElement | null = null;
   let feedback = $state('');
   let feedbackError = $state(false);
   let rawDraft = $state<string | null>(null);
@@ -47,6 +74,7 @@
   let fileInput: HTMLInputElement;
   let confirmDialog: HTMLDialogElement;
   let exportMenu: HTMLDetailsElement;
+  let planCanvas = $state<PlanCanvas | null>(null);
   let confirmation = $state.raw<{
     next: CeremonyProject;
     title: string;
@@ -55,6 +83,16 @@
   } | null>(null);
   let editTimes = $state<number[]>([]);
   let exporting = $state<string | null>(null);
+  let accountSession = $state<AccountSession | null>(null);
+  let projectId = $state<string | null>(null);
+  let revision = $state<number | null>(null);
+  let conflictSnapshot = $state<ProjectSnapshot | null>(null);
+  let retryRequest: SaveProjectRequest | null = null;
+  let savingRemote = false;
+  let accountKey: string | null = null;
+  let remoteReady = false;
+  let accountDraftCorrupt = false;
+  let rawAccountDraft = $state<string | null>(null);
   const geometry = $derived(project ? getLayoutGeometry(project.layout) : null);
   const total = $derived(geometry?.seats.length ?? 0);
   const assigned = $derived(project?.assignments.length ?? 0);
@@ -73,6 +111,11 @@
     feedbackError = error;
   }
   function saveNow() {
+    if (projectId) {
+      if (!accountDraftCorrupt && project && accountSession && revision !== null && accountKey)
+        persistAccountDraft();
+      return;
+    }
     if (!project || !allowSave) return;
     try {
       saveDraft(window.localStorage, project);
@@ -82,6 +125,18 @@
     }
   }
   function queueSave() {
+    if (projectId) {
+      if (!remoteReady) return;
+      if (status === 'conflict' || status === 'expired') {
+        persistAccountDraft();
+        return;
+      }
+      status = 'pending';
+      persistAccountDraft();
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => void sendRemote(), 500);
+      return;
+    }
     if (!allowSave) {
       status = 'blocked';
       return;
@@ -90,16 +145,314 @@
     clearTimeout(saveTimer);
     saveTimer = setTimeout(saveNow, 250);
   }
+  function persistAccountDraft() {
+    if (accountDraftCorrupt || !project || !accountKey || revision === null) return;
+    try {
+      const draft: AccountDraft = {
+        baseRevision: revision,
+        project,
+        dirty: status !== 'saved',
+        ...(retryRequest ? { pending: retryRequest } : {}),
+      };
+      saveAccountDraft(window.localStorage, accountKey, draft);
+    } catch {
+      status = 'error';
+      announce(
+        'Não foi possível guardar o rascunho desta conta neste navegador. Baixe uma cópia em JSON.',
+        true,
+      );
+    }
+  }
+  async function sendRemote() {
+    if (
+      !project ||
+      !projectId ||
+      revision === null ||
+      !remoteReady ||
+      savingRemote ||
+      writesBlocked(status)
+    )
+      return;
+    const request = selectWriteRequest<CeremonyProject>(retryRequest, () => ({
+      expectedRevision: revision!,
+      operationId: createUuid(),
+      project: project!,
+    }));
+    retryRequest = request;
+    persistAccountDraft();
+    savingRemote = true;
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}`, {
+        method: 'PUT',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(request),
+      });
+      if (response.status === 401) {
+        status = 'expired';
+        announce(
+          'Sua sessão expirou. Entre novamente; o rascunho desta conta continua guardado neste navegador.',
+          true,
+        );
+        return;
+      }
+      if (response.status === 409) {
+        status = 'conflict';
+        const remote = await fetch(`/api/projects/${encodeURIComponent(projectId)}`, {
+          credentials: 'same-origin',
+        });
+        if (remote.ok) conflictSnapshot = projectSnapshotSchema.parse(await remote.json());
+        announce(
+          'Este projeto foi alterado em outro dispositivo. Suas mudanças locais estão preservadas.',
+          true,
+        );
+        return;
+      }
+      if (!response.ok) throw new Error('Não foi possível sincronizar agora.');
+      const saved = projectWriteResponseSchema.parse(await response.json());
+      revision = saved.revision;
+      retryRequest = null;
+      const afterAck = stateAfterAcknowledgement(project, request.project, sameProject);
+      status = afterAck;
+      persistAccountDraft();
+      if (afterAck === 'saved') {
+        status = 'saved';
+        announce('Projeto salvo na sua conta.');
+      } else {
+        status = 'pending';
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(() => void sendRemote(), 0);
+      }
+    } catch {
+      // Keep the exact operation and body for a safe retry after an ambiguous network result.
+      status = 'error';
+      persistAccountDraft();
+      announce(
+        'Não foi possível confirmar o salvamento. Tente novamente; a mesma alteração será reenviada com segurança.',
+        true,
+      );
+    } finally {
+      savingRemote = false;
+    }
+  }
+  async function retryRemote() {
+    if (!project) {
+      await initializeEditor();
+      return;
+    }
+    if (status === 'expired') {
+      const destination = projectId
+        ? `${resolve('/editor')}?project=${encodeURIComponent(projectId)}`
+        : resolve('/projetos');
+      window.location.assign(`${resolve('/conta')}?next=${encodeURIComponent(destination)}`);
+      return;
+    }
+    if (status === 'conflict') return;
+    status = 'pending';
+    await sendRemote();
+  }
+  async function loadRemoteVersion() {
+    if (!projectId) return;
+    const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}`, {
+      credentials: 'same-origin',
+    });
+    if (!response.ok) {
+      announce('Não foi possível carregar a versão salva.', true);
+      return;
+    }
+    const snapshot = projectSnapshotSchema.parse(await response.json());
+    project = snapshot.project;
+    revision = snapshot.revision;
+    conflictSnapshot = null;
+    retryRequest = null;
+    past = [];
+    future = [];
+    status = 'saved';
+    persistAccountDraft();
+    announce('Versão salva carregada.');
+  }
+  function acceptRemoteOverAccountDraft() {
+    if (!accountKey || !projectId) return;
+    try {
+      window.localStorage.removeItem(accountKey);
+    } catch {
+      /* The explicit replacement continues in memory. */
+    }
+    rawAccountDraft = null;
+    accountDraftCorrupt = false;
+    remoteReady = true;
+    status = 'saved';
+    persistAccountDraft();
+    announce('Rascunho local substituído pela versão salva na conta.');
+  }
+  async function saveAsNewProject() {
+    if (!project || !accountSession) return;
+    const copy = { ...project, title: `${project.title} (cópia)`.slice(0, 120) };
+    try {
+      const id = createUuid();
+      const response = await fetch('/api/projects', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id, operationId: createUuid(), project: copy }),
+      });
+      if (!response.ok) throw new Error('Não foi possível criar uma cópia. Tente novamente.');
+      const snapshot = projectSnapshotSchema.parse(await response.json());
+      window.location.assign(`${resolve('/editor')}?project=${encodeURIComponent(snapshot.id)}`);
+    } catch (error) {
+      announce(error instanceof Error ? error.message : 'Não foi possível criar uma cópia.', true);
+    }
+  }
+  async function initializeEditor() {
+    const requestedId = new URL(window.location.href).searchParams.get('project');
+    if (requestedId) {
+      projectId = requestedId;
+      try {
+        accountSession = await readSession();
+        if (!accountSession) {
+          status = 'expired';
+          announce('Entre na conta proprietária para abrir este projeto.', true);
+          return;
+        }
+        const response = await fetch(`/api/projects/${encodeURIComponent(requestedId)}`, {
+          credentials: 'same-origin',
+        });
+        if (response.status === 401) {
+          status = 'expired';
+          announce('Sua sessão expirou. Entre novamente para abrir o projeto.', true);
+          return;
+        }
+        if (!response.ok)
+          throw new Error(
+            'Não foi possível abrir este projeto. Confira sua conta e tente novamente.',
+          );
+        const snapshot = projectSnapshotSchema.parse(await response.json());
+        if (snapshot.id !== requestedId)
+          throw new Error('A resposta não corresponde ao projeto solicitado.');
+        revision = snapshot.revision;
+        accountKey = accountDraftKey(accountSession.user.id, requestedId);
+        let local: AccountDraft | null;
+        try {
+          local = loadAccountDraft(window.localStorage, accountKey);
+        } catch {
+          accountDraftCorrupt = true;
+          try {
+            rawAccountDraft = window.localStorage.getItem(accountKey);
+          } catch {
+            rawAccountDraft = null;
+          }
+          project = snapshot.project;
+          status = 'blocked';
+          announce(
+            rawAccountDraft
+              ? 'O rascunho local desta conta não pôde ser lido. Ele foi preservado para recuperação.'
+              : 'O armazenamento local desta conta está indisponível. Nenhum salvamento remoto será feito até você escolher continuar.',
+            true,
+          );
+          return;
+        }
+        project = snapshot.project;
+        if (local?.pending) {
+          retryRequest = local.pending;
+          project = local.project;
+          revision = local.baseRevision;
+          status = 'pending';
+        } else if (
+          local &&
+          local.dirty &&
+          local.baseRevision === snapshot.revision &&
+          !sameProject(local.project, snapshot.project)
+        ) {
+          project = local.project;
+          status = 'pending';
+          revision = local.baseRevision;
+        } else if (
+          local &&
+          local.dirty &&
+          local.baseRevision !== snapshot.revision &&
+          !sameProject(local.project, snapshot.project)
+        ) {
+          project = local.project;
+          status = 'conflict';
+          revision = local.baseRevision;
+          conflictSnapshot = snapshot;
+          announce(
+            'Há um rascunho local e uma versão salva mais recente. Escolha como continuar.',
+            true,
+          );
+        } else {
+          project = snapshot.project;
+          revision = snapshot.revision;
+          status = 'saved';
+        }
+        remoteReady = true;
+        if (status === 'pending') queueSave();
+      } catch (error) {
+        status = accountSession ? 'error' : 'expired';
+        announce(
+          error instanceof Error ? error.message : 'Não foi possível abrir o projeto.',
+          true,
+        );
+      }
+      return;
+    }
+    try {
+      const draft = loadDraft(window.localStorage);
+      if (draft.status === 'ready') {
+        project = draft.project;
+        restored = true;
+        status = 'saved';
+      } else {
+        project = createInitialProject();
+        if (draft.status === 'corrupt') {
+          rawDraft = draft.raw;
+          allowSave = false;
+          status = 'blocked';
+        } else if (draft.status === 'unavailable') status = 'error';
+        else saveNow();
+      }
+    } catch {
+      project = createInitialProject();
+      status = 'error';
+    }
+  }
   function cleanSelection() {
     if (selectedGuestId && !project?.guests.some((g) => g.id === selectedGuestId))
       selectedGuestId = null;
     if (
       selectedSeatId &&
-      !project?.layout.rows.some((r) =>
-        [...r.leftSeatIds, ...r.rightSeatIds].includes(selectedSeatId!),
+      !project?.layout.rows.some(
+        (r) => r.leftSeatIds.includes(selectedSeatId!) || r.rightSeatIds.includes(selectedSeatId!),
       )
     )
       selectedSeatId = null;
+  }
+  // Comparação barata: os comandos preservam referências do que não mudou, então convidados e
+  // atribuições são comparados item a item por referência/campos, sem serializar o projeto todo.
+  function sameItems<T extends object>(a: readonly T[], b: readonly T[]) {
+    return (
+      a === b ||
+      (a.length === b.length &&
+        a.every((item, index) => {
+          const other = b[index]!;
+          return (
+            item === other ||
+            Object.keys(item).every((key) => item[key as keyof T] === other[key as keyof T])
+          );
+        }))
+    );
+  }
+  function sameProject(a: CeremonyProject, b: CeremonyProject) {
+    return (
+      a === b ||
+      (a.title === b.title &&
+        a.weddingDate === b.weddingDate &&
+        a.couple.first === b.couple.first &&
+        a.couple.second === b.couple.second &&
+        (a.layout === b.layout || JSON.stringify(a.layout) === JSON.stringify(b.layout)) &&
+        sameItems(a.guests, b.guests) &&
+        sameItems(a.assignments, b.assignments))
+    );
   }
   function recordFrame(start: number) {
     void tick().then(() =>
@@ -122,14 +475,20 @@
     void tick().then(() => confirmDialog.showModal());
   }
   function mutate(action: ProjectAction, text = '', protectPlaces = false): boolean {
+    if (accountDraftCorrupt) {
+      announce(
+        'Baixe o rascunho preservado ou escolha explicitamente a versão da conta antes de editar.',
+        true,
+      );
+      return false;
+    }
     if (!project) return false;
     const start = performance.now();
     try {
       const next = action(project);
-      if (JSON.stringify(next) === JSON.stringify(project)) return true;
-      const displaced = project.assignments.filter(
-        (a) => !next.assignments.some((b) => b.guestId === a.guestId),
-      ).length;
+      if (sameProject(next, project)) return true;
+      const stillSeated = new Set(next.assignments.map((b) => b.guestId));
+      const displaced = project.assignments.filter((a) => !stillSeated.has(a.guestId)).length;
       if (protectPlaces && displaced) {
         ask(
           next,
@@ -182,6 +541,7 @@
     ) {
       selectedGuestId = null;
       selectedSeatId = seatId;
+      void tick().then(() => planCanvas?.welcome(seatId));
     }
   }
   function selectGuest(id: string | null) {
@@ -198,6 +558,13 @@
     return ok;
   }
   function replaceProject(next: CeremonyProject, title: string) {
+    if (accountDraftCorrupt) {
+      announce(
+        'Recupere o rascunho ou escolha a versão da conta antes de substituir o planejamento.',
+        true,
+      );
+      return;
+    }
     if (restored || past.length || project?.guests.length)
       ask(
         next,
@@ -208,6 +575,24 @@
       apply(next);
       announce('Planejamento aberto.');
     }
+  }
+  async function openCsvImport(trigger: HTMLButtonElement) {
+    csvTrigger = trigger;
+    try {
+      csvDialog = (await import('../../lib/editor/CsvImportDialog.svelte')).default;
+    } catch {
+      announce('Não foi possível abrir a importação. Verifique a conexão e tente novamente.', true);
+    }
+  }
+  function closeCsvImport() {
+    csvDialog = null;
+    void tick().then(() => csvTrigger?.focus());
+  }
+  function importGuests(guests: CeremonyProject['guests']): boolean {
+    return mutate(
+      (p) => addGuests(p, guests),
+      `${guests.length} ${guests.length === 1 ? 'convidado adicionado' : 'convidados adicionados'} pelo CSV. Você pode desfazer.`,
+    );
   }
   async function importFile(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
@@ -236,7 +621,8 @@
     try {
       const files = await import('../../lib/editor/files/images');
       if (kind === 'json') files.downloadProjectJson(snapshot);
-      else if (kind === 'recovery' && rawDraft) files.downloadRawDraft(rawDraft);
+      else if (kind === 'recovery' && (rawDraft || rawAccountDraft))
+        files.downloadRawDraft(rawDraft ?? rawAccountDraft!);
       else if (kind === 'individual') {
         if (!recipient) throw new Error('Selecione uma pessoa com cadeira definida.');
         await files.downloadMapPng(snapshot, recipient);
@@ -265,34 +651,40 @@
       selectedSeatId = null;
     }
   }
-  onMount(() => {
-    try {
-      const draft = loadDraft(window.localStorage);
-      if (draft.status === 'ready') {
-        project = draft.project;
-        restored = true;
-        status = 'saved';
-      } else {
-        project = createInitialProject();
-        if (draft.status === 'corrupt') {
-          rawDraft = draft.raw;
-          allowSave = false;
-          status = 'blocked';
-        } else if (draft.status === 'unavailable') status = 'error';
-        else saveNow();
-      }
-    } catch {
-      project = createInitialProject();
-      status = 'error';
+  function storageChanged(event: StorageEvent) {
+    if (!projectId || !accountSession || !event.key) return;
+    const userId = accountSession.user.id;
+    const draftRemoved =
+      event.key.startsWith(`enlace:draft:account:v1:${userId}:`) && event.newValue === null;
+    const loggedOut = event.key === `enlace:account-logout:v1:${userId}` && event.newValue !== null;
+    if (draftRemoved || loggedOut) {
+      clearTimeout(saveTimer);
+      project = null;
+      accountSession = null;
+      revision = null;
+      accountKey = null;
+      retryRequest = null;
+      conflictSnapshot = null;
+      remoteReady = false;
+      status = 'expired';
+      announce(
+        'A sessão desta conta foi encerrada em outra aba. Entre novamente para continuar.',
+        true,
+      );
     }
+  }
+  onMount(() => {
+    void initializeEditor();
     if (matchMedia('(max-width: 900px)').matches) zoom = 1;
     window.addEventListener('keydown', keyboard);
     window.addEventListener('pagehide', saveNow);
+    window.addEventListener('storage', storageChanged);
     return () => {
       clearTimeout(saveTimer);
       saveNow();
       window.removeEventListener('keydown', keyboard);
       window.removeEventListener('pagehide', saveNow);
+      window.removeEventListener('storage', storageChanged);
     };
   });
 </script>
@@ -304,7 +696,8 @@
   /></svelte:head
 >
 
-<div class="editor-page">
+<div class="editor-page" class:dense-plan={total > SEAT_MOTION_LIMIT}>
+  {#if project && geometry}<a class="skip-link" href="#planta">Pular para a planta</a>{/if}
   <header class="editor-header">
     <a href={resolve('/')} class="editor-brand" aria-label="Enlace, voltar à página inicial"
       ><svg viewBox="0 0 36 36" aria-hidden="true"
@@ -314,18 +707,39 @@
     <div class="project-heading">
       <h1>{project?.title ?? 'Preparando seu espaço…'}</h1>
       <span
-        class:error={status === 'error' || status === 'blocked'}
+        class:error={status === 'error' ||
+          status === 'blocked' ||
+          status === 'conflict' ||
+          status === 'expired'}
+        class:busy={status === 'pending'}
         class="save-state"
         role="status"
         >{status === 'saved'
-          ? 'Rascunho salvo neste navegador'
+          ? projectId
+            ? 'Salvo na sua conta'
+            : 'Rascunho salvo neste navegador'
           : status === 'pending'
-            ? 'Salvando neste navegador…'
+            ? projectId
+              ? 'Sincronizando…'
+              : 'Salvando neste navegador…'
             : status === 'blocked'
               ? 'Rascunho anterior protegido'
-              : 'Não foi possível salvar neste navegador'}</span
+              : status === 'conflict'
+                ? 'Conflito de versões'
+                : status === 'expired'
+                  ? 'Sessão encerrada'
+                  : projectId
+                    ? project
+                      ? 'Não foi possível sincronizar'
+                      : 'Projeto indisponível'
+                    : 'Não foi possível salvar neste navegador'}</span
       >
     </div>
+    <nav class="account-tools" aria-label="Conta e projetos">
+      {#if projectId}<a href={resolve('/projetos')}>Meus projetos</a>{:else}<a
+          href={resolve('/conta')}>Entrar e salvar na conta</a
+        >{/if}
+    </nav>
     <div class="header-tools">
       <div class="history-tools">
         <button
@@ -385,6 +799,12 @@
         O rascunho anterior não pôde ser lido e está preservado. Baixe uma cópia antes de permitir
         um novo salvamento.
       </p>
+      {#if status === 'conflict' && conflictSnapshot}<p class="conflict-date">
+          Versão salva em {new Intl.DateTimeFormat('pt-BR', {
+            dateStyle: 'medium',
+            timeStyle: 'short',
+          }).format(new Date(conflictSnapshot.updatedAt))}.
+        </p>{/if}
       <button onclick={() => exportFile('recovery')}>Baixar para recuperação</button><button
         onclick={() => {
           if (project) {
@@ -400,12 +820,43 @@
         }}>Permitir novo salvamento</button
       >
     </div>
-  {:else if status === 'error'}
+  {:else if status === 'error' && !projectId}
     <div class="recovery-banner" role="alert">
       <p>Suas alterações estão apenas nesta sessão. Baixe o JSON para guardar uma cópia.</p>
       <button onclick={saveNow}>Tentar salvar novamente</button><button
         onclick={() => exportFile('json')}>Baixar JSON</button
       >
+    </div>
+  {/if}
+
+  {#if rawAccountDraft}
+    <div class="recovery-banner" role="alert">
+      <p>
+        O rascunho desta conta não pôde ser validado e continua intacto. Baixe uma cópia antes de
+        decidir usar a versão salva na conta.
+      </p>
+      <button onclick={() => exportFile('recovery')}>Baixar rascunho para recuperação</button>
+      <button onclick={acceptRemoteOverAccountDraft}
+        >Usar versão salva na conta e substituir este rascunho</button
+      >
+    </div>
+  {/if}
+
+  {#if project && projectId && (status === 'error' || status === 'conflict' || status === 'expired')}
+    <div class="recovery-banner" role="alert">
+      <p>
+        {status === 'conflict'
+          ? 'O rascunho local foi preservado. Carregar a versão salva descarta as mudanças locais; criar uma cópia mantém seu trabalho.'
+          : status === 'expired'
+            ? 'O rascunho local desta conta está guardado neste navegador. Entre novamente para retomar a sincronização.'
+            : 'As mudanças seguem no rascunho local desta conta e ainda não foram confirmadas pelo servidor.'}
+      </p>
+      {#if status === 'conflict'}<button onclick={loadRemoteVersion}>Carregar versão salva</button
+        ><button onclick={saveAsNewProject}>Salvar como novo projeto</button>
+      {:else}<button onclick={retryRemote}
+          >{status === 'expired' ? 'Entrar novamente' : 'Tentar sincronizar'}</button
+        >{/if}
+      <button onclick={() => exportFile('json')}>Baixar JSON</button>
     </div>
   {/if}
 
@@ -438,11 +889,17 @@
             onclick={() => replaceProject(createInitialProject(), 'Começar um novo planejamento?')}
             >Novo planejamento</button
           >
-          <p>Os arquivos JSON ficam com você. Este editor ainda não usa uma conta.</p>
+          <p>
+            {projectId
+              ? 'O projeto sincroniza com sua conta após cada alteração.'
+              : 'O rascunho fica neste navegador. Entre na conta para criar um projeto sincronizado.'}
+          </p>
         </div>
       </aside>
 
       <main
+        id="planta"
+        tabindex="-1"
         class="plan-workspace"
         aria-label="Planta da cerimônia"
         data-edit-times={JSON.stringify(editTimes)}
@@ -474,11 +931,18 @@
           </div>
         </div>
         <div class="plan-stats">
-          <span><strong>{total}</strong> cadeiras</span><span
-            ><strong>{assigned}</strong> pessoas posicionadas</span
-          ><span><strong>{total - assigned}</strong> lugares livres</span>
+          <span
+            >{#key total}<strong>{total}</strong>{/key} cadeiras</span
+          ><span
+            >{#key assigned}<strong>{assigned}</strong>{/key} pessoas posicionadas</span
+          ><span
+            >{#key total - assigned}<strong>{total - assigned}</strong>{/key} lugares livres</span
+          >
+          <i class="seated-bar" aria-hidden="true" style:--seated={total ? assigned / total : 0}
+          ></i>
         </div>
         <PlanCanvas
+          bind:this={planCanvas}
           {project}
           {geometry}
           {selectedGuestId}
@@ -489,14 +953,16 @@
         />
         <div class="map-context">
           <div>
-            <span class="context-mark"></span>
-            <p>
-              {selectedGuestId
-                ? `Escolha uma cadeira para ${project.guests.find((g) => g.id === selectedGuestId)?.name}.`
-                : selectedSeatId
-                  ? getSeatLabel(project, selectedSeatId)
-                  : 'Selecione uma pessoa e toque na cadeira dela.'}
-            </p>
+            <span class="context-mark" class:waiting={selectedGuestId}></span>
+            {#key `${selectedGuestId}:${selectedSeatId}`}
+              <p>
+                {selectedGuestId
+                  ? `Escolha uma cadeira para ${project.guests.find((g) => g.id === selectedGuestId)?.name}.`
+                  : selectedSeatId
+                    ? getSeatLabel(project, selectedSeatId)
+                    : 'Selecione uma pessoa e toque na cadeira dela.'}
+              </p>
+            {/key}
           </div>
           <span class="keyboard-note">Setas navegam · Enter seleciona</span>
         </div>
@@ -518,7 +984,11 @@
           </div>{/if}
       </main>
 
-      <nav class="mobile-tabs" aria-label="Ferramentas do planejamento">
+      <nav
+        class="mobile-tabs"
+        aria-label="Ferramentas do planejamento"
+        style:--active-tab={mobilePanel === 'guests' ? 1 : 0}
+      >
         <button
           aria-pressed={mobilePanel === 'structure'}
           onclick={() => (mobilePanel = 'structure')}>Estrutura</button
@@ -532,6 +1002,15 @@
         class="guests-sidebar"
         aria-label="Convidados e lugares"
       >
+        <SeatList
+          {project}
+          {selectedGuestId}
+          {selectedSeatId}
+          onSeatSelect={selectSeat}
+          onAssignGuest={placeGuest}
+          onUnassignSeat={(id) =>
+            mutate((p) => unassignSeat(p, id), 'Lugar liberado. O convidado continua na lista.')}
+        />
         <GuestsPanel
           {project}
           {selectedGuestId}
@@ -544,16 +1023,50 @@
           onAssignGuest={placeGuest}
           onUnassignSeat={(id) =>
             mutate((p) => unassignSeat(p, id), 'Lugar liberado. O convidado continua na lista.')}
+          onImportCsv={openCsvImport}
         />
       </aside>
     </div>
+  {:else if projectId && (status === 'error' || status === 'expired')}<main class="loading-editor">
+      <h1>{status === 'expired' ? 'Entre para abrir este projeto' : 'Projeto indisponível'}</h1>
+      <p>
+        {status === 'expired'
+          ? 'Este projeto pertence a uma conta. Entre com a conta proprietária para continuar.'
+          : 'Ele pode ter sido excluído, pertencer a outra conta ou o servidor pode estar indisponível.'}
+      </p>
+      <p>
+        {#if status === 'expired'}<a href={resolve('/conta')}>Entrar</a>{:else}<a
+            href={resolve('/projetos')}>Voltar para meus projetos</a
+          >{/if}
+      </p>
+    </main>
   {:else}<main class="loading-editor">
+      <svg class="rings-loader" viewBox="0 0 36 36" aria-hidden="true"
+        ><ellipse pathLength="1" cx="14" cy="18" rx="8" ry="11" /><ellipse
+          pathLength="1"
+          cx="23"
+          cy="18"
+          rx="8"
+          ry="11"
+        /></svg
+      >
       <h1>Preparando seu espaço…</h1>
       <p>Carregando o planejamento deste navegador.</p>
     </main>{/if}
 
+  {#if csvDialog && project}
+    {@const CsvDialog = csvDialog}
+    <CsvDialog
+      existingNames={project.guests.map((guest) => guest.name)}
+      capacity={300 - project.guests.length}
+      onImport={importGuests}
+      onClose={closeCsvImport}
+    />
+  {/if}
   <div class:error={feedbackError} class="editor-feedback" role="status" aria-live="polite">
-    {exporting ? 'Preparando seu arquivo…' : feedback}
+    {#if exporting || feedback}{#key exporting ? 'export' : feedback}<span
+          >{exporting ? 'Preparando seu arquivo…' : feedback}</span
+        >{/key}{/if}
   </div>
   <dialog
     bind:this={confirmDialog}
@@ -617,8 +1130,43 @@
     stroke: #295842;
     stroke-width: 1.6;
   }
+  .skip-link {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 100;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: #295842;
+    color: #fffefb;
+    font-size: 13px;
+    font-weight: 600;
+    transform: translateY(-200%);
+  }
+  .skip-link:focus {
+    transform: none;
+  }
+  .plan-workspace:focus {
+    outline: none;
+  }
+  .account-tools a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+  }
   .editor-brand svg ellipse:last-child {
     stroke: #b89364;
+  }
+  .editor-brand svg ellipse {
+    transition: transform var(--dur-slow) var(--ease-out);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .editor-brand:hover svg ellipse:first-child {
+      transform: translateX(1.5px);
+    }
+    .editor-brand:hover svg ellipse:last-child {
+      transform: translateX(-1.5px);
+    }
   }
   .editor-brand span {
     font:
@@ -646,6 +1194,24 @@
   }
   .save-state.error {
     color: #923d35;
+  }
+  .save-state::before {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin-right: 6px;
+    border-radius: 50%;
+    background: #72977d;
+    vertical-align: 1px;
+    transition: background-color var(--dur-base) ease-out;
+  }
+  .save-state.busy::before {
+    background: #b89364;
+    animation: breathe 900ms ease-in-out infinite;
+  }
+  .save-state.error::before {
+    background: #923d35;
   }
   .header-tools,
   .history-tools,
@@ -711,11 +1277,20 @@
   .export-menu summary::-webkit-details-marker {
     display: none;
   }
+  .export-menu summary:hover {
+    background: #1e4433;
+  }
   .export-menu summary svg {
     width: 14px;
     height: 14px;
+    transition: transform var(--dur-base) var(--ease-out);
+  }
+  .export-menu[open] summary svg {
+    transform: rotate(180deg);
   }
   .export-menu > div {
+    transform-origin: top right;
+    animation: pop-in var(--dur-base) var(--ease-out);
     position: absolute;
     top: calc(100% + 9px);
     right: 0;
@@ -803,10 +1378,11 @@
     flex-shrink: 0;
   }
   .zoom-tools button {
-    font-size: 10px;
+    font-size: 11px;
     min-height: 32px;
   }
   .plan-stats {
+    position: relative;
     display: flex;
     gap: 18px;
     flex-wrap: wrap;
@@ -816,9 +1392,23 @@
     border-bottom: 1px solid #eef0e9;
   }
   .plan-stats strong {
+    display: inline-block;
     font-weight: 650;
     color: #295842;
     font-variant-numeric: tabular-nums;
+    animation: rise-in var(--dur-base) var(--ease-out);
+  }
+  /* Fio dourado: quanto da planta já tem alguém sentado. */
+  .seated-bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 2px;
+    background: #b89364;
+    transform: scaleX(var(--seated));
+    transform-origin: left;
+    transition: transform 420ms var(--ease-out);
   }
   .map-context {
     padding: 13px 19px;
@@ -840,15 +1430,21 @@
     border-radius: 50%;
     background: #72977d;
     flex-shrink: 0;
+    transition: background-color var(--dur-base) ease-out;
+  }
+  .context-mark.waiting {
+    background: #b89364;
+    animation: breathe 1400ms ease-in-out infinite;
   }
   .map-context p {
+    animation: fade-in var(--dur-base) ease-out;
     margin: 0;
     font-size: 11px;
     color: #36543d;
     line-height: 1.6;
   }
   .keyboard-note {
-    font-size: 9px;
+    font-size: 11px;
     color: #626e63;
     white-space: nowrap;
   }
@@ -858,7 +1454,7 @@
     align-items: center;
     gap: 11px;
     flex-wrap: wrap;
-    font-size: 9px;
+    font-size: 11px;
     color: #626e63;
   }
   .map-legend span {
@@ -926,6 +1522,10 @@
     padding: 5px 24px;
     flex-shrink: 0;
   }
+  .editor-feedback span {
+    display: inline-block;
+    animation: rise-in var(--dur-base) var(--ease-out);
+  }
   .editor-feedback:empty {
     padding: 0;
     min-height: 0;
@@ -936,6 +1536,7 @@
     background: #fff5ef;
   }
   .recovery-banner {
+    animation: rise-in var(--dur-slow) var(--ease-out);
     display: flex;
     gap: 12px;
     align-items: center;
@@ -994,6 +1595,19 @@
     font:
       28px Georgia,
       serif;
+  }
+  /* Planta grande: o que anima a cada seleção custa ~7 ms por ação com 288 cadeiras (ADR-0011). */
+  .dense-plan :global {
+    .map-context p,
+    .context-mark,
+    .plan-stats strong,
+    .editor-feedback span,
+    .save-state::before,
+    .seat-editor,
+    .selection-banner,
+    .total {
+      animation: none !important;
+    }
   }
   @media (max-width: 1200px) {
     .editor-workspace {
@@ -1071,22 +1685,32 @@
       display: none !important;
     }
     .mobile-tabs {
+      position: relative;
       display: flex;
       order: 1;
       margin: 13px 16px 0;
       border-bottom: 1px solid #cbd7c6;
     }
+    .mobile-tabs::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      bottom: -1px;
+      width: 50%;
+      height: 2px;
+      background: #295842;
+      transform: translateX(calc(var(--active-tab) * 100%));
+      transition: transform var(--dur-slow) var(--ease-out);
+    }
     .mobile-tabs button {
       flex: 1;
       background: transparent;
       border: 0;
-      border-bottom: 2px solid transparent;
-      padding: 12px;
+      padding: 12px 12px 14px;
       color: #626e63;
     }
     .mobile-tabs button[aria-pressed='true'] {
       color: #295842;
-      border-color: #295842;
       font-weight: 650;
     }
     .mobile-tabs span {
@@ -1099,6 +1723,7 @@
       overflow: visible;
       padding: 24px;
       border: 0;
+      animation: fade-in var(--dur-base) ease-out;
     }
     .mobile-hidden {
       display: none;
@@ -1121,9 +1746,6 @@
     .project-heading h1 {
       font-size: 12px;
     }
-    .save-state {
-      font-size: 9px;
-    }
     .header-tools {
       width: 100%;
       justify-content: flex-end;
@@ -1138,15 +1760,9 @@
     .plan-toolbar h2 {
       font-size: 20px;
     }
-    .plan-toolbar p {
-      font-size: 10px;
-    }
     .plan-stats {
       gap: 11px;
-      font-size: 9px;
-    }
-    .map-legend {
-      font-size: 8px;
+      font-size: 11px;
     }
     .personal-map {
       padding: 7px 12px;
@@ -1173,6 +1789,7 @@
     .structure-sidebar,
     .guests-sidebar,
     .mobile-tabs,
+    .seated-bar,
     .map-context,
     .map-legend,
     .personal-map,
