@@ -1,6 +1,10 @@
 # Memória do projeto — Enlace
 
-Atualizado em 08/11/2026, America/Sao_Paulo.
+Atualizado em 09/11/2026, America/Sao_Paulo.
+
+## Planta da festa proposta como fase 6 — 09/11/2026
+
+Pedido do usuário, só documentado, sem código: ADR-0012 (proposta), fase 6 no roadmap e seção em `PRODUCT.md`. Decisões do usuário: medidas reais informadas pela pessoa; convidados por mesa, cada mesa com N cadeiras; salão em formato pronto ou criado manualmente com medidas reais (interpretação registrada: polígono ortogonal, parede a parede); fase 6 aprovada. Lista de convidados compartilhada com a cerimônia e início após o aceite hospedado da fase 5 são recomendações. Muda contrato (JSON v2), banco e domínio; risco principal é arraste no celular, com ensaio no Moto G84 como primeira etapa. Próximo passo do tema: aceite da fase 5 ou decisão do usuário de antecipar.
 
 ## Movimento da interface concluído localmente — 08/11/2026
 

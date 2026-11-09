@@ -2,7 +2,7 @@
 
 <!-- impeccable:product-schema 1 -->
 
-Última atualização: 08/11/2026. Estado: definição baseada no pedido do usuário, com posicionamento, contexto de uso, voz e meta de acessibilidade confirmados em 08/11/2026; hipóteses adicionais estão identificadas abaixo.
+Última atualização: 09/11/2026. Estado: definição baseada no pedido do usuário, com posicionamento, contexto de uso, voz e meta de acessibilidade confirmados em 08/11/2026; hipóteses adicionais estão identificadas abaixo.
 
 ## Platform
 
@@ -60,7 +60,13 @@ O suporte a uma conta em vários dispositivos faz parte do MVP. Duas pessoas usa
 
 ## Limites iniciais
 
-A planta é uma ferramenta de visualização e organização, sem garantia de escala arquitetônica ou dimensionamento físico. O altar já é desenhado no protótipo, mas posicionamento livre de objetos, medidas reais do local e edição do altar precisam de descoberta antes de entrar no escopo.
+A planta da cerimônia é uma ferramenta de visualização e organização, sem garantia de escala arquitetônica ou dimensionamento físico. O altar já é desenhado no protótipo; posicionamento livre de objetos, medidas reais do local e edição do altar não fazem parte da cerimônia.
+
+## Planta da festa (proposta, fase 6)
+
+Pedido do usuário em 09/11/2026, ainda não implementado ([ADR-0012](docs/decisoes/0012-planta-da-festa.md)). No mesmo projeto e com a mesma lista de convidados, planejar a festa em salão fechado: salão com medidas reais informadas pela pessoa, em formato pronto ou criado manualmente; mesas com N cadeiras e convidados atribuídos por mesa; DJ, pista, mesa de bolo, mesa de doces e outras atrações posicionadas livremente. As medidas ajudam a imaginar o espaço, mas o espaçamento é indicativo e não substitui o projeto do local nem as normas de segurança.
+
+## Fora do escopo inicial
 
 Não entram inicialmente: edição simultânea em tempo real, 3D, RSVP, convites enviados automaticamente, pagamentos, marketplace, gestão financeira e aplicação móvel nativa. O botão de compartilhar imagem não autoriza o sistema a enviar mensagens a convidados.
 

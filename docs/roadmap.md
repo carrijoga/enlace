@@ -1,6 +1,6 @@
 # Roadmap de implementação
 
-Atualizado em 08/11/2026, com frontend Vercel e backend/PostgreSQL Railway. Fases 0 e 1 concluídas no escopo local. Fase 2 concluída em 08/11/2026: meta de desempenho atingida no desktop de referência; o celular de entrada testado ficou registrado como limite conhecido ([ADR-0006](decisoes/0006-aparelhos-de-referencia-e-aceite-da-fase-2.md)). Etapas posteriores são propostas, não funcionalidades entregues.
+Atualizado em 09/11/2026, com frontend Vercel e backend/PostgreSQL Railway. Fases 0 e 1 concluídas no escopo local. Fase 2 concluída em 08/11/2026: meta de desempenho atingida no desktop de referência; o celular de entrada testado ficou registrado como limite conhecido ([ADR-0006](decisoes/0006-aparelhos-de-referencia-e-aceite-da-fase-2.md)). Etapas posteriores são propostas, não funcionalidades entregues.
 
 ## Fase 0 — Diagnóstico e estrutura documental — concluída
 
@@ -83,13 +83,39 @@ Inclui, conforme o [ADR-0006](decisoes/0006-aparelhos-de-referencia-e-aceite-da-
 
 Aceite: fluxo completo em ambiente de teste, migrações reproduzíveis, isolamento verificado, metas de desempenho aferidas e procedimento de backup/restauração ensaiado com dados fictícios. Vercel para frontend e Railway para API/PostgreSQL já estão escolhidos; validar o pacote completo, healthcheck e migrações pré-deploy. Domínio, região, recursos, orçamento e qualquer publicação são tratados quando houver uma versão concreta.
 
+## Fase 6 — Planta da festa — proposta, não iniciada
+
+Pedido do usuário em 09/11/2026 ([ADR-0012](decisoes/0012-planta-da-festa.md)). Planejar a festa em salão fechado, dentro do mesmo projeto e com a mesma lista de convidados: salão com medidas reais, formato pronto ou criado manualmente; mesas com N cadeiras e convidados por mesa; DJ, pista, mesa de bolo, mesa de doces e outras atrações posicionadas livremente. Início recomendado após o aceite hospedado da fase 5.
+
+Etapas, nesta ordem por dependência:
+
+1. Ensaio de arraste no Moto G84 com protótipo descartável, para confirmar a abordagem antes de construir o restante.
+2. Contrato JSON v2 com migração de v1/v3 e domínio puro: salão, mesas, elementos, atribuição por mesa e avisos.
+3. Persistência: migração do banco, atribuições por mesa e transação única com a cerimônia.
+4. Editor: alternância Cerimônia/Festa, salão, mesas, elementos, atribuição e alternativa sem arraste.
+5. Saídas e fechamento: PNG, impressão, lista por mesa, acessibilidade e medições.
+
+Depois do contrato, persistência e interface podem andar em paralelo com arquivos exclusivos; alterações de contrato ficam com o coordenador.
+
+Aceite:
+
+- Formato pronto e salão manual produzem a planta com as medidas informadas; salão inválido é recusado com mensagem clara e sem alterar o projeto.
+- Projetos, rascunhos e arquivos JSON existentes abrem sem perda; exportar e importar v2 preserva salão, mesas, elementos e atribuições.
+- Convidado nunca fica em duas mesas e a mesa nunca é sobrelotada sem aviso. Apagar mesa ou reduzir cadeiras explicita o efeito e mantém as pessoas na lista.
+- Elemento fora do salão, sobreposição e passagem estreita geram aviso, e a interface deixa claro que o espaçamento é indicativo.
+- O fluxo completo funciona no celular e por teclado sem depender de arrastar; existe alternativa em lista para leitor de tela.
+- Duas contas continuam isoladas; salvar é uma única transação e revisão, com conflito visível entre dispositivos.
+- Arquivos com referências, limites ou medidas inválidas não alteram o projeto.
+- Arrastar e atribuir ficam com p95 ≤ 50 ms em build de produção no cenário máximo (100 mesas, 60 elementos, 300 convidados), medido também no Moto G84. O JavaScript inicial da cerimônia continua dentro do orçamento, com a festa carregada sob demanda.
+- PNG e impressão não cortam o salão; a lista por mesa traz todos os convidados atribuídos.
+
 ## Questões de produto para resolver no momento certo
 
 | Questão | Padrão provisório | Quando resolver |
 | --- | --- | --- |
 | Uma ou duas contas do casal no mesmo projeto? | Um proprietário; colaboração futura sem compartilhar senha | Antes de implementar convites/acesso compartilhado |
-| Mais de uma planta/cenário por projeto? | Uma planta por projeto; projetos independentes | Antes de oferecer cenários alternativos |
-| Altas quantidades, dimensões reais e objetos livres? | Preservar limites e geometria atuais até validar | Contratos da fase 1 e descoberta do editor |
+| Mais de uma planta/cenário por projeto? | Uma planta de cerimônia e, na fase 6, uma de festa por projeto; cenários alternativos seguem fora | Antes de oferecer cenários alternativos |
+| Altas quantidades, dimensões reais e objetos livres? | Cerimônia preserva limites e geometria atuais; medidas reais e objetos livres entram na festa ([ADR-0012](decisoes/0012-planta-da-festa.md)) | Fase 6 |
 | CSV: colunas, duplicatas e tamanho? | Nome obrigatório e categoria opcional; prévia sem merge automático por nome | Antes da fase 4 |
 | Regras de proximidade e separação familiar? | Remover regras pessoais fixas; regras configuráveis posteriores | Fase 2; descoberta antes de expandir |
 | Região, recursos e custos? | Railway + PostgreSQL definidos; dimensionamento e orçamento pendentes | Antes de provisionar ambiente remoto/publicar |

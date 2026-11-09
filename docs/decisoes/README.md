@@ -1,6 +1,6 @@
 # Registro de decisões
 
-Atualizado em 08/11/2026. Use ADRs numerados com contexto, decisão, status e consequências. Status possíveis: proposta, aceita, substituída ou rejeitada. Um documento de arquitetura proposto não é uma implementação.
+Atualizado em 09/11/2026. Use ADRs numerados com contexto, decisão, status e consequências. Status possíveis: proposta, aceita, substituída ou rejeitada. Um documento de arquitetura proposto não é uma implementação.
 
 | Registro | Status | Referência |
 | --- | --- | --- |
@@ -39,3 +39,7 @@ Não decididos: região e recursos na Railway, orçamento, transporte de e-mail,
 ## 0011 — Movimento da interface
 
 [ADR-0011](0011-movimento-da-interface.md): aceita e implementada. Movimento nativo, sem biblioteca; dentro da planta só até 120 cadeiras, para preservar o orçamento de 50 ms no cenário máximo. Falta medir no Moto G84.
+
+## 0012 — Planta da festa
+
+[ADR-0012](0012-planta-da-festa.md): proposta para a fase 6, não implementada. Salão com medidas reais (formato pronto ou manual), mesas com N cadeiras, convidados por mesa e atrações posicionadas livremente, na mesma lista de convidados da cerimônia.
