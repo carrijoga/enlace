@@ -2,6 +2,14 @@
 
 Atualizado em 08/11/2026, America/Sao_Paulo.
 
+## Movimento da interface concluído localmente — 08/11/2026
+
+ADR-0011, seção Motion em `DESIGN.md`. Nativo (CSS, WAAPI, `svelte/animate`, View Transitions), sem biblioteca. Landing: a planta se arma e 10 lugares ilustrativos são ocupados. Editor (`lib/editor/plan-motion.ts`): cadeiras deslizam com animação aditiva ao mudar `layout`, aro dourado ao receber a pessoa, fio dourado de ocupação, estado de salvamento, contadores, menu, diálogos e aba móvel. `/projetos`: entrada em cascata e remoção com `flip`/`slide`. Acima de 120 cadeiras (`SEAT_MOTION_LIMIT`) nada anima no SVG e as animações de seleção ficam desligadas.
+
+Validação em build de produção: check/lint ok, testes web ok, navegador em landing, editor, `/projetos` (API simulada no navegador) e aba móvel. A/B 288 cadeiras, mesma origem de host, p95: selecionar 14,7–19,5 (base 15,6–18,2), trocar 46,7–50,1 (base 43,7–50,4). JS gzip: landing +2,1 KiB, editor +2,5 KiB. Não verificados: Moto G84 (limite de 120 só medido no desktop), preferência real de movimento reduzido, Safari/Firefox. Commit próprio em `codex/ceremony-editor`, sem push.
+
+Próximo passo do tema: medir o deslizamento no Moto G84 junto do ensaio já pendente da fase 5.
+
 ## Exportação PNG refeita no cartão v3 — 08/11/2026
 
 ADR-0010. `pure-svg.ts` voltou à composição do v3 (moldura, argolas, título, arco, corredor tracejado, guias da meia-lua, resumo, assinatura), com correções de rótulos que colidiam, nomes sem deformação e homônimos com inicial. Validação: check/lint/format ok; 120 testes, 15 integrados pulados (sem PostgreSQL); navegador com PNG real 3200×2778 e individual, 12×12, planta mínima, um lado só e nomes longos (maior nome 47,5 em cadeira de 50). Por decisão do usuário, o mapa individual mostra casal e data como o v3, sem dados dos demais convidados. Sem commit; impressão não alterada.
@@ -34,7 +42,7 @@ Validação: check/lint/format ok; 64 testes unitários; 36 integrados com Postg
 
 Pendente (dependente de ambiente, fica para fase 5): cookies/origem Vercel↔Railway em HTTPS, SMTP real, aparelho físico. Decidir se sair deve limpar rascunhos da conta no localStorage (computador compartilhado). Acessibilidade de /conta e /projetos não auditada.
 
-Execução local da fase 3: `pnpm run db:up`, `pnpm run db:migrate`, `apps/api/.env` e `apps/web/.env` (ignorados) e configs `api-dev` (3011) / `web-dev` (5183) em `.claude/launch.json`. Portas 3001/5173 estavam ocupadas por servidores antigos do agent anterior. Em 08/11, `WEB_ORIGIN` de `apps/api/.env` passou a `http://localhost:5173` (`pnpm run dev` com API em 3011); a config `web-dev` (5183) recebe 403 `invalid_origin` até voltar esse valor. Credenciais de teste: contas fictícias @example.test com senha aleatória (não reutilizáveis).
+Execução local da fase 3: `pnpm run db:up`, `pnpm run db:migrate`, `apps/api/.env` e `apps/web/.env` (ignorados) e configs `api-dev` (3011) / `web-dev` (5183) em `.claude/launch.json`. Portas 3001/5173 estavam ocupadas por servidores antigos do agent anterior. Em 08/11, `WEB_ORIGIN` de `apps/api/.env` passou a `http://192.168.0.221:5173` (acesso pela rede local, API em 3011); `localhost:5173` e a config `web-dev` (5183) recebem 403 `invalid_origin` até trocar esse valor. Credenciais de teste: contas fictícias @example.test com senha aleatória (não reutilizáveis).
 
 ## Estado atual
 

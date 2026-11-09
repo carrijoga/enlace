@@ -319,6 +319,12 @@
     color: var(--structure-forest);
     font-weight: 700;
   }
+  .range-heading,
+  .range,
+  .row-card,
+  .details-section[open] form {
+    animation: rise-in var(--dur-base) var(--ease-out);
+  }
   .range-heading {
     display: flex;
     justify-content: space-between;
@@ -524,6 +530,7 @@
     margin: 6px 0;
     color: #922f28;
     font-size: 12px;
+    animation: nudge 240ms ease-in-out;
   }
   .footnote {
     margin: 8px 0 0;

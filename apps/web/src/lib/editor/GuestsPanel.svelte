@@ -163,7 +163,7 @@
         type="button"
         onclick={(event) => onImportCsv?.(event.currentTarget)}>Importar CSV</button
       >{/if}
-    <span class="total">{guests.length}</span>
+    {#key guests.length}<span class="total">{guests.length}</span>{/key}
   </header>
 
   {#if selectedSeatId}
@@ -420,11 +420,19 @@
     border-radius: 50%;
     font-weight: 700;
     color: var(--guest-forest);
+    animation: pop-in var(--dur-base) var(--ease-out);
   }
   .seat-editor,
   .add-form {
     padding: 12px 0;
     border-top: 1px solid var(--guest-line);
+  }
+  /* Só o que surge por ação da pessoa. Linhas da lista não animam: `hidden` reiniciaria 300 delas. */
+  .seat-editor,
+  .selection-banner,
+  .edit-form,
+  .remove-confirm {
+    animation: rise-in var(--dur-base) var(--ease-out);
   }
   .seat-heading h3,
   .add-form h3,
@@ -531,6 +539,7 @@
     margin: 5px 0;
     color: #922f28;
     font-size: 12px;
+    animation: nudge 240ms ease-in-out;
   }
   .guest-list {
     padding-top: 12px;

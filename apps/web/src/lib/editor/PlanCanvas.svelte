@@ -3,6 +3,7 @@
   import type { CeremonyProject } from '@enlace/contracts';
   import type { LayoutGeometry, SeatGeometry } from '@enlace/domain';
   import { GUEST_CATEGORIES } from './guest-categories';
+  import { glideSeats, SEAT_MOTION_LIMIT, welcomeSeat, type SeatPose } from './plan-motion';
 
   let {
     project,
@@ -79,6 +80,34 @@
     });
   });
 
+  // Movimento fora do fluxo reativo das cadeiras: edições que não mexem em `layout` nem rodam isto.
+  const layout = $derived(project.layout);
+  const dense = $derived(geometry.seats.length > SEAT_MOTION_LIMIT);
+  let shownPoses: ReadonlyMap<string, SeatPose> | null = null;
+  let shownCurve: number | null = null;
+  $effect(() => {
+    const curve = layout.curveStrength;
+    untrack(() => {
+      const previous = shownPoses;
+      const curveDragged = shownCurve !== null && shownCurve !== curve;
+      shownPoses = positions;
+      shownCurve = curve;
+      // O controle de curvatura dispara a cada passo; ali a planta acompanha o dedo diretamente.
+      if (previous && !curveDragged) glideSeats(svg, previous, positions);
+    });
+  });
+
+  let arrivalHolder: SVGGElement;
+  let arrivalRing: SVGRectElement;
+  export function welcome(seatId: string) {
+    if (dense) return;
+    const seat = svg.querySelector<SVGGElement>(`[data-seat-id="${seatId}"]`);
+    const transform = transformOf(seatId);
+    if (!seat || !transform) return;
+    arrivalHolder.setAttribute('transform', transform);
+    welcomeSeat(seat, arrivalRing);
+  }
+
   function seatKey(event: KeyboardEvent, listed: SeatGeometry) {
     // Posição atual (a de `seatList` pode ser de outro formato).
     const seat = positions.get(listed.id) ?? listed;
@@ -132,6 +161,7 @@
     bind:this={svg}
     class="ceremony-map"
     class:fit={zoom === 0 && !mapSize}
+    class:dense
     viewBox={`0 0 ${geometry.width} ${geometry.height}`}
     style:width={mapSize ? `${mapSize.width}px` : zoom ? `${zoom * 100}%` : '100%'}
     style:height={mapSize ? `${mapSize.height}px` : null}
@@ -233,6 +263,20 @@
         {/if}
       </g>
     {/each}
+    <g bind:this={arrivalHolder} aria-hidden="true" class="arrival">
+      <rect
+        bind:this={arrivalRing}
+        x="-30"
+        y="-35"
+        width="60"
+        height="74"
+        rx="12"
+        fill="none"
+        stroke="#b89364"
+        stroke-width="2.5"
+        opacity="0"
+      />
+    </g>
     <text x={geometry.center} y={geometry.height - 15} text-anchor="middle" class="entry"
       >ENTRADA</text
     >
@@ -255,6 +299,13 @@
     max-height: none;
     margin: auto;
     user-select: none;
+    animation: fade-in var(--dur-slow) ease-out;
+  }
+  .ceremony-map:not(.dense) .selection-ring {
+    animation: fade-in var(--dur-fast) ease-out;
+  }
+  .arrival {
+    pointer-events: none;
   }
   .ceremony-map.fit {
     width: 100%;
@@ -319,7 +370,8 @@
       min-width: 0 !important;
       max-height: 230mm;
     }
-    .selection-ring {
+    .selection-ring,
+    .arrival {
       display: none;
     }
   }

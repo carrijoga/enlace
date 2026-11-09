@@ -160,6 +160,16 @@ Controles têm cantos moderadamente arredondados (6–9px); painéis da planta u
 ### Signature Component
 - **Planta da cerimônia:** SVG nativo com altar, corredor, fileiras, assentos, orientação e legenda. No editor, zoom e enquadramento ficam junto ao título; seleção e ocupação aparecem diretamente nos lugares. As categorias usam acentos de cor próprios e a instrução contextual explica a próxima ação. "Ver lugares em lista", no painel de convidados, oferece a mesma planta em texto, com seleção e atribuição, para leitor de tela e para quem não alcança as cadeiras pequenas no celular.
 
+## Motion
+
+O movimento explica estado e continuidade; o fio dourado é o seu material. Decisão e limites no [ADR-0011](docs/decisoes/0011-movimento-da-interface.md).
+
+- **Tokens (`styles.css`):** `--ease-out` (`cubic-bezier(0.16, 1, 0.3, 1)`), `--dur-fast` 120 ms para resposta, `--dur-base` 200 ms para mudança de estado, `--dur-slow` 320 ms para diálogos e listas. Keyframes globais: `fade-in`, `rise-in`, `pop-in`, `nudge`, `breathe`.
+- **Momento autoral da landing:** a planta se arma e as primeiras pessoas chegam, uma única vez. O conteúdo fica visível sem esperar a sequência.
+- **Momentos da planta:** cadeiras deslizam entre as poses e a cadeira recebe a pessoa com um aro dourado. Até 120 cadeiras.
+- **Ferramenta:** resposta curta, sem coreografia de abertura. Saídas de diálogo são imediatas.
+- **Movimento reduzido:** as distâncias viram zero e nada repete; cor e opacidade permanecem.
+
 ## Do's and Don'ts
 
 ### Do:
@@ -168,9 +178,10 @@ Controles têm cantos moderadamente arredondados (6–9px); painéis da planta u
 - **Do** manter o anel de foco de 3px com afastamento de 5px.
 - **Do** preservar a planta SVG nativa como foco e assinatura visual.
 - **Do** adaptar a composição do editor nos limites de 1200px, 980px e 540px observados.
-- **Do** respeitar movimento reduzido, removendo transições.
+- **Do** respeitar movimento reduzido, removendo deslocamento e repetição e mantendo cor e opacidade que confirmam o estado.
 
 ### Don't:
 - **Don't** introduzir sombras nas superfícies comuns; a hierarquia existente usa bordas e tonalidades.
 - **Don't** substituir a geometria de assentos por uma biblioteca gráfica ou um visual genérico.
 - **Don't** usar as cores de categoria como substitutas do verde principal para ações globais.
+- **Don't** animar dentro da planta acima de 120 cadeiras, nem usar `@keyframes` nas linhas da lista de convidados.

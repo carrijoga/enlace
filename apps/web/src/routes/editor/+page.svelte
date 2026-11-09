@@ -32,6 +32,7 @@
   import StructurePanel from '../../lib/editor/StructurePanel.svelte';
   import GuestsPanel from '../../lib/editor/GuestsPanel.svelte';
   import SeatList from '../../lib/editor/SeatList.svelte';
+  import { SEAT_MOTION_LIMIT } from '../../lib/editor/plan-motion';
   import { GUEST_CATEGORIES, type GuestCategory } from '../../lib/editor/guest-categories';
   import {
     accountDraftKey,
@@ -73,6 +74,7 @@
   let fileInput: HTMLInputElement;
   let confirmDialog: HTMLDialogElement;
   let exportMenu: HTMLDetailsElement;
+  let planCanvas = $state<PlanCanvas | null>(null);
   let confirmation = $state.raw<{
     next: CeremonyProject;
     title: string;
@@ -539,6 +541,7 @@
     ) {
       selectedGuestId = null;
       selectedSeatId = seatId;
+      void tick().then(() => planCanvas?.welcome(seatId));
     }
   }
   function selectGuest(id: string | null) {
@@ -693,7 +696,7 @@
   /></svelte:head
 >
 
-<div class="editor-page">
+<div class="editor-page" class:dense-plan={total > SEAT_MOTION_LIMIT}>
   {#if project && geometry}<a class="skip-link" href="#planta">Pular para a planta</a>{/if}
   <header class="editor-header">
     <a href={resolve('/')} class="editor-brand" aria-label="Enlace, voltar à página inicial"
@@ -708,6 +711,7 @@
           status === 'blocked' ||
           status === 'conflict' ||
           status === 'expired'}
+        class:busy={status === 'pending'}
         class="save-state"
         role="status"
         >{status === 'saved'
@@ -927,11 +931,18 @@
           </div>
         </div>
         <div class="plan-stats">
-          <span><strong>{total}</strong> cadeiras</span><span
-            ><strong>{assigned}</strong> pessoas posicionadas</span
-          ><span><strong>{total - assigned}</strong> lugares livres</span>
+          <span
+            >{#key total}<strong>{total}</strong>{/key} cadeiras</span
+          ><span
+            >{#key assigned}<strong>{assigned}</strong>{/key} pessoas posicionadas</span
+          ><span
+            >{#key total - assigned}<strong>{total - assigned}</strong>{/key} lugares livres</span
+          >
+          <i class="seated-bar" aria-hidden="true" style:--seated={total ? assigned / total : 0}
+          ></i>
         </div>
         <PlanCanvas
+          bind:this={planCanvas}
           {project}
           {geometry}
           {selectedGuestId}
@@ -942,14 +953,16 @@
         />
         <div class="map-context">
           <div>
-            <span class="context-mark"></span>
-            <p>
-              {selectedGuestId
-                ? `Escolha uma cadeira para ${project.guests.find((g) => g.id === selectedGuestId)?.name}.`
-                : selectedSeatId
-                  ? getSeatLabel(project, selectedSeatId)
-                  : 'Selecione uma pessoa e toque na cadeira dela.'}
-            </p>
+            <span class="context-mark" class:waiting={selectedGuestId}></span>
+            {#key `${selectedGuestId}:${selectedSeatId}`}
+              <p>
+                {selectedGuestId
+                  ? `Escolha uma cadeira para ${project.guests.find((g) => g.id === selectedGuestId)?.name}.`
+                  : selectedSeatId
+                    ? getSeatLabel(project, selectedSeatId)
+                    : 'Selecione uma pessoa e toque na cadeira dela.'}
+              </p>
+            {/key}
           </div>
           <span class="keyboard-note">Setas navegam · Enter seleciona</span>
         </div>
@@ -971,7 +984,11 @@
           </div>{/if}
       </main>
 
-      <nav class="mobile-tabs" aria-label="Ferramentas do planejamento">
+      <nav
+        class="mobile-tabs"
+        aria-label="Ferramentas do planejamento"
+        style:--active-tab={mobilePanel === 'guests' ? 1 : 0}
+      >
         <button
           aria-pressed={mobilePanel === 'structure'}
           onclick={() => (mobilePanel = 'structure')}>Estrutura</button
@@ -1024,6 +1041,15 @@
       </p>
     </main>
   {:else}<main class="loading-editor">
+      <svg class="rings-loader" viewBox="0 0 36 36" aria-hidden="true"
+        ><ellipse pathLength="1" cx="14" cy="18" rx="8" ry="11" /><ellipse
+          pathLength="1"
+          cx="23"
+          cy="18"
+          rx="8"
+          ry="11"
+        /></svg
+      >
       <h1>Preparando seu espaço…</h1>
       <p>Carregando o planejamento deste navegador.</p>
     </main>{/if}
@@ -1038,7 +1064,9 @@
     />
   {/if}
   <div class:error={feedbackError} class="editor-feedback" role="status" aria-live="polite">
-    {exporting ? 'Preparando seu arquivo…' : feedback}
+    {#if exporting || feedback}{#key exporting ? 'export' : feedback}<span
+          >{exporting ? 'Preparando seu arquivo…' : feedback}</span
+        >{/key}{/if}
   </div>
   <dialog
     bind:this={confirmDialog}
@@ -1129,6 +1157,17 @@
   .editor-brand svg ellipse:last-child {
     stroke: #b89364;
   }
+  .editor-brand svg ellipse {
+    transition: transform var(--dur-slow) var(--ease-out);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .editor-brand:hover svg ellipse:first-child {
+      transform: translateX(1.5px);
+    }
+    .editor-brand:hover svg ellipse:last-child {
+      transform: translateX(-1.5px);
+    }
+  }
   .editor-brand span {
     font:
       30px Georgia,
@@ -1155,6 +1194,24 @@
   }
   .save-state.error {
     color: #923d35;
+  }
+  .save-state::before {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin-right: 6px;
+    border-radius: 50%;
+    background: #72977d;
+    vertical-align: 1px;
+    transition: background-color var(--dur-base) ease-out;
+  }
+  .save-state.busy::before {
+    background: #b89364;
+    animation: breathe 900ms ease-in-out infinite;
+  }
+  .save-state.error::before {
+    background: #923d35;
   }
   .header-tools,
   .history-tools,
@@ -1220,11 +1277,20 @@
   .export-menu summary::-webkit-details-marker {
     display: none;
   }
+  .export-menu summary:hover {
+    background: #1e4433;
+  }
   .export-menu summary svg {
     width: 14px;
     height: 14px;
+    transition: transform var(--dur-base) var(--ease-out);
+  }
+  .export-menu[open] summary svg {
+    transform: rotate(180deg);
   }
   .export-menu > div {
+    transform-origin: top right;
+    animation: pop-in var(--dur-base) var(--ease-out);
     position: absolute;
     top: calc(100% + 9px);
     right: 0;
@@ -1316,6 +1382,7 @@
     min-height: 32px;
   }
   .plan-stats {
+    position: relative;
     display: flex;
     gap: 18px;
     flex-wrap: wrap;
@@ -1325,9 +1392,23 @@
     border-bottom: 1px solid #eef0e9;
   }
   .plan-stats strong {
+    display: inline-block;
     font-weight: 650;
     color: #295842;
     font-variant-numeric: tabular-nums;
+    animation: rise-in var(--dur-base) var(--ease-out);
+  }
+  /* Fio dourado: quanto da planta já tem alguém sentado. */
+  .seated-bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 2px;
+    background: #b89364;
+    transform: scaleX(var(--seated));
+    transform-origin: left;
+    transition: transform 420ms var(--ease-out);
   }
   .map-context {
     padding: 13px 19px;
@@ -1349,8 +1430,14 @@
     border-radius: 50%;
     background: #72977d;
     flex-shrink: 0;
+    transition: background-color var(--dur-base) ease-out;
+  }
+  .context-mark.waiting {
+    background: #b89364;
+    animation: breathe 1400ms ease-in-out infinite;
   }
   .map-context p {
+    animation: fade-in var(--dur-base) ease-out;
     margin: 0;
     font-size: 11px;
     color: #36543d;
@@ -1435,6 +1522,10 @@
     padding: 5px 24px;
     flex-shrink: 0;
   }
+  .editor-feedback span {
+    display: inline-block;
+    animation: rise-in var(--dur-base) var(--ease-out);
+  }
   .editor-feedback:empty {
     padding: 0;
     min-height: 0;
@@ -1445,6 +1536,7 @@
     background: #fff5ef;
   }
   .recovery-banner {
+    animation: rise-in var(--dur-slow) var(--ease-out);
     display: flex;
     gap: 12px;
     align-items: center;
@@ -1503,6 +1595,19 @@
     font:
       28px Georgia,
       serif;
+  }
+  /* Planta grande: o que anima a cada seleção custa ~7 ms por ação com 288 cadeiras (ADR-0011). */
+  .dense-plan :global {
+    .map-context p,
+    .context-mark,
+    .plan-stats strong,
+    .editor-feedback span,
+    .save-state::before,
+    .seat-editor,
+    .selection-banner,
+    .total {
+      animation: none !important;
+    }
   }
   @media (max-width: 1200px) {
     .editor-workspace {
@@ -1580,22 +1685,32 @@
       display: none !important;
     }
     .mobile-tabs {
+      position: relative;
       display: flex;
       order: 1;
       margin: 13px 16px 0;
       border-bottom: 1px solid #cbd7c6;
     }
+    .mobile-tabs::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      bottom: -1px;
+      width: 50%;
+      height: 2px;
+      background: #295842;
+      transform: translateX(calc(var(--active-tab) * 100%));
+      transition: transform var(--dur-slow) var(--ease-out);
+    }
     .mobile-tabs button {
       flex: 1;
       background: transparent;
       border: 0;
-      border-bottom: 2px solid transparent;
-      padding: 12px;
+      padding: 12px 12px 14px;
       color: #626e63;
     }
     .mobile-tabs button[aria-pressed='true'] {
       color: #295842;
-      border-color: #295842;
       font-weight: 650;
     }
     .mobile-tabs span {
@@ -1608,6 +1723,7 @@
       overflow: visible;
       padding: 24px;
       border: 0;
+      animation: fade-in var(--dur-base) ease-out;
     }
     .mobile-hidden {
       display: none;
@@ -1673,6 +1789,7 @@
     .structure-sidebar,
     .guests-sidebar,
     .mobile-tabs,
+    .seated-bar,
     .map-context,
     .map-legend,
     .personal-map,

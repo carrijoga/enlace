@@ -1,6 +1,9 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import { resolve } from '$app/paths';
+  import { flip } from 'svelte/animate';
+  import { slide } from 'svelte/transition';
+  import { motionMs } from '../../lib/motion';
   import {
     MAX_PROJECT_FILE_BYTES,
     createDemoDocument,
@@ -376,7 +379,18 @@
     </section>
   {/if}
   <div role="status">
-    {#if loading}<p>Carregando seus projetos…</p>{/if}
+    {#if loading}<div class="loading">
+        <svg class="rings-loader" viewBox="0 0 36 36" aria-hidden="true"
+          ><ellipse pathLength="1" cx="14" cy="18" rx="8" ry="11" /><ellipse
+            pathLength="1"
+            cx="23"
+            cy="18"
+            rx="8"
+            ry="11"
+          /></svg
+        >
+        <p>Carregando seus projetos…</p>
+      </div>{/if}
   </div>
   {#if loading}
     <!-- Estado anunciado pela região acima. -->
@@ -390,8 +404,12 @@
       >
     </section>
   {:else}<ul class="project-list">
-      {#each projects as item (item.id)}
-        <li>
+      {#each projects as item, index (item.id)}
+        <li
+          style:--row={index}
+          animate:flip={{ duration: motionMs(280) }}
+          out:slide={{ duration: motionMs(200) }}
+        >
           <div class="project-copy">
             <a
               class="project-title"
@@ -539,6 +557,31 @@
     gap: 30px;
     padding: 23px 0;
     border-bottom: 1px solid #dfe3da;
+    animation: rise-in var(--dur-slow) var(--ease-out) min(calc(var(--row) * 35ms), 210ms) backwards;
+  }
+  .primary:hover:not(:disabled) {
+    background: #1e4433;
+  }
+  .secondary:hover:not(:disabled),
+  .site-header nav button:hover:not(:disabled),
+  .project-actions button:hover:not(:disabled),
+  .dialog-actions button:hover:not(:disabled) {
+    background: #eaf1e9;
+  }
+  .project-actions .delete:hover:not(:disabled) {
+    background: #fbefeb;
+  }
+  .dialog-actions .delete-confirm:hover:not(:disabled) {
+    background: #7c322b;
+  }
+  .loading {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .empty,
+  .notice {
+    animation: rise-in var(--dur-slow) var(--ease-out);
   }
   .project-copy {
     min-width: 0;

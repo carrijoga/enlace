@@ -1,5 +1,24 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
+  import { GUEST_CATEGORIES, type GuestCategory } from '../lib/editor/guest-categories';
+
+  // Ordem em que as primeiras pessoas chegam à planta ilustrativa.
+  const arrivals = new Map<string, { category: GuestCategory; order: number }>(
+    (
+      [
+        ['L-0-0', 'familia'],
+        ['R-0-0', 'familia'],
+        ['L-1-0', 'padrinho'],
+        ['R-1-1', 'madrinha'],
+        ['L-2-1', 'convidado'],
+        ['R-2-0', 'pajem'],
+        ['L-3-2', 'convidado'],
+        ['R-3-0', 'convidado'],
+        ['L-4-0', 'familia'],
+        ['R-4-3', 'convidado'],
+      ] as const
+    ).map(([seat, category], order) => [seat, { category, order }]),
+  );
 
   const rows = [
     [3, 3],
@@ -28,12 +47,19 @@
 <header class="site-header">
   <a class="brand" href={resolve('/')} aria-label="Enlace, início">
     <svg viewBox="0 0 36 36" aria-hidden="true"
-      ><ellipse cx="14" cy="18" rx="8" ry="11" /><ellipse cx="23" cy="18" rx="8" ry="11" /></svg
+      ><ellipse class="ring" pathLength="1" cx="14" cy="18" rx="8" ry="11" /><ellipse
+        class="ring"
+        pathLength="1"
+        cx="23"
+        cy="18"
+        rx="8"
+        ry="11"
+      /></svg
     >
     <span>enlace</span>
   </a>
   <a class="header-link" href={resolve('/editor')}
-    >Abrir meu planejamento <span aria-hidden="true">→</span></a
+    >Abrir meu planejamento <span class="arrow" aria-hidden="true">→</span></a
   >
   <nav class="account-nav" aria-label="Acesso à conta">
     <a href={resolve('/conta')}>Entrar</a>
@@ -73,25 +99,50 @@
           aria-label={`Prévia ilustrativa com ${totalSeats} cadeiras em cinco fileiras e corredor central. Não representa medidas reais.`}
         >
           <path
+            class="altar-trace"
+            pathLength="1"
             d="M 310 25 Q 270 50 310 73 Q 350 50 310 25Z"
             fill="none"
             stroke="#a58557"
             stroke-width="2"
           />
-          <path d="M 310 48 V 345" stroke="#d6c8ad" stroke-width="1.5" stroke-dasharray="4 7" />
-          {#each rows as row, ri (row.id)}
-            <text x="17" y={119 + ri * 48} class="row-label">{ri + 1}</text>
-            {#each row.left as seat, si (seat)}
-              <g transform={`translate(${310 - 61 - si * 26}, ${103 + ri * 48})`}>
-                <rect width="18" height="22" rx="4" fill="#fffefb" stroke="#b4bfb2" />
-                <path d="M 3 6 H 15" stroke="#b4bfb2" />
+          <path
+            class="aisle-trace"
+            d="M 310 48 V 345"
+            stroke="#d6c8ad"
+            stroke-width="1.5"
+            stroke-dasharray="4 7"
+          />
+          {#snippet previewSeat(seat: string, x: number, y: number, delay: number)}
+            {@const arrival = arrivals.get(seat)}
+            {@const colors = arrival ? GUEST_CATEGORIES[arrival.category] : null}
+            <g transform={`translate(${x}, ${y})`}>
+              <g class="seat" style:--seat-delay={`${delay}ms`}>
+                <rect
+                  class:arrived={arrival}
+                  style:--arrival-order={arrival?.order}
+                  width="18"
+                  height="22"
+                  rx="4"
+                  fill={colors?.fill ?? '#fffefb'}
+                  stroke={colors?.stroke ?? '#b4bfb2'}
+                />
+                <path d="M 3 6 H 15" stroke={colors?.stroke ?? '#b4bfb2'} />
               </g>
+            </g>
+          {/snippet}
+          {#each rows as row, ri (row.id)}
+            <text
+              x="17"
+              y={119 + ri * 48}
+              class="row-label row-number"
+              style:--seat-delay={`${ri * 70}ms`}>{ri + 1}</text
+            >
+            {#each row.left as seat, si (seat)}
+              {@render previewSeat(seat, 310 - 61 - si * 26, 103 + ri * 48, ri * 70 + si * 16)}
             {/each}
             {#each row.right as seat, si (seat)}
-              <g transform={`translate(${354 + si * 26}, ${103 + ri * 48})`}>
-                <rect width="18" height="22" rx="4" fill="#fffefb" stroke="#b4bfb2" />
-                <path d="M 3 6 H 15" stroke="#b4bfb2" />
-              </g>
+              {@render previewSeat(seat, 354 + si * 26, 103 + ri * 48, ri * 70 + si * 16)}
             {/each}
           {/each}
           <text x="310" y="365" text-anchor="middle" class="entrance-label">ENTRADA</text>
@@ -138,7 +189,9 @@
 <footer class="site-footer">
   <span>enlace</span>
   <p>Planejar com clareza. Celebrar com presença.</p>
-  <a href={resolve('/editor')}>Abrir meu planejamento <span aria-hidden="true">→</span></a>
+  <a href={resolve('/editor')}
+    >Abrir meu planejamento <span class="arrow" aria-hidden="true">→</span></a
+  >
 </footer>
 
 <style>
@@ -180,6 +233,80 @@
     fill: none;
     stroke: currentColor;
     stroke-width: 1.6;
+    transition: transform var(--dur-base) var(--ease-out);
+  }
+  .arrow {
+    display: inline-block;
+    margin-left: 4px;
+    transition: transform var(--dur-base) var(--ease-out);
+  }
+  .seat rect:not(.arrived) {
+    transition: fill var(--dur-fast) ease-out;
+  }
+  .seat:hover rect:not(.arrived) {
+    fill: #eaf1e9;
+  }
+  .ring {
+    transition: transform var(--dur-slow) var(--ease-out);
+  }
+  /* A planta se arma e as primeiras pessoas chegam. Sem animação, o estado final já está no SVG. */
+  @media (prefers-reduced-motion: no-preference) {
+    .brand:hover .ring:first-child {
+      transform: translateX(1.5px);
+    }
+    .brand:hover .ring:last-child {
+      transform: translateX(-1.5px);
+    }
+    .button:hover svg,
+    .header-link:hover .arrow,
+    .site-footer a:hover .arrow {
+      transform: translateX(3px);
+    }
+    .ring,
+    .altar-trace {
+      stroke-dasharray: 1;
+      animation: trace 760ms cubic-bezier(0.45, 0, 0.2, 1) backwards;
+    }
+    .ring:last-child {
+      animation-delay: 160ms;
+    }
+    .aisle-trace {
+      animation: walk-down 760ms var(--ease-out) 240ms backwards;
+    }
+    .seat {
+      animation: seat-settle 420ms var(--ease-out) calc(420ms + var(--seat-delay)) backwards;
+    }
+    .row-number {
+      animation: fade-in 420ms ease-out calc(420ms + var(--seat-delay)) backwards;
+    }
+    .arrived {
+      animation: seat-taken 420ms ease-out calc(1240ms + var(--arrival-order) * 95ms) backwards;
+    }
+  }
+  @keyframes trace {
+    from {
+      stroke-dashoffset: 1;
+    }
+  }
+  @keyframes walk-down {
+    from {
+      clip-path: inset(0 0 100% 0);
+    }
+    to {
+      clip-path: inset(0 0 0 0);
+    }
+  }
+  @keyframes seat-settle {
+    from {
+      opacity: 0;
+      transform: translateY(-7px);
+    }
+  }
+  @keyframes seat-taken {
+    from {
+      fill: #fffefb;
+      stroke: #b4bfb2;
+    }
   }
   .steps {
     border-top: 1px solid var(--line);

@@ -221,24 +221,26 @@
         </form>
       </section>
     {:else}
-      <h2 id="account-title">
-        {mode === 'signup'
-          ? 'Criar conta'
-          : mode === 'recover'
-            ? 'Recuperar acesso'
-            : mode === 'reset'
-              ? 'Criar nova senha'
-              : 'Bem-vinda(o) de volta'}
-      </h2>
-      <p>
-        {mode === 'signup'
-          ? 'Guarde seus projetos e retome em outro dispositivo.'
-          : mode === 'recover'
-            ? 'Informe o e-mail usado na conta.'
-            : mode === 'reset'
-              ? 'Escolha uma senha nova para sua conta.'
-              : 'Entre para continuar de onde parou.'}
-      </p>
+      {#key mode}
+        <h2 id="account-title" class="mode-copy">
+          {mode === 'signup'
+            ? 'Criar conta'
+            : mode === 'recover'
+              ? 'Recuperar acesso'
+              : mode === 'reset'
+                ? 'Criar nova senha'
+                : 'Bem-vinda(o) de volta'}
+        </h2>
+        <p class="mode-copy">
+          {mode === 'signup'
+            ? 'Guarde seus projetos e retome em outro dispositivo.'
+            : mode === 'recover'
+              ? 'Informe o e-mail usado na conta.'
+              : mode === 'reset'
+                ? 'Escolha uma senha nova para sua conta.'
+                : 'Entre para continuar de onde parou.'}
+        </p>
+      {/key}
       <form onsubmit={submit}>
         {#if mode === 'signup'}<label for="name">Seu nome</label><input
             id="name"
@@ -389,10 +391,19 @@
     color: #fffefb;
     background: #295842;
   }
+  .primary:hover:not(:disabled) {
+    background: #1e4433;
+  }
   .secondary {
     margin-top: 10px;
     color: #295842;
     background: transparent;
+  }
+  .secondary:hover:not(:disabled) {
+    background: #eaf1e9;
+  }
+  .mode-copy {
+    animation: rise-in var(--dur-base) var(--ease-out);
   }
   .danger-zone {
     margin-top: 28px;
@@ -416,6 +427,9 @@
     background: #873d35;
     border-color: #873d35;
   }
+  .destructive:hover:not(:disabled) {
+    background: #722f28;
+  }
   .submit {
     margin-top: 10px;
   }
@@ -438,9 +452,11 @@
     margin: 5px 0;
     color: #295842 !important;
     font-size: 14px;
+    animation: rise-in var(--dur-base) var(--ease-out);
   }
   .message-error {
     color: #923d35 !important;
+    animation: nudge 240ms ease-in-out;
   }
   /* O erro não depende só da cor. */
   .message-error::before {

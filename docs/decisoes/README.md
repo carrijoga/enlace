@@ -35,3 +35,7 @@ Não decididos: região e recursos na Railway, orçamento, transporte de e-mail,
 ## 0010 — Cartão de exportação da planta
 
 [ADR-0010](0010-cartao-de-exportacao-da-planta.md): aceita e implementada. PNG volta à composição do protótipo v3, com colisões de rótulos corrigidas e sem deformar nomes; mapa individual passa a mostrar casal e data, sem dados dos demais convidados.
+
+## 0011 — Movimento da interface
+
+[ADR-0011](0011-movimento-da-interface.md): aceita e implementada. Movimento nativo, sem biblioteca; dentro da planta só até 120 cadeiras, para preservar o orçamento de 50 ms no cenário máximo. Falta medir no Moto G84.
