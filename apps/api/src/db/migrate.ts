@@ -56,8 +56,9 @@ export async function migrate(databaseUrl: string): Promise<string[]> {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) throw new Error('DATABASE_URL obrigatória');
+  // Na hospedagem o pre-deploy herda as variáveis do serviço; a credencial de migração é separada da runtime.
+  const databaseUrl = process.env.MIGRATOR_DATABASE_URL ?? process.env.DATABASE_URL;
+  if (!databaseUrl) throw new Error('MIGRATOR_DATABASE_URL ou DATABASE_URL obrigatória');
   const applied = await migrate(databaseUrl);
   console.log(applied.length ? `Migrações aplicadas: ${applied.join(', ')}` : 'Banco atualizado');
 }

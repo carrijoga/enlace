@@ -28,7 +28,7 @@ Ainda não implementados: editor completo, geometria migrada, autenticação, sa
 
 Dois serviços e um contrato compartilhado, sem Redis, filas ou coedição. Deploys independentes exigem compatibilidade entre versões de API e frontend; não mudar contratos publicados de forma incompatível sem versionamento.
 
-`railway.toml` e `apps/web/vercel.json` preparam o deploy. Nenhuma hospedagem foi provisionada ou publicada. Builds locais e CI não substituem a validação futura com domínio, proxy, banco e sessões reais.
+`railway.toml` e `apps/web/vercel.json` preparam o deploy. Nenhuma hospedagem foi provisionada ou publicada. Builds locais e CI não substituem a validação futura com domínio, proxy, banco e sessões reais. O `railway.toml` foi substituído por `.railway/railway.ts` no [ADR-0013](0013-infraestrutura-railway-como-codigo.md).
 
 No Windows deste ambiente, o adaptador Vercel não conseguiu criar os links simbólicos de funções. O comando padrão gera o build de produção para preview local, sem adaptador nessa plataforma. `build:vercel` exige o empacotamento completo, usado pela Vercel e pela CI Linux; não declarar esse pacote validado localmente. Não alterar permissões do Windows nem modificar o adaptador para contornar a limitação.
 

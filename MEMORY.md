@@ -2,6 +2,14 @@
 
 Atualizado em 09/11/2026, America/Sao_Paulo.
 
+## Deploy da API na Railway em preparação — 09/11/2026
+
+ADR-0013. Pedido do usuário. `railway.toml` removido (Railway descontinuou; leitura termina em 01/12/2026) e substituído por `.railway/railway.ts` com SDK `railway` 3.16.0: serviço `api` da branch `main` (alterado pelo usuário), US East, PostgreSQL 17, pré-deploy `node apps/api/dist/db/migrate.js`. Novos: `MIGRATOR_DATABASE_URL` em `migrate.ts` e `scripts/db-bootstrap-roles.mjs`. Sem Cloudflare na API (o navegador só fala com a Vercel).
+
+Validação: check/lint ok, 122 testes passaram e 15 integrados pulados; ensaio em contêineres `node:24.22.1-slim` + PostgreSQL 17 com `NODE_ENV=production`: install, build, bootstrap, migração com roles separadas, `/health`, `/ready`, cadastro e SIGTERM ok. Não verificados: Railpack real, HTTPS/cookies pela Vercel, privilégios na hospedagem. Nada provisionado. Entrega commitada em `codex/ceremony-editor`, sem push nem merge na `main`.
+
+Bloqueios, em ordem: (1) `origin/main` está 9 commits atrás e não tem auth/projetos/migração, então esta entrega precisa chegar à `main` antes do primeiro deploy; (2) aprovação do usuário para `railway config apply`. CLI 5.71.0 instalada e autenticada; pasta vinculada ao projeto Railway `Enlace` (vazio), ambiente `production`; plano: criar `api` e `postgres`, sem alterar ou destruir nada. `WEB_ORIGIN=https://enlace.carrijoga.com.br`, sem barra final (Cloudflare → Vercel, no ar; `/api/health` responde 503 até a API existir e `API_ORIGIN` apontar para ela). Depois seguir o runbook em `docs/desenvolvimento.md`. SMTP real continua sem configuração.
+
 ## Planta da festa proposta como fase 6 — 09/11/2026
 
 Pedido do usuário, só documentado, sem código: ADR-0012 (proposta), fase 6 no roadmap e seção em `PRODUCT.md`. Decisões do usuário: medidas reais informadas pela pessoa; convidados por mesa, cada mesa com N cadeiras; salão em formato pronto ou criado manualmente com medidas reais (interpretação registrada: polígono ortogonal, parede a parede); fase 6 aprovada. Lista de convidados compartilhada com a cerimônia e início após o aceite hospedado da fase 5 são recomendações. Muda contrato (JSON v2), banco e domínio; risco principal é arraste no celular, com ensaio no Moto G84 como primeira etapa. Próximo passo do tema: aceite da fase 5 ou decisão do usuário de antecipar.
@@ -92,7 +100,7 @@ Questões futuras: colaboração entre contas, cenários alternativos, medidas r
 
 AGENTS.md contém as regras permanentes. Usar subagents econômicos para tarefas independentes, arquivos exclusivos e contratos prévios; só coordenador escreve MEMORY em paralelo. Atualizar documentação/roadmap/memória; não publicar dados pessoais nem descrever planejado como implementado. Autorização sempre no servidor e nenhuma sobrescrita concorrente silenciosa na futura nuvem.
 
-Preservados sem incluir nos commits: Dockerfile, .dockerignore, compose.yaml, compose.debug.yaml, .vscode/launch.json e tasks.json. Scripts db usam explicitamente docker-compose.yml. Antes de Railway revisar Dockerfile raiz acrescentado em paralelo, que não descreve o build de API desta entrega.
+Preservados sem incluir nos commits: Dockerfile, .dockerignore, compose.yaml, compose.debug.yaml, .vscode/launch.json e tasks.json. Scripts db usam explicitamente docker-compose.yml. O Dockerfile raiz, não versionado, não descreve o build da API e não é usado pela Railway.
 
 Original privado ignorado: prototypes/private/Planejador-da-Cerimonia-v3.html, 62.046 bytes, SHA256 7d9f86a0b89b33f6113efa4ff14f8765882a1351b0e727476866d93d813d2426. Fonte Downloads; não publicar, nem usar dados pessoais como fixture. Diagnóstico histórico permanece separado das melhorias novas.
 

@@ -18,7 +18,7 @@ Atualizado em 09/11/2026. Use ADRs numerados com contexto, decisão, status e co
 
 O ADR-0003 registra a direção atual. Antes de adicionar integrações, validar e fixar versões compatíveis; mudanças relevantes de direção exigem atualizar o registro. Não é necessário interromper o trabalho para escolhas rotineiras já autorizadas pelo escopo; documente a decisão e avance.
 
-Não decididos: região e recursos na Railway, orçamento, transporte de e-mail, versões das integrações, identidade visual final, domínio público, modelo comercial, colaboração entre contas e suporte a múltiplos cenários dentro do mesmo projeto.
+Não decididos: recursos na Railway, orçamento, transporte de e-mail, versões das integrações, identidade visual final, domínio público, modelo comercial, colaboração entre contas e suporte a múltiplos cenários dentro do mesmo projeto.
 
 ## 0007 — Contas e salvamento transacional
 
@@ -43,3 +43,7 @@ Não decididos: região e recursos na Railway, orçamento, transporte de e-mail,
 ## 0012 — Planta da festa
 
 [ADR-0012](0012-planta-da-festa.md): proposta para a fase 6, não implementada. Salão com medidas reais (formato pronto ou manual), mesas com N cadeiras, convidados por mesa e atrações posicionadas livremente, na mesma lista de convidados da cerimônia.
+
+## 0013 — Infraestrutura Railway como código
+
+[ADR-0013](0013-infraestrutura-railway-como-codigo.md): aceita; validada em contêineres, provisionamento pendente. `.railway/railway.ts` substitui `railway.toml`, região US East, PostgreSQL 17, migração no pré-deploy com credencial própria e sem proxy Cloudflare na API.

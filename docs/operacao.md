@@ -12,6 +12,8 @@ Migrações são um passo operacional separado do build e do start da API. Faça
 4. Inicie/atualize a API e confira `/health` e `/ready`. `/ready` comprova apenas conectividade ao PostgreSQL, não o funcionamento de login ou escrita de projeto.
 5. Observe os eventos de requisição e os erros agregados do provedor. Não rode `drizzle-kit push` em hospedagem.
 
+Na Railway, o pré-deploy de `.railway/railway.ts` executa o runner compilado com `MIGRATOR_DATABASE_URL` e bloqueia o deploy se falhar; o backup prévio continua sendo responsabilidade do operador.
+
 Comandos na raiz: `db:backup`, `db:restore:drill` (somente destino descartável) e `db:predeploy` como atalho para `db:check` seguido de `db:migrate`.
 
 ## Backup lógico e ensaio de restauração

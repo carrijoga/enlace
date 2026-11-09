@@ -41,6 +41,7 @@ A landing `/` e `/editor` anônimo continuam funcionando sem conta/banco. Copie 
 | API | `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM` | Transporte de recuperação de senha; sem esses valores o recurso é indisponível |
 | API | `SMTP_USER`, `SMTP_PASSWORD` | Credenciais SMTP quando o transporte as exigir |
 | API | `NODE_ENV` | `production` na Railway |
+| Migração | `MIGRATOR_DATABASE_URL` | Conexão de migração; quando definida, o runner a usa no lugar de `DATABASE_URL` |
 | Migração | `PG_MIGRATOR_ROLE` | Role explícita opcional do runner; credencial deve possuir essa associação |
 | Testes | `TEST_DATABASE_URL` | Banco descartável/local de teste; suites criam schemas isolados e os removem ao concluir |
 
@@ -70,7 +71,16 @@ Vercel: Root Directory `apps/web`, acesso a fontes externas do workspace, Framew
 
 `STATIC_BUILD_NO_OUT_DIR` após sucesso do adaptador indica frequentemente Root Directory na raiz; a saída correta fica em `apps/web/.vercel/output`. Corrigir Root Directory e refazer deploy sem cache quando publicação for autorizada.
 
-Railway: raiz do repositório, Railpack, `railway.toml`, Node 24, build/start da API, `/health`. Configurar `NODE_ENV`, `WEB_ORIGIN`, segredo e PostgreSQL privado no mesmo ambiente/região. Revisar o Dockerfile raiz adicionado em paralelo pelo usuário antes de publicar; ele não define o build desta API. Migração deve ocorrer em etapa própria com credencial separada e conectividade privada.
+Railway: `.railway/railway.ts` define API e PostgreSQL ([ADR-0013](decisoes/0013-infraestrutura-railway-como-codigo.md)); a Railway só o aplica por `railway config plan` e `railway config apply`. O Dockerfile raiz, não versionado, não define o build desta API. A branch configurada precisa conter esta entrega antes do primeiro deploy.
+
+Sequência do primeiro ambiente, com CLI autenticada e diretório vinculado:
+
+1. `railway config plan`, conferir e `railway config apply`. O primeiro deploy da API falha até as variáveis existirem.
+2. Conferir no painel que API e PostgreSQL estão em US East.
+3. Em arquivo novo fora do repositório, gerar as credenciais: `BOOTSTRAP_OUTPUT_FILE=<arquivo>` e `railway run --service postgres node scripts/db-bootstrap-roles.mjs`. Usa `DATABASE_PUBLIC_URL`; a saída contém `DATABASE_URL` e `MIGRATOR_DATABASE_URL` com referências privadas.
+4. Definir no serviço `api` as duas URLs, `BETTER_AUTH_SECRET` (aleatório, 32+ caracteres) e `WEB_ORIGIN` (origem HTTPS exata da web). Apagar o arquivo.
+5. Refazer o deploy e gerar o domínio: `railway domain --service api`. Remover o proxy TCP público do PostgreSQL.
+6. Conferir `/health` e `/ready`, configurar `API_ORIGIN` na Vercel e testar cadastro, login e salvamento pela web.
 
 `/health` confirma processo; `/ready` verifica `SELECT 1`. Validar cookies, origem e links de recuperação através da hospedagem real antes do aceite remoto. Limitação atual: contadores de autenticação são compartilhados por endpoint, pois cabeçalhos IP externos não são confiáveis. Definir cadeia de proxies confiável e proteção por cliente antes da exposição pública.
 

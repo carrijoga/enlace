@@ -1,8 +1,0 @@
-[build]
-builder = "RAILPACK"
-buildCommand = "pnpm --filter @enlace/contracts build && pnpm --filter @enlace/api build"
-
-[deploy]
-startCommand = "pnpm --filter @enlace/api start"
-healthcheckPath = "/health"
-healthcheckTimeout = 30

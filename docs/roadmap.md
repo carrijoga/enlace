@@ -118,7 +118,7 @@ Aceite:
 | Altas quantidades, dimensões reais e objetos livres? | Cerimônia preserva limites e geometria atuais; medidas reais e objetos livres entram na festa ([ADR-0012](decisoes/0012-planta-da-festa.md)) | Fase 6 |
 | CSV: colunas, duplicatas e tamanho? | Nome obrigatório e categoria opcional; prévia sem merge automático por nome | Antes da fase 4 |
 | Regras de proximidade e separação familiar? | Remover regras pessoais fixas; regras configuráveis posteriores | Fase 2; descoberta antes de expandir |
-| Região, recursos e custos? | Railway + PostgreSQL definidos; dimensionamento e orçamento pendentes | Antes de provisionar ambiente remoto/publicar |
+| Região, recursos e custos? | Railway + PostgreSQL definidos, região US East ([ADR-0013](decisoes/0013-infraestrutura-railway-como-codigo.md)); dimensionamento e orçamento pendentes | Antes de provisionar ambiente remoto/publicar |
 | Como garantir leveza? | SvelteKit, poucas dependências e metas em `docs/desempenho.md` | Medir a base na fase 1 e o editor desde a fase 2 |
 
 ## Critério de conclusão de qualquer etapa
