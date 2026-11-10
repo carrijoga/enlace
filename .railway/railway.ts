@@ -21,6 +21,8 @@ export default defineRailway(() => {
     replicas: { 'us-east4-eqdc4a': 1 },
     env: {
       NODE_ENV: 'production',
+      // Explícita: sem ela a Railway injetou 5432 e o domínio gerado respondeu 502.
+      PORT: '3000',
       PG_MIGRATOR_ROLE: 'enlace_migrator',
       WEB_ORIGIN: preserve(),
       BETTER_AUTH_SECRET: preserve(),
