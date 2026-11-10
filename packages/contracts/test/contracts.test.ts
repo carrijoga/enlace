@@ -10,7 +10,7 @@ const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')
 function document(): ProjectDocument {
   return projectDocumentSchema.parse({
     format: 'enlace-project',
-    schemaVersion: 1,
+    schemaVersion: 2,
     exportedAt: '2026-11-07T12:00:00.000Z',
     project: {
       title: 'Cerimônia',
@@ -25,6 +25,7 @@ function document(): ProjectDocument {
       },
       guests: [{ id: id(3), name: 'Lia', category: 'familia', note: '' }],
       assignments: [{ seatId: id(2), guestId: id(3) }],
+      reception: null,
     },
   });
 }
@@ -39,8 +40,22 @@ describe('@enlace/contracts', () => {
         ...r.rightSeatIds,
       ]),
     ).toHaveLength(55));
-  it('rejeita versão futura', () =>
-    expect(() => parse({ format: 'enlace-project', schemaVersion: 99 })).toThrow(/não suportada/));
+  it('rejeita versão futura e conteúdo que não é objeto', () => {
+    expect(() => parse({ format: 'enlace-project', schemaVersion: 99 })).toThrow(/não suportada/);
+    expect(() => parse([])).toThrow(/inválido/);
+    expect(() => parse(null)).toThrow(/inválido/);
+  });
+  it('migra v3 para o envelope atual com reception nula', () => {
+    const migrated = parse({
+      version: 3,
+      mode: 'straight',
+      rows: [[1, 0]],
+      people: [],
+      assignments: {},
+    });
+    expect(migrated.schemaVersion).toBe(2);
+    expect(migrated.project.reception).toBeNull();
+  });
   it('rejeita IDs duplicados de cadeiras', () => {
     const v = document();
     v.project.layout.rows[0].rightSeatIds = [id(2)];

@@ -83,16 +83,16 @@ Inclui, conforme o [ADR-0006](decisoes/0006-aparelhos-de-referencia-e-aceite-da-
 
 Aceite: fluxo completo em ambiente de teste, migrações reproduzíveis, isolamento verificado, metas de desempenho aferidas e procedimento de backup/restauração ensaiado com dados fictícios. Vercel para frontend e Railway para API/PostgreSQL já estão escolhidos; validar o pacote completo, healthcheck e migrações pré-deploy. Domínio, região, recursos, orçamento e qualquer publicação são tratados quando houver uma versão concreta.
 
-## Fase 6 — Planta da festa — proposta, não iniciada
+## Fase 6 — Planta da festa — em execução
 
-Pedido do usuário em 09/11/2026 ([ADR-0012](decisoes/0012-planta-da-festa.md)). Planejar a festa em salão fechado, dentro do mesmo projeto e com a mesma lista de convidados: salão com medidas reais, formato pronto ou criado manualmente; mesas com N cadeiras e convidados por mesa; DJ, pista, mesa de bolo, mesa de doces e outras atrações posicionadas livremente. Início recomendado após o aceite hospedado da fase 5.
+Pedido do usuário em 09/11/2026 ([ADR-0012](decisoes/0012-planta-da-festa.md)). Planejar a festa em salão fechado, dentro do mesmo projeto e com a mesma lista de convidados: salão com medidas reais, formato pronto ou criado manualmente; mesas com N cadeiras e convidados por mesa; DJ, pista, mesa de bolo, mesa de doces e outras atrações posicionadas livremente. O usuário pediu o início antes do aceite hospedado da fase 5, que continua pendente.
 
 Etapas, nesta ordem por dependência:
 
-1. Ensaio de arraste no Moto G84 com protótipo descartável, para confirmar a abordagem antes de construir o restante.
-2. Contrato JSON v2 com migração de v1/v3 e domínio puro: salão, mesas, elementos, atribuição por mesa e avisos.
-3. Persistência: migração do banco, atribuições por mesa e transação única com a cerimônia.
-4. Editor: alternância Cerimônia/Festa, salão, mesas, elementos, atribuição e alternativa sem arraste.
+1. Ensaio de arraste no Moto G84 com protótipo descartável, para confirmar a abordagem antes de construir o restante. **Página pronta (`scripts/bench-drag.html`). Em 10/11/2026 o usuário decidiu adiar a medição no aparelho e seguir para a etapa 4; ela continua exigida no aceite da fase (último item abaixo).**
+2. Contrato JSON v2 com migração de v1/v3 e domínio puro: salão, mesas, elementos, atribuição por mesa e avisos. **Concluída.**
+3. Persistência: migração do banco, atribuições por mesa e transação única com a cerimônia. Inclui o corte de `parseProjectFile`, rascunhos e API para v2. **Concluída localmente em 09/11/2026: migração `0002_reception`, v2 em contrato, API, editor, rascunhos e exportação; testes integrados com PostgreSQL. API e web precisam ser publicadas juntas (ver ADR-0012).**
+4. Editor: alternância Cerimônia/Festa, salão, mesas, elementos, atribuição e alternativa sem arraste. **Implementada localmente em 10/11/2026, carregada sob demanda; conferida no navegador (desktop e emulação de celular) com rascunho local. Faltam: medir o cenário máximo, toque em aparelho real e o fluxo com conta pela web.**
 5. Saídas e fechamento: PNG, impressão, lista por mesa, acessibilidade e medições.
 
 Depois do contrato, persistência e interface podem andar em paralelo com arquivos exclusivos; alterações de contrato ficam com o coordenador.

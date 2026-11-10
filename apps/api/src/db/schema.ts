@@ -13,7 +13,7 @@ import {
   unique,
   uuid,
 } from 'drizzle-orm/pg-core';
-import type { CeremonyProject } from '@enlace/contracts';
+import type { CeremonyProject, Reception } from '@enlace/contracts';
 import { user as authUsers } from '../auth-schema.js';
 
 // The authentication adapter owns the `user` table. User IDs are text by contract.
@@ -30,6 +30,9 @@ export const projects = pgTable(
     weddingDate: date('wedding_date'),
     layoutSchemaVersion: integer('layout_schema_version').notNull().default(1),
     layout: jsonb('layout').$type<CeremonyProject['layout']>().notNull(),
+    // Planta da festa sem as atribuições (salão, mesas e elementos); nula enquanto não existir.
+    receptionSchemaVersion: integer('reception_schema_version'),
+    reception: jsonb('reception').$type<Omit<Reception, 'tableAssignments'>>(),
     revision: integer('revision').notNull().default(1),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -38,6 +41,11 @@ export const projects = pgTable(
     index('projects_owner_updated_idx').on(table.ownerId, table.updatedAt.desc()),
     check('projects_layout_schema_version_check', sql`${table.layoutSchemaVersion} = 1`),
     check('projects_revision_positive_check', sql`${table.revision} > 0`),
+    // Escrito sem comparações que resultem em NULL: CHECK com resultado NULL passa.
+    check(
+      'projects_reception_check',
+      sql`(${table.reception} IS NULL) = (${table.receptionSchemaVersion} IS NULL) AND (${table.reception} IS NULL OR (jsonb_typeof(${table.reception}) = 'object' AND ${table.receptionSchemaVersion} = 1))`,
+    ),
   ],
 );
 
@@ -75,6 +83,28 @@ export const seatAssignments = pgTable(
   (table) => [
     primaryKey({ columns: [table.projectId, table.seatId] }),
     unique('seat_assignments_project_guest_unique').on(table.projectId, table.guestId),
+    foreignKey({
+      columns: [table.projectId, table.guestId],
+      foreignColumns: [guests.projectId, guests.id],
+    }).onDelete('cascade'),
+  ],
+);
+
+// Mesa da festa de cada convidado. A mesa vive no JSONB `projects.reception`; a existência dela é
+// validada pelo contrato antes da gravação. A ordem importa: reduzir cadeiras retira os últimos.
+export const tableAssignments = pgTable(
+  'table_assignments',
+  {
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    guestId: uuid('guest_id').notNull(),
+    tableId: uuid('table_id').notNull(),
+    sortOrder: integer('sort_order').notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.projectId, table.guestId] }),
+    index('table_assignments_project_table_idx').on(table.projectId, table.tableId),
     foreignKey({
       columns: [table.projectId, table.guestId],
       foreignColumns: [guests.projectId, guests.id],

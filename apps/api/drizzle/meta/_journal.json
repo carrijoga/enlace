@@ -15,6 +15,13 @@
       "when": 1794116857113,
       "tag": "0001_remove_receipt_date_index",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794274614276,
+      "tag": "0002_reception",
+      "breakpoints": true
     }
   ]
 }

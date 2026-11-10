@@ -44,6 +44,14 @@ Executar nos formatos tradicional e meia-lua, com lados assimétricos e ocupaç�
 
 Medir abertura com cache vazio e navegação posterior separadamente. Registrar carregamento da rota e do projeto, edição local, salvamento, prévia CSV e exportações. Usar rede controlada ou informar suas condições; distância até a região da aplicação/banco afeta a espera por dados.
 
+## Ensaio de arraste da festa (fase 6)
+
+`scripts/bench-drag.html` é uma página descartável, sem dependências, com o cenário máximo da festa (100 mesas, 60 elementos, 300 nomes) e cenários menores. Durante o arraste só o `transform` do elemento muda, no máximo uma vez por quadro. Uso: `pnpm run build:web`, copiar para `apps/web/.svelte-kit/output/client/bench-drag.html`, iniciar o preview `web-preview-lan` e abrir `http://<IP-do-PC>:4173/bench-drag.html` no Moto G84. Arrastar à mão até haver pelo menos 100 amostras e tocar em "Ver resultado".
+
+Desde a etapa 3 o schema da festa (`projectSchema`) faz parte do JavaScript inicial, porque abrir, salvar e validar rascunhos exige o projeto completo: cerca de 1,8 KiB gzip medido isolado. `/editor` mediu 89.962 bytes gzip no build de produção de 09/11 (entradas, layout e página, imports estáticos do manifest, gzip nível 9; método diferente das medições anteriores, então não comparar diretamente). Geometria, avisos e comandos da festa (`@enlace/domain/reception`) devem continuar carregados só ao abrir a festa. Na etapa 4 (10/11) o editor da festa entrou como `import()`: chunk próprio de ~19,6 KiB gzip (domínio e componentes), fora do fechamento estático de `/editor`, que mediu 90.758 bytes gzip pelo mesmo método (+796 bytes do botão e do carregador). O cenário máximo da festa (100 mesas, 60 elementos, 300 convidados) ainda não foi medido no editor real.
+
+A latência vai do `timeStamp` do evento de ponteiro mais novo até uma mensagem postada dentro do `requestAnimationFrame`, estimativa do momento pós-pintura. Não inclui o atraso do sensor de toque nem a composição na GPU. Critério: p95 ≤ 50 ms e poucos quadros acima de 50 ms. "Arraste automático" é só teste de fumaça e aparece separado como sintético. Ainda não há medição válida: o único ensaio até agora foi num painel de navegador oculto, com `requestAnimationFrame` limitado, e serviu apenas para confirmar o funcionamento.
+
 ## Servidor e PostgreSQL
 
 - Manter API e banco na mesma região quando disponível e usar a rede privada entre os serviços da Railway. O frontend Vercel não conecta ao banco.

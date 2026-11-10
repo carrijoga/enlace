@@ -1,6 +1,6 @@
 # ADR-0012 — Planta da festa
 
-Status: proposta em 09/11/2026. As escolhas marcadas como "decisão do usuário" estão confirmadas; o restante é proposta técnica e pode mudar na descoberta da fase 6. Nada deste documento está implementado.
+Status: em implementação desde 09/11/2026. As escolhas marcadas como "decisão do usuário" estão confirmadas; o restante é proposta técnica e pode mudar durante a fase 6. Implementados: contrato v2, domínio da festa (em subpath próprio), persistência e o editor da festa (etapa 4, local). Faltam as saídas da festa (PNG, impressão, lista por mesa) e as medições da etapa 5. Ver "Andamento" no fim do documento.
 
 ## Contexto
 
@@ -56,9 +56,44 @@ Segue o padrão atual: salão, mesas e elementos em JSONB versionado, atribuiç�
 - Com medidas reais, as pessoas confiam na escala; os avisos e o texto sobre precisão fazem parte da entrega.
 - A ordem recomendada é iniciar depois do aceite hospedado da fase 5, para não misturar uma mudança grande de dados com uma versão ainda não validada em ambiente real.
 
+## Andamento (09/11/2026)
+
+O usuário pediu o início da fase 6 antes do aceite hospedado da fase 5, que era apenas recomendação.
+
+Decisões técnicas tomadas ao implementar:
+
+- **Corte em duas etapas.** Na etapa 2, `reception` viveu em subpaths próprios e `parseProjectFile`, rascunhos e API seguiram em v1, recusando o campo: a API grava só colunas conhecidas, e aceitar o campo antes faria o servidor responder sucesso e perder a festa. O corte para v2 aconteceu junto da migração do banco, na etapa 3 (abaixo).
+- **Subpath em vez de tree-shaking.** Schemas Zod são chamadas no topo do módulo e podem permanecer no pacote; o subpath garante por construção que o código da festa não entra no JavaScript inicial. Na etapa 3 só o contrato saiu do subpath; o domínio da festa continua nele.
+- **Capacidade é aviso.** Atribuir acima das cadeiras é permitido e gera `table_over_capacity`, como pedem os avisos da proposta. Reduzir cadeiras retira os excedentes, na ordem inversa de atribuição, depois da confirmação feita pela interface.
+- **Faixa de cadeiras nos avisos.** Mesas ocupam 45 cm além do tampo para calcular passagem; mesa retangular só nos lados maiores, onde ficam as cadeiras. Sobreposição usa só o tampo.
+- **Quem não forma passagem.** Pista e área de fotos são caminháveis: acusam sobreposição, não passagem estreita. Itens encostados (até 10 cm) em parede ou outro item também não geram aviso, para mesa de bolo junto da de doces, por exemplo.
+- **Colunas** são retângulos sem rotação, limitadas a 40; **portas** a 20. Trocar o contorno remove as portas que não cabem, e `getRoomChangeImpact` permite confirmar antes.
+
+Etapa 3, persistência e corte para v2 (09/11/2026):
+
+- **v2 é o formato atual.** `projectSchema`/`Project` (cerimônia estrita mais `reception` obrigatório e anulável) ficam na entrada principal de `@enlace/contracts`; o subpath `@enlace/contracts/reception` foi removido. `parseProjectFile` devolve v2 e migra v1 e v3 com `reception: null`. Transporte da API usa o projeto completo.
+- **O contrato entra no JavaScript inicial; a festa não.** Validar rascunho, resposta da API e salvamento exige o schema já na abertura. Custo medido: cerca de 1,8 KiB gzip (módulo isolado, minificado); `/editor` ficou em ~88 KiB gzip no build de produção, contra 150 KiB de orçamento. Geometria, avisos e comandos da festa continuam em `@enlace/domain/reception` e não aparecem em nenhum chunk da web.
+- **Projeto sem `reception` é recusado (400), não tratado como nulo.** Um cliente anterior ao v2 que salvasse sem o campo apagaria a festa em silêncio. Só os rascunhos de conta já salvos no navegador antes do corte aceitam a ausência como `null`: naquela revisão o servidor ainda não tinha festa.
+- **Banco:** `projects.reception` (JSONB com salão, mesas e elementos) e `projects.reception_schema_version`, com `CHECK` que exige os dois nulos ou os dois preenchidos (versão 1, objeto). `table_assignments` tem chave `(project_id, guest_id)`, FK composta para `guests` com cascata e `sort_order`, porque reduzir cadeiras retira os últimos atribuídos. A mesa vive no JSONB, então sua existência é validada pelo contrato antes do commit, como já ocorre com cadeiras. Tudo grava na mesma transação, revisão e recibo da cerimônia.
+- **Remover convidado** (`removeGuest` do domínio da cerimônia) também retira a mesa dele; sem isso o próximo salvamento seria recusado por referência inválida.
+- **Publicação conjunta.** API (com a migração no pré-deploy) e web precisam ir ao ar juntas: a web antiga recusa projetos com `reception` vindos da API nova, e a API antiga recusa salvamentos com `reception` da web nova. Não há perda de dados nessa janela, só erro visível. Recibo de idempotência gravado antes do corte não reconhece a repetição da mesma operação depois dele (`operation_reused`); o cliente recarrega o projeto.
+
+Etapa 4, editor (10/11/2026):
+
+- **Medição no Moto G84 adiada (decisão do usuário).** A etapa 4 começou sem o ensaio de arraste no aparelho. O risco continua: se o p95 passar de 50 ms no Moto G84, a interface de arraste terá de mudar. A medição segue obrigatória no aceite da fase 6.
+- **Alternância no cabeçalho.** "Cerimônia | Festa" troca a área de trabalho inteira; cabeçalho, desfazer, salvamento, rascunhos e confirmações são os mesmos. A escolha fica em `sessionStorage` (`enlace:editor-view:v1`), não na URL: as APIs de histórico conflitam com o roteador do SvelteKit e a regra de lint de navegação não aceita manter `?project=`.
+- **Carregamento sob demanda.** `ReceptionEditor.svelte` e os componentes em `apps/web/src/lib/editor/reception/` entram por `import()` ao abrir a festa: chunk próprio de ~19,6 KiB gzip. O JavaScript inicial de `/editor` passou de 89.962 para 90.758 bytes gzip (só o botão e o carregador).
+- **Atribuição sem arrastar convidado.** Escolher a pessoa e tocar na mesa (na planta ou na lista), ou o seletor "Sentar em…" de cada convidado. Arrastar convidado até a mesa não foi feito; arrastar serve para mover elementos.
+- **Teclado.** A planta tem uma parada de Tab (elemento selecionado ou o primeiro); setas movem 10 cm e Shift+setas 50 cm, cada passo uma alteração com desfazer. Para chegar a outro elemento sem mouse, usar "Ver salão em lista" ou os avisos, que selecionam o elemento.
+- **Elementos novos** entram no centro do salão, encaixados na grade. Mesa retangular nova: 1,8 × 0,9 m, 6 cadeiras. Coluna nova: 40 × 40 cm.
+- **Medidas digitadas não são encaixadas na grade**; só o arraste e as setas encaixam. O contrato aceita qualquer centímetro inteiro.
+- **Confirmações**, pela mesma janela da cerimônia, citando até quatro nomes: reduzir cadeiras abaixo da ocupação, remover mesa com convidados e trocar o contorno quando portas deixam de caber.
+
+Valores provisórios das questões abertas, a revisar quando a interface existir: passagem mínima indicativa de 90 cm e medidas padrão em `RECEPTION_ITEM_DEFAULTS`.
+
 ## Questões abertas
 
 - Lista de formatos prontos além de retângulo, quadrado e L.
-- Medidas padrão de cada elemento e distância mínima usada no aviso de passagem.
+- Confirmação das medidas padrão de cada elemento e da passagem mínima (valores provisórios acima).
 - Mesa dos noivos como tipo próprio ou mesa comum com nome.
 - Se categorias de convidados aparecem no desenho da mesa ou só na lista.

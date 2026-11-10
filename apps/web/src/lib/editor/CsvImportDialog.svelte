@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { createUuid, type CeremonyProject } from '@enlace/contracts';
+  import { createUuid, type Project } from '@enlace/contracts';
   import { GUEST_CATEGORY_OPTIONS } from './guest-categories';
   import {
     CsvError,
@@ -19,7 +19,7 @@
     type GuestCategory,
   } from './files/csv';
 
-  type Guests = CeremonyProject['guests'];
+  type Guests = Project['guests'];
 
   let {
     existingNames,

@@ -1,10 +1,10 @@
 <script lang="ts">
-  import type { CeremonyProject } from '@enlace/contracts';
+  import type { Project } from '@enlace/contracts';
 
   type LayoutPatch = Partial<
-    Pick<CeremonyProject['layout'], 'mode' | 'curveStrength' | 'aisleWidth' | 'linkedCounts'>
+    Pick<Project['layout'], 'mode' | 'curveStrength' | 'aisleWidth' | 'linkedCounts'>
   >;
-  type DetailsPatch = Partial<Pick<CeremonyProject, 'title' | 'couple' | 'weddingDate'>>;
+  type DetailsPatch = Partial<Pick<Project, 'title' | 'couple' | 'weddingDate'>>;
   let {
     project,
     onLayoutChange,
@@ -13,7 +13,7 @@
     onRemoveRow,
     onDetailsChange,
   }: {
-    project: CeremonyProject;
+    project: Project;
     onLayoutChange: (patch: LayoutPatch) => void;
     onRowCount: (rowId: string, side: 'left' | 'right', count: number) => void;
     onAddRow: () => void;

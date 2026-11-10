@@ -1,0 +1,458 @@
+<!doctype html>
+<!-- Ensaio descartável de arrasto em celular físico (planta da festa). Dados fictícios, sem dependências.
+Uso: `pnpm run build`; copiar este arquivo para apps/web/.svelte-kit/output/client/bench-drag.html; iniciar o preview `web-preview-lan`; abrir http://<IP-do-PC>:4173/bench-drag.html no celular (HTTP simples, sem contexto seguro: não usa crypto.randomUUID).
+Procedimento: escolher o cenário, arrastar mesas/itens com o dedo repetidamente (>= 100 quadros com escrita), tocar em "Ver resultado" e copiar o texto. "Zerar" limpa as amostras.
+O que é medido: (a) latência entrada→quadro = (timestamp do rAF − timeStamp do evento de ponteiro mais novo daquele quadro) + estimativa do próximo paint (rAF + MessageChannel); (b) intervalo entre quadros durante o arrasto, com contagem de quadros > 50 ms.
+Limites: não mede o tempo real de composição na GPU nem a latência do toque no hardware/SO (o timeStamp do evento já vem depois deles); a estimativa de paint é um proxy, não um valor exato. O arraste automático é SINTÉTICO (desktop, não é dedo real). -->
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ensaio de arrasto · Enlace</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        font:
+          14px system-ui,
+          sans-serif;
+        background: #f6f3ee;
+        color: #222;
+      }
+      #bar {
+        padding: 8px;
+        background: #295842;
+        color: #fff;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      #bar button,
+      #bar select {
+        font: inherit;
+        min-height: 44px;
+        padding: 0 12px;
+        border: 0;
+        border-radius: 6px;
+        background: #fff;
+        color: #295842;
+        font-weight: 600;
+      }
+      #bar label {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+      #wrap {
+        overflow: auto;
+        background: #fff;
+        border-bottom: 1px solid #ccc;
+      }
+      svg {
+        display: block;
+        width: 100%;
+        height: auto;
+        background: #fbfaf7;
+      }
+      .d {
+        touch-action: none;
+        cursor: grab;
+      }
+      text {
+        pointer-events: none;
+        user-select: none;
+        -webkit-user-select: none;
+        font-family: system-ui, sans-serif;
+      }
+      #warn {
+        margin: 8px;
+        padding: 8px;
+        background: #ffe9b0;
+        border-radius: 6px;
+        display: none;
+      }
+      #out {
+        margin: 8px;
+        white-space: pre-wrap;
+        user-select: all;
+        -webkit-user-select: all;
+        font:
+          12px ui-monospace,
+          monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="bar">
+      <label
+        >Cenário
+        <select id="sc">
+          <option value="100,60,300">100 mesas / 60 itens / 300 nomes</option>
+          <option value="50,30,150">50 mesas / 30 itens / 150 nomes</option>
+          <option value="20,10,60">20 mesas / 10 itens / 60 nomes</option>
+        </select>
+      </label>
+      <label
+        >Zoom
+        <select id="zm">
+          <option value="100">Ajustar</option>
+          <option value="200">2x</option>
+          <option value="400">4x</option>
+        </select>
+      </label>
+      <button id="reset">Zerar</button>
+      <button id="show">Ver resultado</button>
+      <button id="auto">Arraste automático</button>
+    </div>
+    <div id="wrap"><svg id="svg" viewBox="0 0 3000 2000" width="390" height="260"></svg></div>
+    <div id="warn"></div>
+    <pre id="out">Arraste uma mesa ou item e toque em "Ver resultado".</pre>
+    <script>
+      var W = 3000,
+        H = 2000,
+        GRID = 10;
+      var svg = document.getElementById('svg');
+      var $ = function (id) {
+        return document.getElementById(id);
+      };
+      var NAMES = [
+        'Ana',
+        'Beto',
+        'Clara',
+        'Davi',
+        'Elisa',
+        'Fábio',
+        'Gisele',
+        'Hugo',
+        'Inês',
+        'João',
+        'Kátia',
+        'Lúcio',
+        'Marta',
+        'Nando',
+        'Olga',
+        'Paulo',
+        'Rita',
+        'Sérgio',
+        'Tânia',
+        'Vítor',
+      ];
+      var ITEMS = ['Pista', 'DJ', 'Bolo', 'Doces', 'Bar', 'Buffet', 'Fotos'];
+      var seed = 7;
+      function rnd() {
+        seed = (seed * 1664525 + 1013904223) >>> 0;
+        return seed / 4294967296;
+      }
+
+      // Gera o cenário como string (benchmark descartável). Cada <g class="d"> tem o conteúdo centrado na origem.
+      function build(nT, nI, nN) {
+        seed = 7;
+        var cols = Math.ceil(Math.sqrt(nT * 1.5)),
+          rows = Math.ceil(nT / cols);
+        var cw = W / cols,
+          ch = H / rows,
+          s = '',
+          k = 0,
+          nameCount = 0;
+        for (var i = 0; i < nT; i++) {
+          var x = Math.round((cw * (i % cols) + cw / 2) / GRID) * GRID,
+            y = Math.round((ch * Math.floor(i / cols) + ch / 2) / GRID) * GRID;
+          var n = 6 + (i % 5),
+            body = '<circle r="95" fill="transparent"/>',
+            round = i % 2 === 0;
+          if (round) {
+            body += '<circle r="45" fill="#e9dcc3" stroke="#8a7a55" stroke-width="3"/>';
+            for (var c = 0; c < n; c++) {
+              var a = (c / n) * 6.2832;
+              body +=
+                '<circle cx="' +
+                (62 * Math.cos(a)).toFixed(1) +
+                '" cy="' +
+                (62 * Math.sin(a)).toFixed(1) +
+                '" r="14" fill="#9db7a6"/>';
+            }
+          } else {
+            body +=
+              '<rect x="-70" y="-35" width="140" height="70" rx="6" fill="#e9dcc3" stroke="#8a7a55" stroke-width="3"/>';
+            var per = Math.ceil(n / 2);
+            for (var c2 = 0; c2 < n; c2++) {
+              var cx = -52 + (c2 % per) * (104 / Math.max(per - 1, 1)),
+                cy = c2 < per ? -50 : 50;
+              body += '<circle cx="' + cx.toFixed(1) + '" cy="' + cy + '" r="14" fill="#9db7a6"/>';
+            }
+          }
+          body +=
+            '<text y="6" font-size="20" text-anchor="middle" font-weight="700">Mesa ' +
+            (i + 1) +
+            '</text>';
+          var perTable = Math.ceil(nN / nT);
+          for (var m = 0; m < perTable && nameCount < nN; m++, nameCount++)
+            body +=
+              '<text y="' +
+              (92 + m * 16) +
+              '" font-size="14" text-anchor="middle">' +
+              NAMES[(nameCount * 7) % NAMES.length] +
+              ' ' +
+              String.fromCharCode(65 + (nameCount % 26)) +
+              '.</text>';
+          s +=
+            '<g class="d" data-x="' +
+            x +
+            '" data-y="' +
+            y +
+            '" transform="translate(' +
+            x +
+            ' ' +
+            y +
+            ')">' +
+            body +
+            '</g>';
+        }
+        for (var j = 0; j < nI; j++) {
+          var ix = Math.round((100 + rnd() * (W - 200)) / GRID) * GRID,
+            iy = Math.round((60 + rnd() * (H - 120)) / GRID) * GRID;
+          s +=
+            '<g class="d" data-x="' +
+            ix +
+            '" data-y="' +
+            iy +
+            '" transform="translate(' +
+            ix +
+            ' ' +
+            iy +
+            ')"><rect x="-60" y="-30" width="120" height="60" rx="8" fill="#d8c3df" stroke="#7a5d86" stroke-width="3"/><text y="6" font-size="20" text-anchor="middle">' +
+            ITEMS[j % ITEMS.length] +
+            '</text></g>';
+        }
+        svg.innerHTML =
+          '<rect width="3000" height="2000" fill="none" stroke="#999" stroke-width="6"/>' + s;
+      }
+
+      // ---- amostras (separadas: dedo real x sintético) ----
+      var S = { real: { lat: [], fi: [], long: 0 }, syn: { lat: [], fi: [], long: 0 } };
+      function resetAll() {
+        S = { real: { lat: [], fi: [], long: 0 }, syn: { lat: [], fi: [], long: 0 } };
+        $('out').textContent = 'Amostras zeradas.';
+        $('warn').style.display = 'none';
+      }
+
+      // ---- arrasto ----
+      var drag = null; // {g, id, inv, sx, sy, ox, oy, ev, dirty, last, bucket, raf}
+      function snap(v) {
+        return Math.round(v / GRID) * GRID;
+      }
+
+      function frame(ts) {
+        var d = drag;
+        if (!d) return;
+        if (d.last) {
+          var dt = ts - d.last;
+          d.bucket.fi.push(dt);
+          if (dt > 50) d.bucket.long++;
+        }
+        d.last = ts;
+        if (d.dirty) {
+          d.dirty = false;
+          var ev = d.ev,
+            x = snap(d.ox + (ev.clientX - d.sx) * d.inv),
+            y = snap(d.oy + (ev.clientY - d.sy) * d.inv);
+          x = Math.max(0, Math.min(W, x));
+          y = Math.max(0, Math.min(H, y));
+          if (x !== d.cx || y !== d.cy) {
+            d.cx = x;
+            d.cy = y;
+            d.g.setAttribute('transform', 'translate(' + x + ' ' + y + ')');
+          } // única escrita no DOM durante o arrasto
+          var evTs = ev.timeStamp,
+            b = d.bucket;
+          // Estimativa do paint: a mensagem é postada dentro do rAF e roda após o quadro ser pintado (na prática).
+          // Latência = (instante da mensagem) − (timeStamp do evento) = (ts do rAF − evento) + (rAF→pós-paint estimado).
+          d.mc.port2.onmessage = function () {
+            b.lat.push(performance.now() - evTs);
+          };
+          d.mc.port1.postMessage(0);
+        }
+        d.raf = requestAnimationFrame(frame);
+      }
+
+      svg.addEventListener('pointerdown', function (e) {
+        if (drag) return; // um ponteiro ativo
+        var g = e.target.closest && e.target.closest('g.d');
+        if (!g) return;
+        var m = svg.getScreenCTM(); // única leitura de layout, em cache durante o arrasto
+        if (!m) return;
+        try {
+          g.setPointerCapture(e.pointerId);
+        } catch (_) {
+          /* ponteiro sintético não pode ser capturado */
+        }
+        var mc = new MessageChannel();
+        drag = {
+          g: g,
+          id: e.pointerId,
+          inv: 1 / m.a,
+          sx: e.clientX,
+          sy: e.clientY,
+          ox: +g.dataset.x,
+          oy: +g.dataset.y,
+          cx: +g.dataset.x,
+          cy: +g.dataset.y,
+          ev: e,
+          dirty: false,
+          last: 0,
+          bucket: synth ? S.syn : S.real,
+          mc: mc,
+        };
+        drag.raf = requestAnimationFrame(frame);
+        e.preventDefault();
+      });
+      svg.addEventListener('pointermove', function (e) {
+        if (!drag || e.pointerId !== drag.id) return;
+        var c = e.getCoalescedEvents ? e.getCoalescedEvents() : null;
+        drag.ev = c && c.length ? c[c.length - 1] : e; // o mais novo; só a última posição vale por quadro
+        if (drag.ev.timeStamp < e.timeStamp && !synth) drag.ev = e;
+        drag.dirty = true;
+      });
+      function end(e) {
+        if (!drag || e.pointerId !== drag.id) return;
+        cancelAnimationFrame(drag.raf);
+        // Soltar antes do próximo quadro não pode perder a última posição.
+        if (drag.dirty) {
+          drag.cx = Math.max(
+            0,
+            Math.min(W, snap(drag.ox + (drag.ev.clientX - drag.sx) * drag.inv)),
+          );
+          drag.cy = Math.max(
+            0,
+            Math.min(H, snap(drag.oy + (drag.ev.clientY - drag.sy) * drag.inv)),
+          );
+          drag.g.setAttribute('transform', 'translate(' + drag.cx + ' ' + drag.cy + ')');
+        }
+        drag.g.dataset.x = drag.cx;
+        drag.g.dataset.y = drag.cy;
+        drag = null;
+      }
+      svg.addEventListener('pointerup', end);
+      svg.addEventListener('pointercancel', end);
+
+      // ---- arraste automático (SINTÉTICO) ----
+      var synth = false;
+      $('auto').onclick = function () {
+        if (drag || synth) return;
+        var g = svg.querySelector('g.d'),
+          r = g.getBoundingClientRect();
+        var x0 = r.left + r.width / 2,
+          y0 = r.top + r.height / 2,
+          R = Math.min(r.width * 3, 60),
+          n = 0,
+          id = 99;
+        function opts(x, y) {
+          return {
+            bubbles: true,
+            cancelable: true,
+            pointerId: id,
+            isPrimary: true,
+            clientX: x,
+            clientY: y,
+            button: 0,
+            buttons: 1,
+          };
+        }
+        synth = true;
+        g.dispatchEvent(new PointerEvent('pointerdown', opts(x0, y0)));
+        (function step() {
+          if (n++ < 300) {
+            var a = n / 20;
+            g.dispatchEvent(
+              new PointerEvent(
+                'pointermove',
+                opts(x0 + R * Math.sin(a), y0 + R * (1 - Math.cos(a))),
+              ),
+            );
+            requestAnimationFrame(step);
+          } else {
+            g.dispatchEvent(new PointerEvent('pointerup', opts(x0, y0)));
+            synth = false;
+            show();
+          }
+        })();
+      };
+
+      // ---- resultado ----
+      function pct(a, p) {
+        if (!a.length) return '-';
+        var s = a.slice().sort(function (x, y) {
+          return x - y;
+        });
+        return s[Math.min(s.length - 1, Math.max(0, Math.ceil(p * s.length) - 1))].toFixed(1);
+      }
+      function line(name, a) {
+        return (
+          name +
+          ': n=' +
+          a.length +
+          ' p50=' +
+          pct(a, 0.5) +
+          ' p95=' +
+          pct(a, 0.95) +
+          ' p99=' +
+          pct(a, 0.99) +
+          ' max=' +
+          pct(a, 1) +
+          ' ms'
+        );
+      }
+      function block(title, b) {
+        return (
+          title +
+          '\n' +
+          line('  latência entrada→quadro (+paint estimado)', b.lat) +
+          '\n' +
+          line('  intervalo entre quadros', b.fi) +
+          '\n  quadros > 50 ms: ' +
+          b.long
+        );
+      }
+      function show() {
+        var txt =
+          'ENSAIO DE ARRASTO · cenário ' +
+          $('sc').selectedOptions[0].textContent +
+          ' · zoom ' +
+          $('zm').selectedOptions[0].textContent +
+          '\nuserAgent: ' +
+          navigator.userAgent +
+          '\ndevicePixelRatio: ' +
+          devicePixelRatio +
+          '\nviewport: ' +
+          innerWidth +
+          'x' +
+          innerHeight +
+          '\n\n' +
+          block('DEDO REAL', S.real) +
+          '\n\n' +
+          block('SINTÉTICO (arraste automático, não é dedo real)', S.syn);
+        $('out').textContent = txt;
+        var w = $('warn'),
+          low = S.real.lat.length < 100;
+        w.style.display = low ? 'block' : 'none';
+        if (low)
+          w.textContent =
+            'Atenção: só ' +
+            S.real.lat.length +
+            ' amostras de dedo real (< 100). O p95 não é confiável; repita o arrasto várias vezes.';
+      }
+      $('show').onclick = show;
+      $('reset').onclick = resetAll;
+      $('sc').onchange = function () {
+        var v = $('sc').value.split(',').map(Number);
+        build(v[0], v[1], v[2]);
+        resetAll();
+      };
+      $('zm').onchange = function () {
+        svg.style.width = $('zm').value + '%';
+      };
+      $('sc').onchange();
+    </script>
+  </body>
+</html>

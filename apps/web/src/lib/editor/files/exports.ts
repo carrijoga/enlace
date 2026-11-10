@@ -1,8 +1,4 @@
-import {
-  ceremonyProjectSchema,
-  projectDocumentSchema,
-  type CeremonyProject,
-} from '@enlace/contracts';
+import { projectSchema, projectDocumentSchema, type Project } from '@enlace/contracts';
 import { createMapSvg } from './pure-svg.js';
 
 function slug(value: string): string {
@@ -28,12 +24,12 @@ function triggerDownload(blob: Blob, filename: string): void {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function exportProjectJson(projectInput: CeremonyProject): string {
-  const project = ceremonyProjectSchema.parse(projectInput);
+export function exportProjectJson(projectInput: Project): string {
+  const project = projectSchema.parse(projectInput);
   return JSON.stringify(
     projectDocumentSchema.parse({
       format: 'enlace-project',
-      schemaVersion: 1,
+      schemaVersion: 2,
       exportedAt: new Date().toISOString(),
       project,
     }),
@@ -42,7 +38,7 @@ export function exportProjectJson(projectInput: CeremonyProject): string {
   );
 }
 
-export function downloadProjectJson(project: CeremonyProject): void {
+export function downloadProjectJson(project: Project): void {
   triggerDownload(
     new Blob([exportProjectJson(project)], { type: 'application/json;charset=utf-8' }),
     `${slug(project.title)}.enlace.json`,
@@ -56,10 +52,7 @@ export function downloadRawDraft(raw: string): void {
   );
 }
 
-export async function downloadMapPng(
-  project: CeremonyProject,
-  personalGuestId?: string,
-): Promise<void> {
+export async function downloadMapPng(project: Project, personalGuestId?: string): Promise<void> {
   const svg = createMapSvg(project, personalGuestId);
   const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
   const svgUrl = URL.createObjectURL(svgBlob);

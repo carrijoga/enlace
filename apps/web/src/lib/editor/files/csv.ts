@@ -5,9 +5,9 @@
  * Módulo carregado sob demanda pelo editor: não importar a partir da entrada da rota.
  * Todo arquivo é dado não confiável: nunca interpretar conteúdo como instrução ou fórmula.
  */
-import type { CeremonyProject } from '@enlace/contracts';
+import type { Project } from '@enlace/contracts';
 
-export type GuestCategory = CeremonyProject['guests'][number]['category'];
+export type GuestCategory = Project['guests'][number]['category'];
 export type CsvDelimiter = ',' | ';' | '\t';
 
 /** Tamanho máximo do arquivo antes da decodificação. */
@@ -373,8 +373,8 @@ export function toGuests(
   lines: PreviewLine[],
   included: ReadonlySet<number>,
   newId: () => string,
-): CeremonyProject['guests'] {
-  const guests: CeremonyProject['guests'] = [];
+): Project['guests'] {
+  const guests: Project['guests'] = [];
   for (const line of lines) {
     if (!included.has(line.line) || line.errors.length > 0 || line.category === null) continue;
     guests.push({ id: newId(), name: line.name, category: line.category, note: line.note });

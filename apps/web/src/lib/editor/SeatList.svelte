@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { CeremonyProject } from '@enlace/contracts';
+  import type { Project } from '@enlace/contracts';
   import { GUEST_CATEGORIES } from './guest-categories';
 
   // Alternativa em texto à planta SVG (WCAG 1.1.1/2.5.8): mesma seleção e atribuição, sem depender
@@ -12,7 +12,7 @@
     onAssignGuest,
     onUnassignSeat,
   }: {
-    project: CeremonyProject;
+    project: Project;
     selectedGuestId: string | null;
     selectedSeatId: string | null;
     onSeatSelect: (id: string) => void;

@@ -1,6 +1,34 @@
 # Memória do projeto — Enlace
 
-Atualizado em 09/11/2026, America/Sao_Paulo.
+Atualizado em 10/11/2026, America/Sao_Paulo.
+
+## Fase 6, etapa 4 (editor da festa) — 10/11/2026
+
+Pedido do usuário ("keep with next step"), que decidiu adiar a medição no Moto G84; ela continua no aceite da fase (ADR-0012, roadmap). Etapas 1–4 commitadas em 10/11 em `codex/ceremony-editor`, a pedido do usuário, sem push. Coordenador: contratos de props em `apps/web/src/lib/editor/reception/contracts.ts`, `ReceptionEditor.svelte` (seleção, confirmações, textos dos avisos, layout e abas no celular) e a alternância "Cerimônia | Festa" em `routes/editor/+page.svelte` (`import()` sob demanda, `confirmAction`, aba guardada em `sessionStorage`). Três subagents Sonnet com arquivos exclusivos, revisados e testados pelo coordenador: `ReceptionCanvas.svelte` (SVG em cm, arraste só com `transform` por quadro, setas 10/50 cm, zoom), `RoomSetup.svelte` + `ElementInspector.svelte` (formatos, salão manual, portas, colunas, propriedades em metros), `TableGuests.svelte` + `ElementList.svelte` (convidados por mesa, "Sentar em…", "Ver salão em lista"). Decisões no ADR-0012 ("Etapa 4").
+
+Validação: check/lint/format ok; `pnpm test` 176 aprovados (24 integrados pulados, backend inalterado). Navegador (dev, rascunho local, exemplo fictício): criar salão, mesa, arrastar (encaixa e grava), atribuir por seletor e por toque na mesa, reduzir cadeiras com confirmação, desfazer, remover mesa com convidados (confirmação), sobreposição pista/DJ e setas desfazendo o aviso, layout de celular (planta primeiro). Build de produção: `/editor` 90.758 bytes gzip; festa em chunk dinâmico de ~19,6 KiB. Não verificados: cenário máximo, toque em aparelho real, fluxo com conta pela web.
+
+Próximo passo: etapa 5 (PNG e impressão do salão, lista por mesa, acessibilidade e medições, incluindo o Moto G84). Ficaram fora dos commits: Dockerfile, `.dockerignore`, `compose*.yaml` e `.vscode/` (modelo npm genérico, incompatível com o monorepo; um Dockerfile na raiz faria a Railway trocar o Railpack por ele) e `.claude/launch.json` (caminhos locais).
+
+## Fase 6, etapa 3 (persistência e corte para v2) — 09/11/2026
+
+Pedido do usuário ("start stage 3"). Commitada junto da etapa 4. Coordenador: contrato (`ceremony.ts` + `reception.ts` + `index.ts`; v2 é o formato atual, `projectSchema`/`Project`; subpath `@enlace/contracts/reception` removido), domínio (comandos da cerimônia validam o projeto completo; `removeGuest` também tira a mesa; `toProjectV2`/`removeGuestFromProject` removidos), migração `apps/api/drizzle/0002_reception.sql` (`projects.reception` + `reception_schema_version` com CHECK; tabela `table_assignments` com `sort_order`), `store.ts` e testes da API. Subagent Sonnet: `apps/web/**` (tipos `Project`, rascunhos v2, rascunho de conta sem `reception` vira `null`, exportação v2, `sameProject` passou a comparar `reception`); revisado pelo coordenador. Decisões no ADR-0012 ("Etapa 3").
+
+Validação: check/lint/format ok; `pnpm test` com PostgreSQL local (`TEST_DATABASE_URL` do `docker-compose.yml`, `TEST_CREATE_DATABASE=1`): 200 testes, nenhum pulado. Corrigido no caminho: o CHECK deixava passar versão sem festa (expressão NULL aprova CHECK). Build de produção: contrato da festa ~1,8 KiB gzip no inicial, `/editor` 89.962 bytes gzip (método novo, ver `docs/desempenho.md`); domínio da festa fora dos chunks. Navegador (build de produção, sem API): rascunho v1 abre e é regravado como v2; rascunho v2 com festa preserva mesas e elementos; remover convidado sentado à mesa remove a atribuição dele e mantém a do outro. Não verificados: fluxo com conta pela web (só testes integrados da API), migração na Railway.
+
+Atenção à publicação: a API da Railway sai da `main` e já está no ar. API e web precisam ir juntas; antes disso a web antiga não abre projetos vindos da API nova e a API antiga recusa salvamentos da web nova (erro visível, sem perda). A migração `0002` roda no pré-deploy.
+
+Próximo passo (na época): medir `bench-drag.html` no Moto G84 antes da etapa 4; o usuário adiou a medição em 10/11 (seção acima).
+
+Correção em dev (10/11/2026): cadastro dava 403 `invalid_origin` porque `vite dev` escutava e mostrava `127.0.0.1:5173`, enquanto a API só confia em `WEB_ORIGIN=http://localhost:5173`. `apps/web` `dev` passou a `--host localhost` (continua só local). Reproduzido com curl: 403 com origem `127.0.0.1`, 200 com `localhost`, também pelo proxy da web. Abrir sempre `http://localhost:5173`. Em seguida, criar projeto dava 500: o banco de dev não tinha a migração `0002_reception` (os testes usam banco próprio). `pnpm run db:migrate` aplicou-a; cadastro, criação (201) e leitura do projeto pelo proxy conferidos. Todo banco existente precisa de `db:migrate` depois desta etapa.
+
+## Fase 6 iniciada — 09/11/2026
+
+Pedido do usuário, antecipando o aceite hospedado da fase 5 (era recomendação do ADR-0012). Etapas 1 e 2 do roadmap entregues (commitadas junto da etapa 4): `scripts/bench-drag.html` (subagent Sonnet, corrigido pelo coordenador: soltar antes do próximo quadro perdia a última posição) e contrato v2 + domínio em `@enlace/contracts/reception` e `@enlace/domain/reception` (coordenador). Sem consumidores ainda: `parseProjectFile`, rascunhos e API seguem em v1 e recusam `reception`, porque a API em produção grava só colunas conhecidas e perderia a festa em silêncio; o corte acontece na etapa 3.
+
+Validação: check/lint/format ok; 169 testes, 15 integrados pulados (sem PostgreSQL). Nenhum chunk da web contém código da festa; `/editor` 89.700 bytes gzip. Página de ensaio no navegador: arraste real de mouse e sintético funcionam, 375 px sem overflow. Não verificados: toque real e qualquer tempo válido (painel oculto limitou o rAF a ~5 fps).
+
+Próximo passo (na época): medir `bench-drag.html` no Moto G84 e iniciar a etapa 3, feita depois (seção acima). Valores provisórios a confirmar: passagem de 90 cm e medidas padrão dos elementos (ADR-0012).
 
 ## Deploy da API na Railway em preparação — 09/11/2026
 
@@ -8,7 +36,9 @@ ADR-0013. Pedido do usuário. `railway.toml` removido (Railway descontinuou; lei
 
 Validação: check/lint ok, 122 testes passaram e 15 integrados pulados; ensaio em contêineres `node:24.22.1-slim` + PostgreSQL 17 com `NODE_ENV=production`: install, build, bootstrap, migração com roles separadas, `/health`, `/ready`, cadastro e SIGTERM ok. Não verificados: Railpack real, HTTPS/cookies pela Vercel, privilégios na hospedagem. Nada provisionado. Entrega commitada em `codex/ceremony-editor`, sem push nem merge na `main`.
 
-Bloqueios, em ordem: (1) `origin/main` está 9 commits atrás e não tem auth/projetos/migração, então esta entrega precisa chegar à `main` antes do primeiro deploy; (2) aprovação do usuário para `railway config apply`. CLI 5.71.0 instalada e autenticada; pasta vinculada ao projeto Railway `Enlace` (vazio), ambiente `production`; plano: criar `api` e `postgres`, sem alterar ou destruir nada. `WEB_ORIGIN=https://enlace.carrijoga.com.br`, sem barra final (Cloudflare → Vercel, no ar; `/api/health` responde 503 até a API existir e `API_ORIGIN` apontar para ela). Depois seguir o runbook em `docs/desenvolvimento.md`. SMTP real continua sem configuração.
+Atualização: merge na `main` feito pelo usuário (`3e32527`) e `railway config apply` executado com aprovação dele; `api` e `postgres` existem no projeto `Enlace`, ambiente `production`. `WEB_ORIGIN` e `BETTER_AUTH_SECRET` definidos. O banco nasceu sem proxy TCP e `railway ssh` exige chave SSH inexistente na máquina. Primeiro deploy (`73e5e281`): build Railpack real ok (Node 24.22.1, pnpm 12.18.0); falhou só no pré-deploy por falta de `MIGRATOR_DATABASE_URL`/`DATABASE_URL`, como previsto. Depois, com proxy TCP temporário e TLS: logins `enlace_app`/`enlace_deploy` criados, URLs definidas na Railway, proxy removido, migrações aplicadas. API no ar em `https://api-production-22a6.up.railway.app`, `/health` e `/ready` 200, `PORT=3000`.
+
+Pendências: (1) `API_ORIGIN` na Vercel com esse endereço e novo deploy da web; depois testar cadastro, login e salvamento no site real. (2) Divergência no banco: roda PostgreSQL 18.6, não 17 como declarado, e a região não foi verificada; o plano propõe mudança destrutiva, não confirmar (ADR-0013). Decidir entre manter 18 alinhando Compose/CI/backup ou recriar em 17. (3) `PORT` em `.railway/railway.ts` e docs desta etapa commitados em 10/11, sem push. SMTP não configurado. `WEB_ORIGIN=https://enlace.carrijoga.com.br`, sem barra final (Cloudflare → Vercel, no ar; `/api/health` responde 503 até a API existir e `API_ORIGIN` apontar para ela). Depois seguir o runbook em `docs/desenvolvimento.md`. SMTP real continua sem configuração.
 
 ## Planta da festa proposta como fase 6 — 09/11/2026
 
@@ -105,4 +135,3 @@ Preservados sem incluir nos commits: Dockerfile, .dockerignore, compose.yaml, co
 Original privado ignorado: prototypes/private/Planejador-da-Cerimonia-v3.html, 62.046 bytes, SHA256 7d9f86a0b89b33f6113efa4ff14f8765882a1351b0e727476866d93d813d2426. Fonte Downloads; não publicar, nem usar dados pessoais como fixture. Diagnóstico histórico permanece separado das melhorias novas.
 
 Nenhum subagent com implementação pendente ao encerrar.
-

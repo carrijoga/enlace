@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick, untrack } from 'svelte';
-  import type { CeremonyProject } from '@enlace/contracts';
+  import type { Project } from '@enlace/contracts';
   import type { LayoutGeometry, SeatGeometry } from '@enlace/domain';
   import { GUEST_CATEGORIES } from './guest-categories';
   import { glideSeats, SEAT_MOTION_LIMIT, welcomeSeat, type SeatPose } from './plan-motion';
@@ -14,7 +14,7 @@
     onSeatSelect,
     onGuestDrop,
   }: {
-    project: CeremonyProject;
+    project: Project;
     geometry: LayoutGeometry;
     selectedGuestId: string | null;
     selectedSeatId: string | null;

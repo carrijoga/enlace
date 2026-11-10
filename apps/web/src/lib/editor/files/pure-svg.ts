@@ -1,4 +1,4 @@
-import { ceremonyProjectSchema, type CeremonyProject } from '@enlace/contracts';
+import { projectSchema, type Project } from '@enlace/contracts';
 import { getLayoutGeometry, type LayoutGeometry, type SeatGeometry } from '@enlace/domain';
 import { GUEST_CATEGORIES } from '../guest-categories.js';
 
@@ -130,7 +130,7 @@ const aisleLabel = (width: number): string =>
 const firstName = (name: string): string => name.trim().split(/\s+/)[0]!;
 
 /** Primeiro nome na cadeira; pessoas homônimas ganham a inicial do sobrenome para não se confundirem. */
-function chairNames(project: CeremonyProject): Map<string, string> {
+function chairNames(project: Project): Map<string, string> {
   const seated = new Set(project.assignments.map((assignment) => assignment.guestId));
   const guests = project.guests.filter((guest) => seated.has(guest.id));
   const repeated = new Map<string, number>();
@@ -171,7 +171,7 @@ function arch(center: number): string {
 }
 
 /** Curva pontilhada sob cada fileira; cada trecho é exato porque a rotação da cadeira é a tangente. */
-function rowGuides(geometry: LayoutGeometry, mode: CeremonyProject['layout']['mode']): string {
+function rowGuides(geometry: LayoutGeometry, mode: Project['layout']['mode']): string {
   if (mode !== 'curve') return '';
   const lines = new Map<string, SeatGeometry[]>();
   for (const seat of geometry.seats) {
@@ -207,8 +207,8 @@ function sideLabel(geometry: LayoutGeometry, side: SeatGeometry['side'], label: 
   return { y, svg: text(x, y, label, 'side') };
 }
 
-export function createMapSvg(projectInput: CeremonyProject, personalGuestId?: string): string {
-  const project = ceremonyProjectSchema.parse(projectInput);
+export function createMapSvg(projectInput: Project, personalGuestId?: string): string {
+  const project = projectSchema.parse(projectInput);
   const geometry = getLayoutGeometry(project.layout);
   const guestById = new Map(project.guests.map((guest) => [guest.id, guest]));
   const assignmentBySeat = new Map(
