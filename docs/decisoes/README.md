@@ -1,6 +1,6 @@
 # Registro de decisões
 
-Atualizado em 09/11/2026. Use ADRs numerados com contexto, decisão, status e consequências. Status possíveis: proposta, aceita, substituída ou rejeitada. Um documento de arquitetura proposto não é uma implementação.
+Atualizado em 20/11/2026. Use ADRs numerados com contexto, decisão, status e consequências. Status possíveis: proposta, aceita, substituída ou rejeitada. Um documento de arquitetura proposto não é uma implementação.
 
 | Registro | Status | Referência |
 | --- | --- | --- |
@@ -47,3 +47,7 @@ Não decididos: recursos na Railway, orçamento, transporte de e-mail, versões 
 ## 0013 — Infraestrutura Railway como código
 
 [ADR-0013](0013-infraestrutura-railway-como-codigo.md): aceita; validada em contêineres, provisionamento pendente. `.railway/railway.ts` substitui `railway.toml`, região US East, PostgreSQL 17, migração no pré-deploy com credencial própria e sem proxy Cloudflare na API.
+
+## 0014 — Link de visualização somente leitura
+
+[ADR-0014](0014-link-de-visualizacao.md): proposta para a fase 7, não implementada; executa antes da fase 6. Links com nome, para quem não tem conta, com o modo "Com nomes" ou "Só a planta" e validade escolhidos pelo dono, revogáveis. Token HMAC no fragmento da URL e projeção mínima no servidor.

@@ -1,6 +1,10 @@
 # Memória do projeto — Enlace
 
-Atualizado em 09/11/2026, America/Sao_Paulo.
+Atualizado em 20/11/2026, America/Sao_Paulo.
+
+## Link de visualização proposto como fase 7 — 20/11/2026
+
+Pedido do usuário, só documentado, sem código. Registrado em ADR-0014 (proposta), na fase 7 do roadmap e numa seção do `PRODUCT.md`. A tabela de evoluções em `modelo-de-dados.md` foi atualizada. Decisões do usuário: link para quem não tem conta, somente leitura; vários links com nome por projeto; o dono escolhe em cada link o modo "Com nomes" ou "Só a planta" e a validade (7, 30, 90 dias ou sem prazo); a execução vem antes da festa (fase 6), depois do aceite hospedado da fase 5. A numeração 7 foi mantida para não renumerar a festa. Proposta técnica: tabela `project_share_links` sem o token; token = `linkId` + HMAC (`SHARE_LINK_SECRET`) no fragmento `/ver#…`, enviado no corpo de `POST /api/shared/view`; projeção pura `toSharedView` sem notas, IDs, dono nem convidados sem lugar; limite de 10 links ativos; sem rastrear quem vê. Próximo passo do tema: o mesmo da fase 5 (aceite hospedado) e, em seguida, a etapa 1 da fase 7 (contratos e projeção).
 
 ## Deploy da API na Railway em preparação — 09/11/2026
 

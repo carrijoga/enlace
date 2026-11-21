@@ -2,7 +2,7 @@
 
 <!-- impeccable:product-schema 1 -->
 
-Última atualização: 09/11/2026. Estado: definição baseada no pedido do usuário, com posicionamento, contexto de uso, voz e meta de acessibilidade confirmados em 08/11/2026; hipóteses adicionais estão identificadas abaixo.
+Última atualização: 20/11/2026. Estado: definição baseada no pedido do usuário, com posicionamento, contexto de uso, voz e meta de acessibilidade confirmados em 08/11/2026; hipóteses adicionais estão identificadas abaixo.
 
 ## Platform
 
@@ -65,6 +65,10 @@ A planta da cerimônia é uma ferramenta de visualização e organização, sem 
 ## Planta da festa (proposta, fase 6)
 
 Pedido do usuário em 09/11/2026, ainda não implementado ([ADR-0012](docs/decisoes/0012-planta-da-festa.md)). No mesmo projeto e com a mesma lista de convidados, planejar a festa em salão fechado: salão com medidas reais informadas pela pessoa, em formato pronto ou criado manualmente; mesas com N cadeiras e convidados atribuídos por mesa; DJ, pista, mesa de bolo, mesa de doces e outras atrações posicionadas livremente. As medidas ajudam a imaginar o espaço, mas o espaçamento é indicativo e não substitui o projeto do local nem as normas de segurança.
+
+## Link de visualização (proposta, fase 7)
+
+Pedido do usuário em 20/11/2026, ainda não implementado ([ADR-0014](docs/decisoes/0014-link-de-visualizacao.md)). O dono cria links com nome para quem não tem conta abrir o projeto em qualquer dispositivo, sem poder editar: convidados procurando o próprio lugar, família, cerimonialista. Em cada link, o dono escolhe "Com nomes" (planta, nomes, categorias e busca "Encontre seu lugar") ou "Só a planta" (ocupação, sem dados de convidados), e a validade (7, 30, 90 dias ou sem prazo). Qualquer link pode ser desativado. As observações dos convidados nunca aparecem. O link mostra a última versão salva e não é um convite: o Enlace não envia nada aos convidados.
 
 ## Fora do escopo inicial
 

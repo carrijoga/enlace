@@ -1,6 +1,6 @@
 # Roadmap de implementação
 
-Atualizado em 09/11/2026, com frontend Vercel e backend/PostgreSQL Railway. Fases 0 e 1 concluídas no escopo local. Fase 2 concluída em 08/11/2026: meta de desempenho atingida no desktop de referência; o celular de entrada testado ficou registrado como limite conhecido ([ADR-0006](decisoes/0006-aparelhos-de-referencia-e-aceite-da-fase-2.md)). Etapas posteriores são propostas, não funcionalidades entregues.
+Atualizado em 20/11/2026, com frontend Vercel e backend/PostgreSQL Railway. Fases 0 e 1 concluídas no escopo local. Fase 2 concluída em 08/11/2026: meta de desempenho atingida no desktop de referência; o celular de entrada testado ficou registrado como limite conhecido ([ADR-0006](decisoes/0006-aparelhos-de-referencia-e-aceite-da-fase-2.md)). Etapas posteriores são propostas, não funcionalidades entregues.
 
 ## Fase 0 — Diagnóstico e estrutura documental — concluída
 
@@ -109,11 +109,34 @@ Aceite:
 - Arrastar e atribuir ficam com p95 ≤ 50 ms em build de produção no cenário máximo (100 mesas, 60 elementos, 300 convidados), medido também no Moto G84. O JavaScript inicial da cerimônia continua dentro do orçamento, com a festa carregada sob demanda.
 - PNG e impressão não cortam o salão; a lista por mesa traz todos os convidados atribuídos.
 
+## Fase 7 — Link de visualização — proposta, não iniciada; executa antes da fase 6
+
+Pedido do usuário em 20/11/2026 ([ADR-0014](decisoes/0014-link-de-visualizacao.md)). O dono cria links com nome para quem não tem conta ver o projeto em qualquer dispositivo, sem editar. Em cada link, o dono escolhe o modo ("Com nomes" ou "Só a planta") e a validade (7, 30, 90 dias ou sem prazo), e pode desativá-lo a qualquer momento. O número é 7 para não renumerar a festa, mas por decisão do usuário a execução vem antes dela, depois do aceite hospedado da fase 5.
+
+Etapas, nesta ordem por dependência:
+
+1. Contratos (entrada e projeção) e `toSharedView` puro, com testes de ausência de dados.
+2. Tabela `project_share_links`, migração, token HMAC, rotas de gerenciamento e leitura pública, limite de requisições e allowlist do proxy.
+3. Página `/ver` com `PlanCanvas`/`SeatList` em modo somente leitura e busca "Encontre seu lugar"; painel "Compartilhar" no editor e em `/projetos`.
+4. Fechamento: acessibilidade, celular (Moto G84), medição do bundle e runbook com `SHARE_LINK_SECRET`.
+
+Depois dos contratos, a API (etapa 2) e a página de visualização (etapa 3) podem andar em paralelo com arquivos exclusivos.
+
+Aceite:
+
+- O link abre sem conta, em outra sessão e em outro aparelho, e mostra a última revisão salva.
+- Nenhuma rota de escrita aceita o token, e chamadas diretas com ele não alteram nada.
+- Link desativado, vencido, de projeto excluído ou de conta excluída responde igual a um link inexistente.
+- A resposta "Só a planta" não contém nenhum nome, nota ou ID de convidado. "Com nomes" não contém notas, convidados sem lugar, dono, revisão ou dados dos outros links. Os testes verificam o JSON serializado.
+- O dono só lista, cria e desativa links dos próprios projetos. O limite de 10 links ativos se mantém com criações simultâneas.
+- O token não aparece em logs da API nem da Vercel, nem em eventos de analytics.
+- `/ver` não carrega código do editor, funciona por toque e teclado, tem alternativa em lista e cumpre WCAG 2.2 AA na auditoria automatizada.
+
 ## Questões de produto para resolver no momento certo
 
 | Questão | Padrão provisório | Quando resolver |
 | --- | --- | --- |
-| Uma ou duas contas do casal no mesmo projeto? | Um proprietário; colaboração futura sem compartilhar senha | Antes de implementar convites/acesso compartilhado |
+| Uma ou duas contas do casal no mesmo projeto? | Um proprietário; colaboração futura sem compartilhar senha. Visualização sem conta por link somente leitura proposta na fase 7 ([ADR-0014](decisoes/0014-link-de-visualizacao.md)) | Antes de implementar convites/acesso compartilhado com edição |
 | Mais de uma planta/cenário por projeto? | Uma planta de cerimônia e, na fase 6, uma de festa por projeto; cenários alternativos seguem fora | Antes de oferecer cenários alternativos |
 | Altas quantidades, dimensões reais e objetos livres? | Cerimônia preserva limites e geometria atuais; medidas reais e objetos livres entram na festa ([ADR-0012](decisoes/0012-planta-da-festa.md)) | Fase 6 |
 | CSV: colunas, duplicatas e tamanho? | Nome obrigatório e categoria opcional; prévia sem merge automático por nome | Antes da fase 4 |

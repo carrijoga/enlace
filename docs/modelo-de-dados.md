@@ -109,4 +109,4 @@ Criar uma projeção própria para exportação individual: geometria necessári
 - Histórico de versões e recuperação, com retenção e restauração transacional.
 - Grupos familiares e restrições de posição configuráveis, se validados como necessidade do produto.
 - Normalização das cadeiras caso sejam editadas/consultadas independentemente da planta.
-- Links de visualização individual com tokens limitados e revogáveis, caso o produto venha a oferecer compartilhamento por URL.
+- Links de visualização somente leitura, com nome, modo, validade e revogação: proposta em [ADR-0014](decisoes/0014-link-de-visualizacao.md) (tabela `project_share_links`, token HMAC fora do banco, projeção mínima). Não implementado.
