@@ -25,9 +25,9 @@ Não verificados:
 - 390 px (o Chrome não redimensionou);
 - leitor de tela.
 
-Nada foi commitado.
+Commits `fef2e03` (API), `76a9a41` (web) e `9d04088` (docs) na branch `carrijoga/feat-login-cadastro-google`. PR #5 aberto para a `main` em 21/11/2026, a pedido do usuário.
 
-Próximo passo: o usuário revisa e commita. Para ativar o Google em produção, criar o cliente OAuth e gravar as variáveis na Railway (runbook em `docs/desenvolvimento.md`, passo 6). Depois, aceite hospedado do roadmap.
+Próximo passo: o usuário revisa e faz o merge do PR #5. Para ativar o Google em produção, criar o cliente OAuth e gravar as variáveis na Railway (runbook em `docs/desenvolvimento.md`, passo 6). Depois, aceite hospedado do roadmap.
 
 ## Fase 7, auditoria axe e sincronização com a main — 21/11/2026
 
