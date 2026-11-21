@@ -20,7 +20,7 @@ Integração à `main` solicitada pelo usuário. Após o merge, o próximo passo
 
 ## Vincular Google com e-mail diferente — 21/11/2026
 
-PR #5 mergeado. Num teste do usuário em produção, o "Conectar Google" voltava sem mudar nada. A conta de senha e a conta Google tinham e-mails diferentes, então o Better Auth recusou com `email_does_not_match`, e a tela só mostrou a mensagem genérica. Correção na branch `carrijoga/fix-vincular-google-email-diferente`: `allowDifferentEmails: true`, que vale só para a vinculação explícita com sessão, e mensagens para `account_already_linked_to_different_user` e `unable_to_link_account`. A entrada deslogada continua sem vinculação implícita. ADR-0015 revisado. Não verificado: a vinculação real em produção, até o deploy.
+PR #5 mergeado. Num teste do usuário em produção, o "Conectar Google" voltava sem mudar nada. A conta de senha e a conta Google tinham e-mails diferentes, então o Better Auth recusou com `email_does_not_match`, e a tela só mostrou a mensagem genérica. Correção na branch `carrijoga/fix-vincular-google-email-diferente`: `allowDifferentEmails: true`, que vale só para a vinculação explícita com sessão, e mensagens para `account_already_linked_to_different_user` e `unable_to_link_account`. A entrada deslogada continua sem vinculação implícita. ADR-0015 revisado. Commit `287a183` levado direto à `main` por fast-forward, sem PR, a pedido do usuário. O usuário também tinha criado uma conta de teste só Google (gabriel30carrijo@gmail.com), que precisa ser excluída antes de conectar esse Google à conta de senha; senão o resultado é `account_already_linked_to_different_user`. Não verificado: a vinculação real em produção, até o deploy.
 
 ## Login com Google e exclusão de conta concluídos localmente — 21/11/2026
 
