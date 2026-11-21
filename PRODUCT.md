@@ -66,9 +66,13 @@ A planta da cerimônia é uma ferramenta de visualização e organização, sem 
 
 Pedido do usuário em 09/11/2026, ainda não implementado ([ADR-0012](docs/decisoes/0012-planta-da-festa.md)). No mesmo projeto e com a mesma lista de convidados, planejar a festa em salão fechado: salão com medidas reais informadas pela pessoa, em formato pronto ou criado manualmente; mesas com N cadeiras e convidados atribuídos por mesa; DJ, pista, mesa de bolo, mesa de doces e outras atrações posicionadas livremente. As medidas ajudam a imaginar o espaço, mas o espaçamento é indicativo e não substitui o projeto do local nem as normas de segurança.
 
-## Link de visualização (fase 7, implementado localmente)
+## Links de visualização, edição e cópia (fase 7, implementado localmente)
 
-Pedido do usuário em 20/11/2026, implementado localmente em 21/11/2026 e ainda não publicado ([ADR-0014](docs/decisoes/0014-link-de-visualizacao.md)). O dono cria links com nome para quem não tem conta abrir o projeto em qualquer dispositivo, sem poder editar: convidados procurando o próprio lugar, família, cerimonialista. Em cada link, o dono escolhe "Com nomes" (planta, nomes, categorias e busca "Encontre seu lugar") ou "Só a planta" (ocupação, sem dados de convidados), e a validade (7, 30, 90 dias ou sem prazo). Qualquer link pode ser desativado. As observações dos convidados nunca aparecem. O link mostra a última versão salva e não é um convite: o Enlace não envia nada aos convidados.
+Pedido do usuário em 20–21/11/2026, implementado localmente e ainda não publicado ([ADR-0014](docs/decisoes/0014-link-de-visualizacao.md) e [ADR-0016](docs/decisoes/0016-compartilhamento-colaborativo-e-copia.md)). O dono cria links com nome e validade (7, 30, 90 dias ou sem prazo), e pode desativar qualquer link a qualquer momento:
+- **Para quem não tem conta (somente leitura):** "Com nomes" (planta, nomes, categorias e busca "Encontre seu lugar", sem observações) ou "Só a planta" (ocupação, sem dados de convidados), na página `/ver`.
+- **Para quem tem conta (participação autenticada):** "Permitir edição" (abre o projeto original para editar planta, convidados e observações enquanto o link estiver ativo) ou "Permitir cópia" (cria uma cópia independente da última versão salva na conta de quem recebeu, que continua com seu novo dono mesmo após o link vencer ou ser desativado), com confirmação explícita em `/participar`.
+
+O link mostra a última versão salva e não é um convite enviado pelo sistema: o Enlace não envia mensagens aos convidados.
 
 ## Fora do escopo inicial
 

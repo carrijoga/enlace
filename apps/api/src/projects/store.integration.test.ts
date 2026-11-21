@@ -1,8 +1,10 @@
+import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { setTimeout } from 'node:timers/promises';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Pool } from 'pg';
-import { createProjectStore } from './store.js';
+import { createProjectStore, insertProjectCopy, readSnapshot, transaction } from './store.js';
 import { migrate } from '../db/migrate.js';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
@@ -14,6 +16,7 @@ const seatId = '1a2b3c4d-4444-4444-8444-444444444444';
 const guestId = '1a2b3c4d-5555-4555-8555-555555555555';
 const ownerId = 'integration-owner';
 const foreignOwnerId = 'integration-other';
+const linkMigrations = ['0002_share_links.sql', '0003_project_link_redemptions.sql'];
 const project = {
   title: 'Cerimônia de teste',
   couple: { first: 'Lia', second: 'Noah' },
@@ -42,11 +45,10 @@ suite('PostgreSQL project store (opt-in isolated schema)', () => {
     admin = new Pool({ connectionString: databaseUrl });
     await admin.query(`CREATE SCHEMA "${schema}"`);
     pool = new Pool({ connectionString: databaseUrl, options: `-c search_path=${schema}` });
-    const migration = await readFile(
-      resolve(import.meta.dirname, '../../drizzle/0000_initial.sql'),
-      'utf8',
-    );
-    await pool.query(migration.replaceAll('"public".', `"${schema}".`));
+    for (const name of ['0000_initial.sql', ...linkMigrations]) {
+      const migration = await readFile(resolve(import.meta.dirname, '../../drizzle', name), 'utf8');
+      await pool.query(migration.replaceAll('"public".', `"${schema}".`));
+    }
     await pool.query('INSERT INTO "user" (id,name,email) VALUES ($1,$1,$2),($3,$3,$4)', [
       ownerId,
       'owner@example.test',
@@ -60,6 +62,9 @@ suite('PostgreSQL project store (opt-in isolated schema)', () => {
     await admin.query(`GRANT USAGE ON SCHEMA "${schema}" TO "${runtimeRole}"`);
     await admin.query(
       `GRANT SELECT,INSERT,UPDATE,DELETE ON ${schema}.projects,${schema}.guests,${schema}.seat_assignments,${schema}.project_write_receipts TO "${runtimeRole}"`,
+    );
+    await admin.query(
+      `GRANT SELECT ON ${schema}.project_share_links,${schema}.project_link_editors TO "${runtimeRole}"`,
     );
     runtimePool = new Pool({
       connectionString: databaseUrl,
@@ -222,6 +227,134 @@ suite('PostgreSQL project store (opt-in isolated schema)', () => {
     await expect(runtimePool.query('DROP TABLE projects')).rejects.toMatchObject({ code: '42501' });
     await pool.query('DELETE FROM projects WHERE id=$1', [id]);
   });
+
+  async function grantEditor(id: string) {
+    const linkId = randomUUID();
+    await pool.query(
+      "INSERT INTO project_share_links (id,project_id,label,mode) VALUES ($1,$2,$3,'edit')",
+      [linkId, id, 'Link de edição'],
+    );
+    await pool.query('INSERT INTO project_link_editors (link_id,user_id) VALUES ($1,$2)', [
+      linkId,
+      foreignOwnerId,
+    ]);
+    return linkId;
+  }
+
+  it('limits editor access to active grants and preserves owner-only operations', async () => {
+    const id = randomUUID();
+    const op = randomUUID();
+    const input = { id, operationId: op, project };
+    await store.create(ownerId, input);
+    const linkId = await grantEditor(id);
+    const secondLinkId = await grantEditor(id);
+    const unavailable = { status: 404, code: 'not_found' };
+    expect(await runtimeStore.list(foreignOwnerId)).toEqual([
+      expect.objectContaining({ id, role: 'editor' }),
+    ]);
+    expect(await runtimeStore.get(foreignOwnerId, id)).toMatchObject({ role: 'editor', project });
+    expect(await store.get(ownerId, id)).toMatchObject({ role: 'owner', project });
+    expect(
+      await transaction(pool, (client) => readSnapshot(client, foreignOwnerId, id)),
+    ).toBeNull();
+    await expect(store.create(foreignOwnerId, input)).rejects.toMatchObject(unavailable);
+    await expect(store.delete(foreignOwnerId, id, 1)).rejects.toMatchObject(unavailable);
+
+    await pool.query('UPDATE project_share_links SET revoked_at=now() WHERE id=$1', [linkId]);
+    expect(await store.get(foreignOwnerId, id)).toMatchObject({ role: 'editor' });
+    await pool.query(
+      "UPDATE project_share_links SET created_at=now()-interval '2 seconds', expires_at=now()-interval '1 second' WHERE id=$1",
+      [secondLinkId],
+    );
+    expect(await store.list(foreignOwnerId)).toEqual([]);
+    await expect(store.get(foreignOwnerId, id)).rejects.toMatchObject(unavailable);
+    await store.delete(ownerId, id, 1);
+  });
+
+  it('scopes receipts by actor and serializes owner and editor revisions', async () => {
+    const id = randomUUID();
+    await store.create(ownerId, { id, operationId: randomUUID(), project });
+    const linkId = await grantEditor(id);
+    const editorWrite = { expectedRevision: 1, operationId: randomUUID(), project };
+    const saved = await runtimeStore.save(foreignOwnerId, id, editorWrite);
+    expect(await store.save(foreignOwnerId, id, editorWrite)).toEqual(saved);
+    await expect(store.save(ownerId, id, editorWrite)).rejects.toMatchObject({
+      status: 409,
+      code: 'revision_conflict',
+    });
+    const concurrentWrite = { expectedRevision: 2, operationId: randomUUID(), project };
+    const race = await Promise.allSettled([
+      store.save(ownerId, id, concurrentWrite),
+      store.save(foreignOwnerId, id, concurrentWrite),
+    ]);
+    expect(race).toContainEqual({
+      status: 'fulfilled',
+      value: expect.objectContaining({ revision: 3 }),
+    });
+    expect(race).toContainEqual({
+      status: 'rejected',
+      reason: expect.objectContaining({ status: 409, code: 'revision_conflict' }),
+    });
+    await pool.query('UPDATE project_share_links SET revoked_at=now() WHERE id=$1', [linkId]);
+    await expect(store.save(foreignOwnerId, id, editorWrite)).rejects.toMatchObject({
+      status: 404,
+      code: 'not_found',
+    });
+    await store.delete(ownerId, id, 3);
+  });
+
+  it('checks a grant again when a save waits for the revocation lock', async () => {
+    const id = randomUUID();
+    await store.create(ownerId, { id, operationId: randomUUID(), project });
+    const linkId = await grantEditor(id);
+    await transaction(pool, async (client) => {
+      await client.query('SELECT id FROM projects WHERE id=$1 FOR UPDATE', [id]);
+      await client.query('UPDATE project_share_links SET revoked_at=now() WHERE id=$1', [linkId]);
+      const { rows } = await client.query<{ pid: number }>('SELECT pg_backend_pid() AS pid');
+      const saving = store.save(foreignOwnerId, id, {
+        expectedRevision: 1,
+        operationId: randomUUID(),
+        project: { ...project, title: 'Edição sem acesso' },
+      });
+      const saved = Promise.allSettled([saving]);
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        const waiting = await pool.query(
+          'SELECT 1 FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))',
+          [rows[0]!.pid],
+        );
+        if (waiting.rowCount) return { saved };
+        await setTimeout(10);
+      }
+      throw new Error('Save did not wait for the project lock');
+    }).then(async ({ saved }) => {
+      expect(await saved).toEqual([
+        { status: 'rejected', reason: expect.objectContaining({ status: 404, code: 'not_found' }) },
+      ]);
+    });
+    expect(await store.get(ownerId, id)).toMatchObject({ revision: 1, project });
+    await store.delete(ownerId, id, 1);
+  });
+
+  it('inserts an independent copy in the caller transaction without overwriting project IDs', async () => {
+    const sourceId = randomUUID();
+    const copyId = randomUUID();
+    await store.create(ownerId, { id: sourceId, operationId: randomUUID(), project });
+    await expect(
+      transaction(pool, (client) => insertProjectCopy(client, foreignOwnerId, sourceId, project)),
+    ).rejects.toMatchObject({ status: 409, code: 'operation_reused' });
+    const copy = await transaction(pool, (client) =>
+      insertProjectCopy(client, foreignOwnerId, copyId, project),
+    );
+    expect(copy).toMatchObject({ id: copyId, role: 'owner', revision: 1, project });
+    await store.save(foreignOwnerId, copyId, {
+      expectedRevision: 1,
+      operationId: randomUUID(),
+      project: { ...project, title: 'Cópia alterada' },
+    });
+    expect(await store.get(ownerId, sourceId)).toMatchObject({ revision: 1, project });
+    await store.delete(ownerId, sourceId, 1);
+    await store.delete(foreignOwnerId, copyId, 2);
+  });
 });
 
 const migrationSuite =
@@ -240,7 +373,7 @@ migrationSuite('PostgreSQL migration runner (temporary database)', () => {
       expect(first).toEqual([
         '0000_initial.sql',
         '0001_remove_receipt_date_index.sql',
-        '0002_share_links.sql',
+        ...linkMigrations,
       ]);
       expect(second).toEqual([]);
       tempPool = new Pool({ connectionString: tempUrl.toString() });

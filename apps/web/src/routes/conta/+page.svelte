@@ -8,6 +8,7 @@
     type AccountSession,
   } from '../../lib/account/client';
   import { clearAccountDraft } from '../../lib/editor/files/drafts';
+  import { participationReturnPath } from '../../lib/share/client';
 
   let session = $state<AccountSession | null>(null);
   let mode = $state<'login' | 'signup' | 'recover' | 'reset'>('login');
@@ -26,8 +27,11 @@
 
   onMount(() => {
     const url = new URL(window.location.href);
+    const participationNext = participationReturnPath(url, resolve('/participar'));
     const requestedNext = url.searchParams.get('next');
-    if (requestedNext) {
+    if (participationNext) {
+      nextPath = participationNext;
+    } else if (requestedNext) {
       const destination = new URL(requestedNext, window.location.origin);
       if (destination.origin === window.location.origin)
         nextPath = `${destination.pathname}${destination.search}${destination.hash}`;
@@ -36,7 +40,10 @@
     if (token) mode = 'reset';
     void Promise.all([
       readSession()
-        .then((value) => (session = value))
+        .then((value) => {
+          session = value;
+          if (value && participationNext) window.location.replace(participationNext);
+        })
         .catch(() => (message = 'Não foi possível consultar sua sessão.')),
       fetch('/api/auth-capabilities')
         .then((response) => (response.ok ? response.json() : null))

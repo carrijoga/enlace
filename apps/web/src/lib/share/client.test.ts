@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { ceremonyProjectSchema, SHARE_TOKEN_LENGTH, type SharedView } from '@enlace/contracts';
-import { coupleTitle, normalizeName, shareUrl, tokenFromHash, toViewProject } from './client';
+import {
+  coupleTitle,
+  normalizeName,
+  participationFromHash,
+  participationReturnPath,
+  shareUrl,
+  tokenFromHash,
+  toViewProject,
+} from './client';
 
 const token = 'A'.repeat(SHARE_TOKEN_LENGTH - 2) + '-_';
 const seatA = '1a2b3c4d-1111-4111-8111-111111111111';
@@ -19,9 +27,18 @@ const base = {
 };
 
 describe('link no fragmento', () => {
-  it('monta o link com o token depois de #', () => {
-    expect(shareUrl('https://enlace.example.test', token)).toBe(
+  it('monta o link com o token depois de # conforme o modo', () => {
+    expect(shareUrl('https://enlace.example.test', token, 'names')).toBe(
       `https://enlace.example.test/ver#${token}`,
+    );
+    expect(shareUrl('https://enlace.example.test', token, 'plan')).toBe(
+      `https://enlace.example.test/ver#${token}`,
+    );
+    expect(shareUrl('https://enlace.example.test', token, 'edit')).toBe(
+      `https://enlace.example.test/participar#edit.${token}`,
+    );
+    expect(shareUrl('https://enlace.example.test', token, 'clone')).toBe(
+      `https://enlace.example.test/participar#clone.${token}`,
     );
   });
   it('lê só tokens no formato do contrato', () => {
@@ -36,6 +53,48 @@ describe('link no fragmento', () => {
       `#${token.replace('A', '+')}`,
     ])
       expect(tokenFromHash(bad)).toBeNull();
+  });
+  it('lê modo e token de participação no fragmento', () => {
+    expect(participationFromHash(`#edit.${token}`)).toEqual({ mode: 'edit', token });
+    expect(participationFromHash(`#clone.${token}`)).toEqual({ mode: 'clone', token });
+    for (const bad of [
+      '',
+      '#',
+      `#${token}`,
+      `edit.${token}`,
+      `#names.${token}`,
+      `#plan.${token}`,
+      `#edit.${token}.extra`,
+      `#edit.${token.slice(1)}`,
+      '#edit.',
+    ])
+      expect(participationFromHash(bad)).toBeNull();
+  });
+  it('reconstrói o destino de retorno para /participar preservando o fragmento', () => {
+    expect(
+      participationReturnPath(
+        new URL(`https://enlace.example.test/conta?next=%2Fparticipar#edit.${token}`),
+        '/participar',
+      ),
+    ).toBe(`/participar#edit.${token}`);
+    expect(
+      participationReturnPath(
+        new URL(`https://enlace.example.test/conta?next=%2Fparticipar#clone.${token}`),
+        '/participar',
+      ),
+    ).toBe(`/participar#clone.${token}`);
+    expect(
+      participationReturnPath(
+        new URL(`https://enlace.example.test/conta?next=%2Fprojetos#edit.${token}`),
+        '/participar',
+      ),
+    ).toBeNull();
+    expect(
+      participationReturnPath(
+        new URL(`https://enlace.example.test/conta?next=%2Fparticipar#${token}`),
+        '/participar',
+      ),
+    ).toBeNull();
   });
 });
 

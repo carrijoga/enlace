@@ -1,16 +1,19 @@
 import {
+  redeemShareLinkResponseSchema,
   shareLinkListResponseSchema,
   shareLinkSchema,
   sharedViewSchema,
   shareTokenSchema,
   type CeremonyProject,
   type CreateShareLinkRequest,
+  type RedeemShareLinkRequest,
   type ShareLink,
+  type ShareLinkMode,
   type SharedView,
 } from '@enlace/contracts';
 
-// ADR-0014. O token fica no fragmento (`/ver#token`): o navegador não o envia ao servidor nem o
-// põe no Referer. Vai só no corpo de `POST /api/shared/view`.
+// O token fica no fragmento, que o navegador omite do Referer e das requisições de página.
+// Só os POSTs de visualização e resgate recebem o token, no corpo da requisição.
 
 export class ShareError extends Error {
   constructor(
@@ -28,7 +31,8 @@ export class ShareError extends Error {
   }
 }
 
-export function shareUrl(origin: string, token: string): string {
+export function shareUrl(origin: string, token: string, mode: ShareLinkMode): string {
+  if (mode === 'edit' || mode === 'clone') return `${origin}/participar#${mode}.${token}`;
   return `${origin}/ver#${token}`;
 }
 
@@ -36,6 +40,27 @@ export function shareUrl(origin: string, token: string): string {
 export function tokenFromHash(hash: string): string | null {
   const candidate = hash.startsWith('#') ? hash.slice(1) : hash;
   return shareTokenSchema.safeParse(candidate).success ? candidate : null;
+}
+
+export function participationFromHash(hash: string): RedeemShareLinkRequest | null {
+  const [mode, value, extra] = hash.slice(1).split('.');
+  if (
+    !hash.startsWith('#') ||
+    (mode !== 'edit' && mode !== 'clone') ||
+    !value ||
+    extra !== undefined
+  )
+    return null;
+  return shareTokenSchema.safeParse(value).success ? { token: value, mode } : null;
+}
+
+export function participationReturnPath(accountUrl: URL, participationPath: string): string | null {
+  if (
+    accountUrl.searchParams.get('next') !== participationPath ||
+    !participationFromHash(accountUrl.hash)
+  )
+    return null;
+  return `${participationPath}${accountUrl.hash}`;
 }
 
 async function call(path: string, init: RequestInit = {}): Promise<unknown> {
@@ -107,6 +132,17 @@ export async function fetchSharedView(token: string): Promise<SharedView> {
   const parsed = sharedViewSchema.safeParse(data);
   if (!parsed.success) throw new ShareError('failed', 'Não foi possível abrir esta planta.');
   return parsed.data;
+}
+
+export async function redeemShareLink(input: RedeemShareLinkRequest): Promise<string> {
+  const data = await call('/api/shared/redeem', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  const parsed = redeemShareLinkResponseSchema.safeParse(data);
+  if (!parsed.success)
+    throw new ShareError('failed', 'Não foi possível abrir o projeto. Tente de novo.');
+  return parsed.data.projectId;
 }
 
 /**

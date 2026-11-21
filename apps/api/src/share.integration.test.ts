@@ -6,10 +6,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   createDemoDocument,
   MAX_ACTIVE_SHARE_LINKS,
+  projectSnapshotSchema,
   shareLinkListResponseSchema,
   shareLinkSchema,
   sharedViewSchema,
   type CeremonyProject,
+  type CreateShareLinkRequest,
 } from '@enlace/contracts';
 import { createAuth } from './auth.js';
 import { createApp } from './app.js';
@@ -19,7 +21,7 @@ import { createProjectStore } from './projects/store.js';
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const NOTE = 'nota-privada-integracao';
 
-describe.skipIf(!databaseUrl)('links de visualização com PostgreSQL real', () => {
+describe.skipIf(!databaseUrl)('compartilhamento com PostgreSQL real', () => {
   const schema = `enlace_share_${randomUUID().replaceAll('-', '')}`;
   const origin = 'http://localhost:5173';
   const password = 'Senha-ficticia-teste-123!';
@@ -43,11 +45,9 @@ describe.skipIf(!databaseUrl)('links de visualização com PostgreSQL real', () 
   }
   const view = (token: string, target = app) =>
     request('/api/shared/view', 'POST', '', { token }, target);
-  async function createLink(
-    cookie: string,
-    projectId: string,
-    body: { label: string; mode: 'names' | 'plan'; expiresInDays: 7 | 30 | 90 | null },
-  ) {
+  const redeem = (token: string, mode: 'edit' | 'clone', cookie = cookieB) =>
+    request('/api/shared/redeem', 'POST', cookie, { token, mode });
+  async function createLink(cookie: string, projectId: string, body: CreateShareLinkRequest) {
     const response = await request(`/api/projects/${projectId}/share-links`, 'POST', cookie, body);
     expect(response.status).toBe(201);
     return shareLinkSchema.parse(await response.json());
@@ -339,5 +339,147 @@ describe.skipIf(!databaseUrl)('links de visualização com PostgreSQL real', () 
       [link.id],
     );
     expect(left.rows[0]!.n).toBe(0);
+  });
+
+  it('separa convites de edição, cópia e visualização e exige sessão no resgate', async () => {
+    const edit = await createLink(cookieA, projectA, {
+      label: 'Editar juntos',
+      mode: 'edit',
+      expiresInDays: 7,
+    });
+    const clone = await createLink(cookieA, projectA, {
+      label: 'Criar cópia',
+      mode: 'clone',
+      expiresInDays: 7,
+    });
+    const plan = await createLink(cookieA, projectA, {
+      label: 'Ver planta',
+      mode: 'plan',
+      expiresInDays: 7,
+    });
+
+    expect((await redeem(edit.token, 'edit', '')).status).toBe(401);
+    for (const response of await Promise.all([
+      view(edit.token),
+      view(clone.token),
+      redeem(edit.token, 'clone'),
+      redeem(clone.token, 'edit'),
+      redeem(plan.token, 'edit'),
+      redeem(plan.token, 'clone'),
+    ])) {
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({ error: 'not_found' });
+    }
+    expect((await request(`/api/projects/${projectA}`, 'GET', cookieB)).status).toBe(404);
+
+    for (const response of await Promise.all([
+      redeem(edit.token, 'edit', cookieA),
+      redeem(edit.token, 'edit'),
+      redeem(edit.token, 'edit'),
+    ])) {
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ projectId: projectA });
+    }
+    expect(
+      (await pool.query('SELECT user_id FROM project_link_editors WHERE link_id=$1', [edit.id]))
+        .rowCount,
+    ).toBe(1);
+    expect((await request(`/api/projects/${projectA}`, 'GET', cookieB)).status).toBe(200);
+
+    const path = `/api/projects/${projectA}/share-links/${edit.id}`;
+    expect((await request(path, 'DELETE', cookieA, {})).status).toBe(204);
+    expect((await redeem(edit.token, 'edit')).status).toBe(404);
+    expect((await request(`/api/projects/${projectA}`, 'GET', cookieB)).status).toBe(404);
+
+    await pool.query(
+      `UPDATE project_share_links SET created_at=now()-interval '8 days', expires_at=now()-interval '1 day' WHERE id=$1`,
+      [clone.id],
+    );
+    expect((await redeem(clone.token, 'clone')).status).toBe(404);
+  });
+
+  it('copia a última versão completa uma vez por conta enquanto a cópia existir', async () => {
+    const sourceId = randomUUID();
+    expect(
+      (
+        await request('/api/projects', 'POST', cookieA, {
+          id: sourceId,
+          operationId: randomUUID(),
+          project,
+        })
+      ).status,
+    ).toBe(201);
+    const link = await createLink(cookieA, sourceId, {
+      label: 'Cópia independente',
+      mode: 'clone',
+      expiresInDays: null,
+    });
+    const last = { ...project, title: `${'A'.repeat(110)}🎉 agora` };
+    expect(
+      (
+        await request(`/api/projects/${sourceId}`, 'PUT', cookieA, {
+          expectedRevision: 1,
+          operationId: randomUUID(),
+          project: last,
+        })
+      ).status,
+    ).toBe(200);
+
+    const copyIds = new Set<string>();
+    for (const response of await Promise.all(
+      Array.from({ length: 3 }, () => redeem(link.token, 'clone')),
+    )) {
+      expect(response.status).toBe(200);
+      const { projectId } = await response.json();
+      copyIds.add(projectId);
+    }
+    expect(copyIds.size).toBe(1);
+    const [copyId] = copyIds;
+    expect(copyId).not.toBe(sourceId);
+    const replica = projectSnapshotSchema.parse(
+      await (await request(`/api/projects/${copyId}`, 'GET', cookieB)).json(),
+    );
+    expect(replica).toMatchObject({
+      revision: 1,
+      project: { ...last, title: `Cópia de ${'A'.repeat(110)}` },
+    });
+    expect((await request(`/api/projects/${copyId}`, 'GET', cookieA)).status).toBe(404);
+    expect((await request(`/api/projects/${sourceId}`, 'GET', cookieB)).status).toBe(404);
+    const links = await request(`/api/projects/${copyId}/share-links`, 'GET', cookieB);
+    expect(await links.json()).toEqual({ links: [] });
+    expect(
+      (
+        await pool.query('SELECT project_id FROM project_write_receipts WHERE project_id=$1', [
+          copyId,
+        ])
+      ).rowCount,
+    ).toBe(0);
+
+    const ownerCopy = await redeem(link.token, 'clone', cookieA);
+    expect(ownerCopy.status).toBe(200);
+    expect((await ownerCopy.json()).projectId).not.toBe(copyId);
+    expect(
+      (await request(`/api/projects/${copyId}`, 'DELETE', cookieB, { expectedRevision: 1 })).status,
+    ).toBe(204);
+    const recovered = await redeem(link.token, 'clone');
+    expect(recovered.status).toBe(200);
+    const recoveredId = (await recovered.json()).projectId;
+    expect(recoveredId).not.toBe(copyId);
+
+    const linkPath = `/api/projects/${sourceId}/share-links/${link.id}`;
+    expect((await request(linkPath, 'DELETE', cookieA, {})).status).toBe(204);
+    expect((await redeem(link.token, 'clone')).status).toBe(404);
+    expect(
+      (await request(`/api/projects/${sourceId}`, 'DELETE', cookieA, { expectedRevision: 2 }))
+        .status,
+    ).toBe(204);
+    expect((await request(`/api/projects/${recoveredId}`, 'GET', cookieB)).status).toBe(200);
+    expect(
+      (
+        await pool.query('SELECT project_id FROM project_link_clone_receipts WHERE link_id=$1', [
+          link.id,
+        ])
+      ).rowCount,
+    ).toBe(0);
   });
 });

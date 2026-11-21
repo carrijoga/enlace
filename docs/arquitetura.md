@@ -6,9 +6,9 @@ Atualizado em 08/11/2026. Fases 1–4 implementadas localmente; fase 5 prepara o
 
 | Parte | Responsabilidade |
 | --- | --- |
-| `apps/web` — SvelteKit/Svelte/TypeScript | Landing `/`, editor `/editor`, conta `/conta`, lista `/projetos`; proxy same-origin com destino fixo. |
-| `apps/api` — Hono/Node | Better Auth, validação de sessão e proprietário, operações de projeto, health/readiness. |
-| PostgreSQL / Drizzle / `pg` | Identidade e sessões, planta JSONB, convidados, atribuições e recibos; transações e integridade. |
+| `apps/web` — SvelteKit/Svelte/TypeScript | Landing `/`, editor `/editor`, conta `/conta`, lista `/projetos`, visualização `/ver`, convite/cópia `/participar`; proxy same-origin com destino fixo. |
+| `apps/api` — Hono/Node | Better Auth, validação de sessão, proprietário e permissão de edição, operações de projeto e compartilhamento, health/readiness. |
+| PostgreSQL / Drizzle / `pg` | Identidade e sessões, planta JSONB, convidados, atribuições, recibos e vínculos de compartilhamento; transações e integridade. |
 | `packages/contracts` | Schemas Zod portáteis e de transporte, parser/migração JSON v3. Compilar antes dos consumidores. |
 | `packages/domain` | Geometria e comandos puros imutáveis; não acessa rede, DOM ou banco. |
 
@@ -24,15 +24,18 @@ Selecionar ou mover pessoas não espera rede. Salvamento usa revisão esperada e
 
 Better Auth executa na API com adaptador Drizzle e IDs textuais de usuário. E-mail/senha, sessões persistidas, logout e recuperação via transporte SMTP configurável. Sem SMTP, recuperação é explicitamente indisponível; não se registram links ou tokens nos logs. Verificação de e-mail não é obrigatória nesta implementação; recebimento de e-mail e políticas de entrega ainda precisam de validação no ambiente de publicação.
 
-O navegador chama `/api/auth/*`, `/api/auth-capabilities`, `/api/projects` (incluindo `/api/projects/:id/share-links`) e `/api/shared/view` na origem do frontend. O proxy encaminha somente cabeçalhos permitidos ao destino configurado em `API_ORIGIN`; preserva múltiplos `Set-Cookie`, limita corpo a 2 MiB, recusa destino arbitrário e não armazena respostas privadas em cache. Cookies são HttpOnly, SameSite=Lax e Secure em produção. O `baseURL` público da autenticação deriva de `WEB_ORIGIN`, sem confiar em host encaminhado pelo cliente.
+O navegador chama `/api/auth/*`, `/api/auth-capabilities`, `/api/projects` (incluindo `/api/projects/:id/share-links`) e `/api/shared/{view,redeem}` na origem do frontend. O proxy encaminha somente cabeçalhos permitidos ao destino configurado em `API_ORIGIN`; preserva múltiplos `Set-Cookie`, limita corpo a 2 MiB, recusa destino arbitrário e não armazena respostas privadas em cache. Cookies são HttpOnly, SameSite=Lax e Secure em produção. O `baseURL` público da autenticação deriva de `WEB_ORIGIN`, sem confiar em host encaminhado pelo cliente.
 
-As escritas conferem origem no proxy e no backend. CORS não substitui sessão/CSRF. Cada chamada de projeto obtém a sessão no servidor sem cache de cookie de identidade, e usa o proprietário da sessão nas consultas. Uma conta diferente recebe 404 para o ID alheio. `ownerId` vindo do corpo é recusado pelos contratos estritos.
+As escritas conferem origem no proxy e no backend. CORS não substitui sessão/CSRF. Cada chamada de projeto obtém a sessão no servidor sem cache de cookie de identidade, e usa o usuário autenticado nas consultas (dono ou editor com link ativo, conforme a operação). Uma conta sem permissão recebe 404 para o ID alheio. `ownerId` vindo do corpo é recusado pelos contratos estritos.
 
 O controle de frequência da autenticação é persistido no PostgreSQL. Como não há cadeia de proxies/IP confiável configurada, cabeçalhos IP do cliente são ignorados; os contadores são compartilhados por endpoint. Esse limite protege de rajadas, mas não substitui proteção individual contra abuso. Configurar uma cadeia confiável e validar limites/fairness antes de exposição pública.
 
-## Link de visualização
+## Compartilhamento: visualização, edição e cópia
 
-Implementado em 20–21/11/2026 ([ADR-0014](decisoes/0014-link-de-visualizacao.md)): API, página pública `/ver` e diálogo "Compartilhar". A página não carrega o código do editor e reaproveita `PlanCanvas` e `SeatList` com `readonly`. `POST /api/shared/view` é a única rota que devolve dados de projeto sem sessão. Ela recebe o token no corpo, confere o HMAC antes de consultar o banco e devolve só a projeção de `toSharedView`. O token não vale como sessão em nenhuma outra rota. Gerenciar links segue as regras das demais escritas: sessão, origem exata, dono na consulta e bloqueio da linha do projeto. O limite de leituras é por link e por instância (600 por minuto), pois a API só vê o IP do proxy, a mesma limitação da autenticação.
+Implementado em 20–21/11/2026 ([ADR-0014](decisoes/0014-link-de-visualizacao.md) e [ADR-0016](decisoes/0016-compartilhamento-colaborativo-e-copia.md)): API, página pública `/ver`, página de confirmação autenticada `/participar` e diálogo "Compartilhar".
+- **Visualização pública (`names` e `plan`):** `/ver` não carrega o código do editor e reaproveita `PlanCanvas` e `SeatList` com `readonly`. `POST /api/shared/view` é a única rota que devolve dados de projeto sem sessão. Ela recebe o token no corpo, confere o HMAC antes de consultar o banco e devolve só a projeção de `toSharedView`.
+- **Edição e cópia autenticadas (`edit` e `clone`):** `/participar#<modo>.<token>` exige sessão e confirmação explícita do destinatário antes de chamar `POST /api/shared/redeem`. No modo `edit`, a conta é registrada em `project_link_editors` e pode listar, abrir e salvar revisões no projeto original enquanto o link estiver ativo (a revogação e o salvamento usam o mesmo bloqueio `FOR UPDATE` na linha do projeto). No modo `clone`, uma cópia independente é criada na conta destinatária e registrada em `project_link_clone_receipts` para evitar duplicatas no mesmo link.
+- Gerenciar links (`/api/projects/:id/share-links`) e excluir o projeto continuam exclusivos do dono (`owner_id`).
 
 ## Agregado, transações e conflitos
 

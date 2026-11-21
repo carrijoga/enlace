@@ -14,7 +14,7 @@
     "test": "vitest run",
     "db:check": "node --env-file-if-exists=.env --input-type=module -e \"const { Pool } = await import('pg'); if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL obrigatória'); const p = new Pool({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 5000 }); try { await p.query('SELECT 1'); console.log('PostgreSQL disponível'); } finally { await p.end(); }\"",
     "db:migrate": "node --env-file-if-exists=.env --import tsx/esm src/db/migrate.ts",
-    "db:generate": "node --env-file-if-exists=.env ./node_modules/drizzle-kit/bin.cjs generate"
+    "db:generate": "node --env-file-if-exists=.env ../../node_modules/drizzle-kit/bin.cjs generate"
   },
   "dependencies": {
     "@better-auth/drizzle-adapter": "^1.7.18",

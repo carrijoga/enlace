@@ -434,7 +434,8 @@
               href={resolve(`/editor?project=${encodeURIComponent(item.id)}`)}>{item.title}</a
             >
             <p>
-              Atualizado em {new Intl.DateTimeFormat('pt-BR', {
+              {#if item.role === 'editor'}<span class="role-badge">Compartilhado com você</span> ·
+              {/if}Atualizado em {new Intl.DateTimeFormat('pt-BR', {
                 dateStyle: 'medium',
                 timeStyle: 'short',
               }).format(new Date(item.updatedAt))}
@@ -447,10 +448,13 @@
               maxlength="120"
               bind:value={titleDrafts[item.id]}
               onkeydown={(event) => event.key === 'Enter' && rename(item)}
-            /><button disabled={busy} onclick={() => rename(item)}>Renomear</button><button
-              disabled={busy}
-              onclick={(event) => openShare(item, event.currentTarget)}>Compartilhar</button
-            ><button class="delete" disabled={busy} onclick={() => askDelete(item)}>Excluir</button>
+            /><button disabled={busy} onclick={() => rename(item)}>Renomear</button
+            >{#if item.role === 'owner'}<button
+                disabled={busy}
+                onclick={(event) => openShare(item, event.currentTarget)}>Compartilhar</button
+              ><button class="delete" disabled={busy} onclick={() => askDelete(item)}
+                >Excluir</button
+              >{/if}
           </div>
         </li>
       {/each}
@@ -621,6 +625,16 @@
     margin: 7px 0 0;
     color: #626e63;
     font-size: 13px;
+  }
+  .role-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    color: #295842;
+    background: #eaf1e9;
+    border: 1px solid #cbd7c6;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
   }
   .project-actions {
     display: flex;

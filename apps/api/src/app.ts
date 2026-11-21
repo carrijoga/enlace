@@ -1,6 +1,7 @@
 import {
   createProjectRequestSchema,
   createShareLinkRequestSchema,
+  redeemShareLinkRequestSchema,
   revokeShareLinkRequestSchema,
   sharedViewRequestSchema,
   deleteProjectRequestSchema,
@@ -9,6 +10,7 @@ import {
   saveProjectRequestSchema,
   type CreateProjectRequest,
   type CreateShareLinkRequest,
+  type RedeemShareLinkRequest,
   type SaveProjectRequest,
 } from '@enlace/contracts';
 import { cors } from 'hono/cors';
@@ -41,6 +43,7 @@ export interface ShareLinkStore {
   create(ownerId: string, projectId: string, input: CreateShareLinkRequest): Promise<unknown>;
   revoke(ownerId: string, projectId: string, linkId: string): Promise<void>;
   view(token: unknown): Promise<unknown>;
+  redeem(userId: string, input: RedeemShareLinkRequest): Promise<{ projectId: string }>;
 }
 
 export interface ProjectStore {
@@ -250,6 +253,20 @@ export function createApp(config: ApiConfig, dependencies: AppDependencies) {
       revokeShareLinkRequestSchema.parse(await c.req.json());
       await dependencies.shareLinks.revoke(owner, c.req.param('id'), c.req.param('linkId'));
       return c.body(null, 204);
+    } catch (error) {
+      return projectError(c, error);
+    }
+  });
+
+  app.post('/api/shared/redeem', async (c) => {
+    const blocked = sameOriginJson(c);
+    if (blocked) return blocked;
+    if (!dependencies.shareLinks) return sharingUnavailable(c);
+    const userId = await requireSession(c);
+    if (userId instanceof Response) return userId;
+    try {
+      const input = redeemShareLinkRequestSchema.parse(await c.req.json());
+      return c.json(await dependencies.shareLinks.redeem(userId, input));
     } catch (error) {
       return projectError(c, error);
     }

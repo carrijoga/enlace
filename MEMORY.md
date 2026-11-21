@@ -1,6 +1,21 @@
 # Memória do projeto — Enlace
 
-Atualizado em 20/11/2026, America/Sao_Paulo.
+Atualizado em 21/11/2026, America/Sao_Paulo.
+
+## Colaboração e cópia entre contas — 21/11/2026
+
+Entrega concluída localmente na branch `carrijoga/link-compartilhamento-somente`, estendendo o compartilhamento (ADR-0014) com os dois modos autenticados de participação registrados no ADR-0016 (`docs/decisoes/0016-compartilhamento-colaborativo-e-copia.md`):
+- **Contratos e domínio**: `role: 'owner' | 'editor'` em `ProjectSummary` e `ProjectSnapshot`; `shareLinkModeSchema` com `'names' | 'plan' | 'edit' | 'clone'`; `redeemShareLinkRequestSchema` (`{ token, mode: 'edit' | 'clone' }`) e `redeemShareLinkResponseSchema` (`{ projectId }`).
+- **Banco e migração**: `0003_project_link_redemptions.sql` (`project_link_editors` e `project_link_clone_receipts` + constraint `project_share_links_mode_check` ampliada). Script `db:generate` em `apps/api/package.json` apontado para `../../node_modules/drizzle-kit/bin.cjs` (compatível com `nodeLinker: hoisted`).
+- **API e concorrência**: `POST /api/shared/redeem` (autenticado, liberado no proxy `/api/[...path]`); `store.list` e `store.get` retornam projetos próprios (`owner`) e compartilhados com link `'edit'` ativo (`editor`); `store.save` revalida a permissão após `FOR UPDATE` na linha do projeto e escopa `operationId` por `(project_id, actor_id, operation_id)`; `insertProjectCopy` clona o último snapshot salvo com título `Cópia de ...` e recibo deduplicado por `(link_id, user_id)` enquanto a cópia existir.
+- **Interface web**: `ShareDialog.svelte` oferece os 4 modos com avisos específicos de permissão e revogação; `/participar` (pré-renderizada, `noindex`, `no-referrer`) lê `#edit.<token>` ou `#clone.<token>`, preserva o fragmento no login/cadastro em `/conta` (`participationReturnPath`) e exige confirmação explícita antes de chamar `POST /api/shared/redeem`; `/projetos` exibe o selo `Compartilhado com você` e oculta `Compartilhar`/`Excluir` para `editor`; `/editor` oculta `Compartilhar` para `editor`, exibe `Salvo no projeto compartilhado` e trata perda de acesso (`404` ao salvar) preservando o rascunho local com opção `Salvar como novo projeto`.
+
+Validação:
+- `pnpm run check` (`tsc` + `svelte-check`) e `pnpm run lint` (`eslint --max-warnings=0`): 0 erros e 0 avisos.
+- `vitest run` com PostgreSQL 18 (`humpback-postgres-1`): 25 arquivos / 190 testes passando (incluindo concorrência `save` vs `revoke`, deduplicação e recriação de cópia após exclusão, isolamento entre modos e contas).
+- Build de produção e `pnpm run measure:web` (meta < 150 KiB gzip): `/` 41,95 KiB, `/editor` 90,87 KiB, `/ver` 79,16 KiB, `/participar` 71,87 KiB.
+
+Próximo passo: revisar e commitar as alterações na branch / atualizar o PR da fase 7, e validar o fluxo hospedado após o deploy com `0003_project_link_redemptions.sql`.
 
 ## Fase 7, auditoria axe e sincronização com a main — 21/11/2026
 

@@ -22,7 +22,7 @@ const base = { couple: { first: 'Alex', second: 'Ravi' }, weddingDate: null, lay
 describe('criação de link', () => {
   it('aceita nome, modo e validades permitidas', () => {
     for (const expiresInDays of [7, 30, 90, null])
-      for (const mode of ['names', 'plan'])
+      for (const mode of ['names', 'plan', 'edit', 'clone'])
         expect(
           createShareLinkRequestSchema.safeParse({ label: 'Família', mode, expiresInDays }).success,
         ).toBe(true);
@@ -33,7 +33,7 @@ describe('criação de link', () => {
       { ...valid, label: '' },
       { ...valid, label: '   ' },
       { ...valid, label: 'x'.repeat(61) },
-      { ...valid, mode: 'edit' },
+      { ...valid, mode: 'admin' },
       { ...valid, expiresInDays: 1 },
       { ...valid, expiresInDays: undefined },
       { ...valid, projectId: randomUUID() },

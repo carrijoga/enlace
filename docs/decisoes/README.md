@@ -1,6 +1,6 @@
 # Registro de decisões
 
-Atualizado em 20/11/2026. Use ADRs numerados com contexto, decisão, status e consequências. Status possíveis: proposta, aceita, substituída ou rejeitada. Um documento de arquitetura proposto não é uma implementação.
+Atualizado em 21/11/2026. Use ADRs numerados com contexto, decisão, status e consequências. Status possíveis: proposta, aceita, substituída ou rejeitada. Um documento de arquitetura proposto não é uma implementação.
 
 | Registro | Status | Referência |
 | --- | --- | --- |
@@ -18,7 +18,7 @@ Atualizado em 20/11/2026. Use ADRs numerados com contexto, decisão, status e co
 
 O ADR-0003 registra a direção atual. Antes de adicionar integrações, validar e fixar versões compatíveis; mudanças relevantes de direção exigem atualizar o registro. Não é necessário interromper o trabalho para escolhas rotineiras já autorizadas pelo escopo; documente a decisão e avance.
 
-Não decididos: recursos na Railway, orçamento, transporte de e-mail, versões das integrações, identidade visual final, domínio público, modelo comercial, colaboração entre contas e suporte a múltiplos cenários dentro do mesmo projeto.
+Não decididos: recursos na Railway, orçamento, transporte de e-mail, versões das integrações, identidade visual final, domínio público, modelo comercial e suporte a múltiplos cenários dentro do mesmo projeto.
 
 ## 0007 — Contas e salvamento transacional
 
@@ -51,3 +51,7 @@ Não decididos: recursos na Railway, orçamento, transporte de e-mail, versões 
 ## 0014 — Link de visualização somente leitura
 
 [ADR-0014](0014-link-de-visualizacao.md): proposta para a fase 7; contratos, projeção, API, página `/ver` e painel implementados localmente; fechamento pendente; executa antes da fase 6. Links com nome, para quem não tem conta, com o modo "Com nomes" ou "Só a planta" e validade escolhidos pelo dono, revogáveis. Token HMAC no fragmento da URL e projeção mínima no servidor.
+
+## 0016 — Compartilhamento colaborativo com edição e cópia entre contas
+
+[ADR-0016](0016-compartilhamento-colaborativo-e-copia.md): aceita e implementada localmente em 21/11/2026. Estende os links de compartilhamento com os modos `edit` (edição do projeto original por conta autenticada enquanto o link estiver ativo, com `role: 'owner' | 'editor'` e controle de revisão concorrente) e `clone` (cópia independente na conta de destino, idempotente por link e usuário), resgatados com confirmação explícita em `/participar`.
