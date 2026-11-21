@@ -23,14 +23,31 @@ describe('readConfig', () => {
         DATABASE_URL: 'postgres://fake:fake@db.invalid/app',
       }),
     ).toThrow(/BETTER_AUTH_SECRET/);
-    expect(
+    expect(() =>
       readConfig({
         NODE_ENV: 'production',
         WEB_ORIGIN: 'https://site.example',
         DATABASE_URL: 'postgres://fake:fake@db.invalid/app',
         BETTER_AUTH_SECRET: 'x'.repeat(32),
       }),
-    ).toMatchObject({ production: true });
+    ).toThrow(/SHARE_LINK_SECRET/);
+    expect(
+      readConfig({
+        NODE_ENV: 'production',
+        WEB_ORIGIN: 'https://site.example',
+        DATABASE_URL: 'postgres://fake:fake@db.invalid/app',
+        BETTER_AUTH_SECRET: 'x'.repeat(32),
+        SHARE_LINK_SECRET: 'y'.repeat(32),
+      }),
+    ).toMatchObject({ production: true, shareLinkSecret: 'y'.repeat(32) });
+  });
+
+  it('keeps the share link secret optional in development but strong and distinct', () => {
+    expect(readConfig({ NODE_ENV: 'development' }).shareLinkSecret).toBeUndefined();
+    expect(() => readConfig({ SHARE_LINK_SECRET: 'short' })).toThrow(/SHARE_LINK_SECRET/);
+    expect(() =>
+      readConfig({ BETTER_AUTH_SECRET: 'z'.repeat(32), SHARE_LINK_SECRET: 'z'.repeat(32) }),
+    ).toThrow(/diferente/);
   });
 
   it('rejects paths and invalid ports', () => {

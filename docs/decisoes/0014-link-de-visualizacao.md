@@ -1,6 +1,6 @@
 # ADR-0014 — Link de visualização somente leitura
 
-Status: proposta em 20/11/2026. As escolhas marcadas como "decisão do usuário" estão confirmadas. O resto é proposta técnica e pode mudar na implementação. Em 20/11/2026 foram implementados só os contratos e a projeção `toSharedView` (etapa 1, ver [contratos](../contratos.md#link-de-visualização--fase-7-etapa-1)). Tabela, token, rotas e página ainda não existem. Na implementação, o título do projeto ficou fora da projeção até a questão aberta ser decidida.
+Status: proposta em 20/11/2026. As escolhas marcadas como "decisão do usuário" estão confirmadas. O resto é proposta técnica e pode mudar na implementação. Em 20/11/2026 foram implementados os contratos e a projeção `toSharedView` (etapa 1) e a tabela, o token e as rotas da API (etapa 2), ver [contratos](../contratos.md#link-de-visualização--fase-7-etapa-1). A página `/ver` e o painel "Compartilhar" ainda não existem. Na implementação, o título do projeto ficou fora da projeção até a questão aberta ser decidida.
 
 ## Contexto
 
@@ -49,7 +49,7 @@ Hoje só o dono abre o projeto, e só com a própria conta. O usuário quer que 
 
   Nunca saem: notas, IDs de convidados, `owner_id`, revisão, recibos, nome/modo/validade dos outros links, nem convidados sem lugar (a pessoa só aparece onde está sentada). Testes verificam a ausência desses campos na resposta serializada, não só no tipo.
 - **Validação no servidor a cada leitura:** link existe, `revoked_at` nulo, `expires_at` no futuro ou nulo, projeto existe. Excluir o projeto ou a conta remove os links em cascata.
-- **Abuso:** limite de requisições por IP em `/api/shared/view`. Com 256 bits de HMAC não há como adivinhar um token; o limite serve para conter custo. Respostas com `Cache-Control: no-store`, `X-Robots-Tag: noindex` e `<meta name="robots" content="noindex">` na página. `Referrer-Policy: no-referrer` na página, por precaução.
+- **Abuso:** limite de requisições em `/api/shared/view`. Com 256 bits de HMAC não há como adivinhar um token; o limite serve para conter custo. *Implementado de outra forma:* a API só vê o IP do proxy da Vercel, então o limite é por link e por instância (600 leituras por minuto, com folga para um grupo inteiro abrir o link ao mesmo tempo). Tokens forjados param no HMAC, sem consulta ao banco. Respostas com `Cache-Control: no-store`, `X-Robots-Tag: noindex` e `<meta name="robots" content="noindex">` na página. `Referrer-Policy: no-referrer` na página, por precaução.
 - **Sem rastreio de quem vê.** Não registrar acessos por link, IP ou aparelho. Um contador agregado pode ser discutido depois, se fizer falta.
 
 ### Dados
@@ -71,7 +71,7 @@ Nova tabela, sem mudar o JSON do projeto nem a revisão:
 | --- | --- | --- |
 | `GET /api/projects/:id/share-links` | Dono (sessão) | Lista os links ativos, com o URL recalculado. |
 | `POST /api/projects/:id/share-links` | Dono (sessão + origem) | Cria `{ label, mode, expiresInDays: 7 \| 30 \| 90 \| null }` e devolve o link. |
-| `DELETE /api/projects/:id/share-links/:linkId` | Dono (sessão + origem) | Desativa (`revoked_at = now()`). Repetir a chamada não dá erro. |
+| `DELETE /api/projects/:id/share-links/:linkId` | Dono (sessão + origem) | Desativa (`revoked_at = now()`). Repetir a chamada não dá erro. O corpo é `{}`, porque o proxy exige JSON em métodos que alteram dados. |
 | `POST /api/shared/view` | Público | Recebe `{ token }` e devolve a projeção ou `404 not_found` genérico. |
 
 Todas as consultas de gerenciamento incluem o dono, como no restante da API. O link de outro projeto, ou de outro dono, responde 404. O allowlist do proxy (`apps/web/src/lib/server/api-proxy.ts`) recebe só essas rotas. O proxy continua sem repassar `Authorization`, porque o token vai no corpo. Os contratos de entrada e da projeção ficam em `packages/contracts`, com Zod estrito.

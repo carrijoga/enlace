@@ -109,14 +109,14 @@ Aceite:
 - Arrastar e atribuir ficam com p95 ≤ 50 ms em build de produção no cenário máximo (100 mesas, 60 elementos, 300 convidados), medido também no Moto G84. O JavaScript inicial da cerimônia continua dentro do orçamento, com a festa carregada sob demanda.
 - PNG e impressão não cortam o salão; a lista por mesa traz todos os convidados atribuídos.
 
-## Fase 7 — Link de visualização — etapa 1 implementada localmente; executa antes da fase 6
+## Fase 7 — Link de visualização — etapas 1 e 2 implementadas localmente; executa antes da fase 6
 
 Pedido do usuário em 20/11/2026 ([ADR-0014](decisoes/0014-link-de-visualizacao.md)). O dono cria links com nome para quem não tem conta ver o projeto em qualquer dispositivo, sem editar. Em cada link, o dono escolhe o modo ("Com nomes" ou "Só a planta") e a validade (7, 30, 90 dias ou sem prazo), e pode desativá-lo a qualquer momento. O número é 7 para não renumerar a festa, mas por decisão do usuário a execução vem antes dela, depois do aceite hospedado da fase 5.
 
 Etapas, nesta ordem por dependência:
 
 1. Contratos (entrada e projeção) e `toSharedView` puro, com testes de ausência de dados **Feito em 20/11/2026** ([contratos](contratos.md#link-de-visualização--fase-7-etapa-1)).
-2. Tabela `project_share_links`, migração, token HMAC, rotas de gerenciamento e leitura pública, limite de requisições e allowlist do proxy.
+2. Tabela `project_share_links`, migração, token HMAC, rotas de gerenciamento e leitura pública, limite de requisições e allowlist do proxy. **Feito em 20/11/2026**, com testes integrados em PostgreSQL 17.
 3. Página `/ver` com `PlanCanvas`/`SeatList` em modo somente leitura e busca "Encontre seu lugar"; painel "Compartilhar" no editor e em `/projetos`.
 4. Fechamento: acessibilidade, celular (Moto G84), medição do bundle e runbook com `SHARE_LINK_SECRET`.
 

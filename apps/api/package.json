@@ -19,6 +19,7 @@
   "dependencies": {
     "@better-auth/drizzle-adapter": "^1.7.18",
     "@enlace/contracts": "workspace:*",
+    "@enlace/domain": "workspace:*",
     "@hono/node-server": "^2.1.6",
     "better-auth": "^1.7.18",
     "drizzle-orm": "^0.45.4",

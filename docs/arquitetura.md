@@ -24,11 +24,15 @@ Selecionar ou mover pessoas não espera rede. Salvamento usa revisão esperada e
 
 Better Auth executa na API com adaptador Drizzle e IDs textuais de usuário. E-mail/senha, sessões persistidas, logout e recuperação via transporte SMTP configurável. Sem SMTP, recuperação é explicitamente indisponível; não se registram links ou tokens nos logs. Verificação de e-mail não é obrigatória nesta implementação; recebimento de e-mail e políticas de entrega ainda precisam de validação no ambiente de publicação.
 
-O navegador chama `/api/auth/*`, `/api/auth-capabilities` e `/api/projects` na origem do frontend. O proxy encaminha somente cabeçalhos permitidos ao destino configurado em `API_ORIGIN`; preserva múltiplos `Set-Cookie`, limita corpo a 2 MiB, recusa destino arbitrário e não armazena respostas privadas em cache. Cookies são HttpOnly, SameSite=Lax e Secure em produção. O `baseURL` público da autenticação deriva de `WEB_ORIGIN`, sem confiar em host encaminhado pelo cliente.
+O navegador chama `/api/auth/*`, `/api/auth-capabilities`, `/api/projects` (incluindo `/api/projects/:id/share-links`) e `/api/shared/view` na origem do frontend. O proxy encaminha somente cabeçalhos permitidos ao destino configurado em `API_ORIGIN`; preserva múltiplos `Set-Cookie`, limita corpo a 2 MiB, recusa destino arbitrário e não armazena respostas privadas em cache. Cookies são HttpOnly, SameSite=Lax e Secure em produção. O `baseURL` público da autenticação deriva de `WEB_ORIGIN`, sem confiar em host encaminhado pelo cliente.
 
 As escritas conferem origem no proxy e no backend. CORS não substitui sessão/CSRF. Cada chamada de projeto obtém a sessão no servidor sem cache de cookie de identidade, e usa o proprietário da sessão nas consultas. Uma conta diferente recebe 404 para o ID alheio. `ownerId` vindo do corpo é recusado pelos contratos estritos.
 
 O controle de frequência da autenticação é persistido no PostgreSQL. Como não há cadeia de proxies/IP confiável configurada, cabeçalhos IP do cliente são ignorados; os contadores são compartilhados por endpoint. Esse limite protege de rajadas, mas não substitui proteção individual contra abuso. Configurar uma cadeia confiável e validar limites/fairness antes de exposição pública.
+
+## Link de visualização
+
+Implementado na API em 20/11/2026 ([ADR-0014](decisoes/0014-link-de-visualizacao.md)); a página `/ver` ainda não existe. `POST /api/shared/view` é a única rota que devolve dados de projeto sem sessão. Ela recebe o token no corpo, confere o HMAC antes de consultar o banco e devolve só a projeção de `toSharedView`. O token não vale como sessão em nenhuma outra rota. Gerenciar links segue as regras das demais escritas: sessão, origem exata, dono na consulta e bloqueio da linha do projeto. O limite de leituras é por link e por instância (600 por minuto), pois a API só vê o IP do proxy, a mesma limitação da autenticação.
 
 ## Agregado, transações e conflitos
 

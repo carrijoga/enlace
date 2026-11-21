@@ -24,6 +24,7 @@ export default defineRailway(() => {
       PG_MIGRATOR_ROLE: 'enlace_migrator',
       WEB_ORIGIN: preserve(),
       BETTER_AUTH_SECRET: preserve(),
+      SHARE_LINK_SECRET: preserve(),
       DATABASE_URL: preserve(),
       MIGRATOR_DATABASE_URL: preserve(),
     },

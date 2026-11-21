@@ -417,6 +417,8 @@ export const shareLinkListResponseSchema = z
   .object({ links: z.array(shareLinkSchema).max(MAX_ACTIVE_SHARE_LINKS) })
   .strict();
 export const sharedViewRequestSchema = z.object({ token: shareTokenSchema }).strict();
+/** Corpo vazio: métodos que alteram dados sempre mandam JSON pelo proxy. */
+export const revokeShareLinkRequestSchema = z.object({}).strict();
 
 /** Planta sem `linkedCounts`, que é preferência do editor e não interessa a quem só vê. */
 const sharedLayoutSchema = layoutSchema.omit({ linkedCounts: true });

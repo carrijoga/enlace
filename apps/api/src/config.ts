@@ -3,6 +3,7 @@ export interface ApiConfig {
   webOrigin: string;
   databaseUrl?: string;
   authSecret?: string;
+  shareLinkSecret?: string;
   smtpHost?: string;
   smtpPort?: number;
   smtpUser?: string;
@@ -36,6 +37,15 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
   }
   if (authSecret && authSecret.length < 32)
     throw new Error('BETTER_AUTH_SECRET deve ter ao menos 32 caracteres');
+  // ADR-0014: assina os links de visualização. Separado do segredo de sessão, para que trocar um
+  // não invalide o outro; trocá-lo desativa todos os links de uma vez.
+  const shareLinkSecret = env.SHARE_LINK_SECRET;
+  if (production && !shareLinkSecret)
+    throw new Error('SHARE_LINK_SECRET é obrigatória em produção');
+  if (shareLinkSecret && shareLinkSecret.length < 32)
+    throw new Error('SHARE_LINK_SECRET deve ter ao menos 32 caracteres');
+  if (shareLinkSecret && shareLinkSecret === authSecret)
+    throw new Error('SHARE_LINK_SECRET deve ser diferente de BETTER_AUTH_SECRET');
   const smtpPort = env.SMTP_PORT === undefined ? undefined : Number(env.SMTP_PORT);
   if (smtpPort !== undefined && (!Number.isInteger(smtpPort) || smtpPort < 1 || smtpPort > 65535)) {
     throw new Error('SMTP_PORT inválida');
@@ -49,6 +59,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     webOrigin: parsedOrigin.origin,
     ...(env.DATABASE_URL ? { databaseUrl: env.DATABASE_URL } : {}),
     ...(authSecret ? { authSecret } : {}),
+    ...(shareLinkSecret ? { shareLinkSecret } : {}),
     ...(env.SMTP_HOST ? { smtpHost: env.SMTP_HOST } : {}),
     ...(smtpPort ? { smtpPort } : {}),
     ...(env.SMTP_USER ? { smtpUser: env.SMTP_USER } : {}),

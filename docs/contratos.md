@@ -80,7 +80,7 @@ Exports: `createProjectRequestSchema`, `saveProjectRequestSchema`, `deleteProjec
 
 ## Link de visualização — fase 7, etapa 1
 
-Implementados em 20/11/2026 os schemas e a projeção do [ADR-0014](decisoes/0014-link-de-visualizacao.md). As rotas, a tabela e a geração do token ainda não existem (etapa 2).
+Implementados em 20/11/2026 os schemas e a projeção do [ADR-0014](decisoes/0014-link-de-visualizacao.md). As rotas, a tabela e o token vieram na etapa 2 (tabela abaixo); a página `/ver` ainda não existe.
 
 | Schema | Forma | Regras |
 | --- | --- | --- |
@@ -90,4 +90,15 @@ Implementados em 20/11/2026 os schemas e a projeção do [ADR-0014](decisoes/001
 | `sharedViewSchema` | União por `mode` | Base: `couple`, `weddingDate` e `layout` sem `linkedCounts`. `names` acrescenta `seats: [{ seatId, name, category }]`; `plan` acrescenta só `occupiedSeatIds`. Estrito: título, notas, IDs de convidado, revisão e dono são recusados. Cada cadeira citada existe na planta e aparece uma vez. |
 
 `toSharedView(project, mode)`, em `@enlace/domain`, monta a projeção a partir do agregado validado. Cada campo é copiado explicitamente, sem espalhar o projeto, e o resultado passa por `sharedViewSchema`. Só pessoas com lugar aparecem, na ordem da planta (fileira, esquerda, direita), não na ordem da lista. Os testes em `packages/domain/test/shared-view.test.ts` verificam no JSON serializado a ausência de notas, título, IDs e nomes de convidados (este último no modo `plan`) e de convidados sem lugar.
+
+### Rotas (etapa 2)
+
+| Operação | Entrada | Resposta |
+| --- | --- | --- |
+| `GET /api/projects/:id/share-links` | Sessão por cookie | `{ links: [{ id, label, mode, createdAt, expiresAt, token }] }`, só os ativos |
+| `POST /api/projects/:id/share-links` | `{ label, mode, expiresInDays }` | `201` com o link |
+| `DELETE /api/projects/:id/share-links/:linkId` | `{}` (o proxy exige JSON em métodos que alteram dados) | `204`, também quando o link já estava desativado |
+| `POST /api/shared/view` | `{ token }`, sem sessão | Projeção `sharedViewSchema` |
+
+Erros novos: `share_link_limit` (409) ao passar de 10 links ativos, `sharing_unavailable` (503) sem banco ou sem `SHARE_LINK_SECRET`, e `rate_limited` (429, com `Retry-After`) acima de 600 leituras por minuto num link. Na leitura pública, token malformado, forjado, de outro segredo, desativado, vencido ou de projeto excluído dá sempre `404 { error: 'not_found' }`. Projeto de outra conta dá 404 nas rotas do dono. Export novo: `revokeShareLinkRequestSchema`.
 

@@ -14,7 +14,11 @@ export class ProjectStoreError extends Error {
   constructor(
     public readonly status: 400 | 404 | 409,
     public readonly code:
-      'invalid_request' | 'not_found' | 'revision_conflict' | 'operation_reused',
+      | 'invalid_request'
+      | 'not_found'
+      | 'revision_conflict'
+      | 'operation_reused'
+      | 'share_link_limit',
   ) {
     super(code);
     this.name = 'ProjectStoreError';
@@ -99,7 +103,7 @@ async function replaceAggregate(client: PoolClient, projectId: string, project: 
   );
 }
 
-async function readSnapshot(
+export async function readSnapshot(
   client: PoolClient,
   ownerId: string,
   id: string,
@@ -149,24 +153,30 @@ async function readSnapshot(
   };
 }
 
-export function createProjectStore(pool: Pool) {
-  async function tx<T>(callback: (client: PoolClient) => Promise<T>): Promise<T> {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      const result = await callback(client);
-      await client.query('COMMIT');
-      return result;
-    } catch (error) {
-      await client.query('ROLLBACK').catch(() => undefined);
-      // A vanished auth principal maps to an invalid request, not a leaked DB error.
-      if ((error as { code?: string })?.code === '23503')
-        throw new ProjectStoreError(400, 'invalid_request');
-      throw error;
-    } finally {
-      client.release();
-    }
+/** Uma conexão do pool do BEGIN ao COMMIT/ROLLBACK. */
+export async function transaction<T>(
+  pool: Pool,
+  callback: (client: PoolClient) => Promise<T>,
+): Promise<T> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await callback(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    // A vanished auth principal maps to an invalid request, not a leaked DB error.
+    if ((error as { code?: string })?.code === '23503')
+      throw new ProjectStoreError(400, 'invalid_request');
+    throw error;
+  } finally {
+    client.release();
   }
+}
+
+export function createProjectStore(pool: Pool) {
+  const tx = <T>(callback: (client: PoolClient) => Promise<T>) => transaction(pool, callback);
 
   return {
     async list(ownerId: string): Promise<ProjectSummary[]> {

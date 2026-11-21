@@ -2,6 +2,32 @@
 
 Atualizado em 20/11/2026, America/Sao_Paulo.
 
+## Fase 7, etapa 2 (API dos links) concluída localmente — 20/11/2026
+
+Pedido do usuário.
+- Migração `0002_share_links.sql`: tabela `project_share_links`, sem o token.
+- `apps/api/src/projects/share-token.ts`: HMAC-SHA256 com contexto `enlace-share-link:v1:` e `timingSafeEqual`, recusando codificação não canônica.
+- `share-links.ts`: list, create com a linha do projeto bloqueada e limite de 10, revoke idempotente com corpo `{}`, e view com `REPEATABLE READ`, `readSnapshot` e `toSharedView`.
+- Rotas no `app.ts`, com `sameOriginJson` separado de `writable` para não exigir o store de projetos.
+- `store.ts` passou a exportar `transaction` e `readSnapshot`.
+- Proxy liberou `projects/:id/share-links[/:linkId]` e `shared/view`.
+- A API depende de `@enlace/domain`, e `build:api` compila o domínio.
+- `SHARE_LINK_SECRET` é obrigatória em produção, com 32+ caracteres e diferente de `BETTER_AUTH_SECRET`. Foi incluída em `.railway/railway.ts` (`preserve()`), `.env.example` e no runbook. O primeiro deploy precisa dela, ou a API não sobe.
+- Desvio registrado no ADR: o limite é por link e por instância (600/min), não por IP, porque a API só vê o proxy.
+
+Validação: 173 testes passaram com PostgreSQL 17 local (`TEST_DATABASE_URL` no contêiner `humpback-postgres-1`, criado por este worktree com volume próprio; `--maxWorkers=2 --testTimeout=30000`). check, lint, prettier (arquivos alterados) e `build:api` ok. O integrado cobre:
+- os dois modos sem dados privados no JSON;
+- última revisão salva, e links não mudam a revisão;
+- isolamento entre contas;
+- token recusado como Bearer ou cookie de sessão;
+- desativado, vencido e de outro segredo respondem 404;
+- limite de 10 com 13 criações simultâneas;
+- cascata ao excluir o projeto.
+
+Não verificados: role de runtime real com a tabela nova (coberta por `ALTER DEFAULT PRIVILEGES`, sem teste próprio), proxy Vercel→Railway hospedado.
+
+Próximo passo do tema: etapa 3. Página `/ver` pré-renderizada, com token no fragmento e `POST /api/shared/view`; `PlanCanvas`/`SeatList` com modo somente leitura explícito; busca "Encontre seu lugar"; noindex e `Referrer-Policy: no-referrer`; painel "Compartilhar" no editor e em `/projetos`.
+
 ## Fase 7, etapa 1 (contratos e projeção) concluída localmente — 20/11/2026
 
 Pedido do usuário. Em `@enlace/contracts`: `createShareLinkRequestSchema`, `shareLinkSchema`, `shareLinkListResponseSchema`, `sharedViewRequestSchema`, `sharedViewSchema` (união `names`/`plan`, estrita, layout sem `linkedCounts`), `MAX_ACTIVE_SHARE_LINKS` (10) e `SHARE_TOKEN_LENGTH` (64). Em `@enlace/domain`: `toSharedView(project, mode)`, com cópia campo a campo, só pessoas sentadas, na ordem da planta. O título ficou fora da projeção (questão aberta no ADR). Documentado em `docs/contratos.md`.
