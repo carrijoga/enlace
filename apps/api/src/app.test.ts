@@ -128,7 +128,27 @@ describe('API base', () => {
     expect(auth.status).toBe(503);
     expect(await auth.json()).toEqual({ error: 'auth_unavailable' });
     const capabilities = await app.request('/api/auth-capabilities');
-    expect(await capabilities.json()).toEqual({ passwordReset: false });
+    expect(await capabilities.json()).toEqual({ passwordReset: false, google: false });
+  });
+
+  it('informa Google nas capacidades somente com auth e as duas credenciais', async () => {
+    const google = { ...config, googleClientId: 'id.example', googleClientSecret: 'segredo' };
+    const semAuth = createApp(google, { checkReadiness: async () => undefined });
+    expect(await (await semAuth.request('/api/auth-capabilities')).json()).toEqual({
+      passwordReset: false,
+      google: false,
+    });
+    const auth = { handler: async () => new Response(null) } as never;
+    const comAuth = createApp(google, { checkReadiness: async () => undefined, auth });
+    expect(await (await comAuth.request('/api/auth-capabilities')).json()).toEqual({
+      passwordReset: false,
+      google: true,
+    });
+    const semGoogle = createApp(config, { checkReadiness: async () => undefined, auth });
+    expect(await (await semGoogle.request('/api/auth-capabilities')).json()).toEqual({
+      passwordReset: false,
+      google: false,
+    });
   });
 
   it('requires exact same origin for project mutations and auth for reads', async () => {

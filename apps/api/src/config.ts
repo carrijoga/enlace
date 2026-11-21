@@ -9,6 +9,8 @@ export interface ApiConfig {
   smtpUser?: string;
   smtpPassword?: string;
   smtpFrom?: string;
+  googleClientId?: string;
+  googleClientSecret?: string;
   version: string;
   production: boolean;
 }
@@ -50,6 +52,12 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
   if (smtpPort !== undefined && (!Number.isInteger(smtpPort) || smtpPort < 1 || smtpPort > 65535)) {
     throw new Error('SMTP_PORT inválida');
   }
+  // Login com Google é opcional, mas as duas credenciais andam juntas: uma só é erro de configuração.
+  const googleClientId = env.GOOGLE_CLIENT_ID || undefined;
+  const googleClientSecret = env.GOOGLE_CLIENT_SECRET || undefined;
+  if (Boolean(googleClientId) !== Boolean(googleClientSecret)) {
+    throw new Error('GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET devem ser definidos juntos');
+  }
   const port = Number(env.PORT ?? 3001);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error('PORT deve ser um inteiro entre 1 e 65535');
@@ -65,6 +73,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     ...(env.SMTP_USER ? { smtpUser: env.SMTP_USER } : {}),
     ...(env.SMTP_PASSWORD ? { smtpPassword: env.SMTP_PASSWORD } : {}),
     ...(env.SMTP_FROM ? { smtpFrom: env.SMTP_FROM } : {}),
+    ...(googleClientId && googleClientSecret ? { googleClientId, googleClientSecret } : {}),
     version: env.npm_package_version ?? '0.1.0',
     production,
   };

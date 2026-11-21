@@ -55,6 +55,17 @@ describe('readConfig', () => {
     expect(() => readConfig({ PORT: '0' })).toThrow(/PORT/);
   });
 
+  it('exige as duas credenciais do Google juntas', () => {
+    expect(() => readConfig({ GOOGLE_CLIENT_ID: 'id.example' })).toThrow(/GOOGLE_CLIENT_ID/);
+    expect(() => readConfig({ GOOGLE_CLIENT_SECRET: 'segredo' })).toThrow(/GOOGLE_CLIENT_SECRET/);
+    const semGoogle = readConfig({});
+    expect(semGoogle.googleClientId).toBeUndefined();
+    expect(semGoogle.googleClientSecret).toBeUndefined();
+    expect(
+      readConfig({ GOOGLE_CLIENT_ID: 'id.example', GOOGLE_CLIENT_SECRET: 'segredo' }),
+    ).toMatchObject({ googleClientId: 'id.example', googleClientSecret: 'segredo' });
+  });
+
   it('rejects short auth secrets and invalid SMTP ports', () => {
     expect(() => readConfig({ BETTER_AUTH_SECRET: 'short' })).toThrow(/32 caracteres/);
     expect(() => readConfig({ SMTP_PORT: '70000' })).toThrow(/SMTP_PORT/);
