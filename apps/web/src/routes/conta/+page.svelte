@@ -4,9 +4,15 @@
   import {
     authError,
     authRequest,
+    AuthRequestError,
+    listAccountProviders,
+    oauthErrorMessage,
+    readCapabilities,
     readSession,
+    startSocial,
     type AccountSession,
   } from '../../lib/account/client';
+  import WorkspaceHeader from '../../lib/account/WorkspaceHeader.svelte';
   import { clearAccountDraft } from '../../lib/editor/files/drafts';
   import { participationReturnPath } from '../../lib/share/client';
 
@@ -21,9 +27,21 @@
   let message = $state('');
   let error = $state(false);
   let resetAvailable = $state(false);
+  let googleAvailable = $state(false);
+  let providers = $state<string[] | null>(null);
   let nextPath = $state('/projetos');
   let deletePassword = $state('');
   let deleteConfirmation = $state('');
+  let deleteMessage = $state('');
+  let deleteError = $state(false);
+  let reauthNeeded = $state(false);
+  let deleteReady = $state(false);
+  let deleteOpen = $state(false);
+
+  // Sem lista de provedores (falha), assume conta com senha: é o formulário que já existia.
+  const hasPassword = $derived(providers === null || providers.includes('credential'));
+  const googleLinked = $derived(providers?.includes('google') === true);
+  const tabMode = $derived(mode === 'signup' ? 'signup' : 'login');
 
   onMount(() => {
     const url = new URL(window.location.href);
@@ -38,6 +56,13 @@
     }
     token = url.searchParams.get('token') ?? '';
     if (token) mode = 'reset';
+    const oauthError = url.searchParams.get('error');
+    const connected = url.searchParams.get('conectado');
+    const deleteStep = url.searchParams.get('excluir');
+    if (oauthError || connected || deleteStep) {
+      for (const key of ['error', 'conectado', 'excluir']) url.searchParams.delete(key);
+      history.replaceState(history.state, '', `${url.pathname}${url.search}${url.hash}`);
+    }
     void Promise.all([
       readSession()
         .then((value) => {
@@ -45,22 +70,115 @@
           if (value && participationNext) window.location.replace(participationNext);
         })
         .catch(() => (message = 'Não foi possível consultar sua sessão.')),
-      fetch('/api/auth-capabilities')
-        .then((response) => (response.ok ? response.json() : null))
-        .then((value) => (resetAvailable = value?.passwordReset === true))
-        .catch(() => (resetAvailable = false)),
-    ]).finally(() => (checking = false));
+      readCapabilities().then((value) => {
+        resetAvailable = value.passwordReset;
+        googleAvailable = value.google;
+      }),
+    ])
+      .then(async () => {
+        if (session) {
+          providers = await listAccountProviders().catch(() => null);
+          if (oauthError) {
+            const result = oauthErrorMessage(oauthError);
+            message = result.text;
+            error = result.alert;
+          }
+          if (connected === 'google' && providers?.includes('google'))
+            message = 'Google conectado. Agora você também pode entrar com ele.';
+          if (deleteStep === 'confirmar') {
+            deleteReady = true;
+            deleteOpen = true;
+            reauthNeeded = false;
+            checking = false;
+            await tick();
+            const zone = document.getElementById('delete-summary');
+            zone?.scrollIntoView({
+              block: 'center',
+              behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+            });
+            zone?.focus();
+          }
+        } else if (oauthError) {
+          const result = oauthErrorMessage(oauthError);
+          message = result.text;
+          error = result.alert;
+          if (oauthError === 'account_not_linked') {
+            mode = 'login';
+            email = '';
+          }
+        }
+      })
+      .finally(() => (checking = false));
   });
 
-  // Os botões de troca de modo são removidos da página; leva o foco ao primeiro campo do novo modo.
-  async function changeMode(next: typeof mode) {
+  // Troca de modo: o foco vai ao primeiro campo, exceto quando a troca vem das abas (o foco fica nelas).
+  async function changeMode(next: typeof mode, focusField = true) {
     mode = next;
     message = '';
     error = false;
+    if (!focusField) return;
     await tick();
     document
       .getElementById(next === 'signup' ? 'name' : next === 'reset' ? 'password' : 'email')
       ?.focus();
+  }
+
+  function onTabKeydown(event: KeyboardEvent) {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const next = event.key === 'ArrowLeft' || event.key === 'Home' ? 'login' : 'signup';
+    void changeMode(next, false).then(() => document.getElementById(`tab-${next}`)?.focus());
+  }
+
+  async function continueWithGoogle() {
+    loading = true;
+    message = '';
+    error = false;
+    try {
+      window.location.assign(await startSocial('sign-in/social', window.location.origin, nextPath));
+    } catch (cause) {
+      message = authError(cause);
+      error = true;
+      loading = false;
+    }
+  }
+
+  async function connectGoogle() {
+    loading = true;
+    message = '';
+    error = false;
+    try {
+      window.location.assign(
+        await startSocial(
+          'link-social',
+          window.location.origin,
+          `${resolve('/conta')}?conectado=google`,
+        ),
+      );
+    } catch (cause) {
+      message = authError(cause);
+      error = true;
+      loading = false;
+    }
+  }
+
+  async function reauthenticateWithGoogle() {
+    loading = true;
+    deleteMessage = '';
+    deleteError = false;
+    try {
+      window.location.assign(
+        await startSocial(
+          'sign-in/social',
+          window.location.origin,
+          `${resolve('/conta')}?excluir=confirmar`,
+        ),
+      );
+    } catch (cause) {
+      deleteMessage = authError(cause);
+      deleteError = true;
+      loading = false;
+    }
   }
 
   async function submit(event: SubmitEvent) {
@@ -108,10 +226,22 @@
 
   async function logout() {
     loading = true;
+    message = '';
+    error = false;
     try {
       await authRequest('sign-out', {});
-      if (session) clearAccountDraft(window.localStorage, session.user.id);
+      const userId = session?.user.id;
       session = null;
+      try {
+        if (userId) clearAccountDraft(window.localStorage, userId);
+      } catch {
+        mode = 'login';
+        message =
+          'Você saiu da sua conta, mas não foi possível remover os rascunhos deste navegador. Remova os dados do site manualmente.';
+        await tick();
+        document.getElementById('account-message')?.focus();
+        return;
+      }
       message = 'Você saiu da sua conta.';
       window.location.assign(resolve('/editor'));
     } catch (cause) {
@@ -126,10 +256,10 @@
     event.preventDefault();
     if (!session || deleteConfirmation.trim() !== session.user.email) return;
     loading = true;
-    message = '';
-    error = false;
+    deleteMessage = '';
+    deleteError = false;
     try {
-      await authRequest('delete-user', { password: deletePassword });
+      await authRequest('delete-user', hasPassword ? { password: deletePassword } : {});
       const deletedUserId = session.user.id;
       session = null;
       try {
@@ -141,8 +271,16 @@
       }
       window.location.assign(resolve('/editor'));
     } catch (cause) {
-      message = authError(cause);
-      error = true;
+      if (cause instanceof AuthRequestError && cause.code === 'REAUTH_REQUIRED') {
+        reauthNeeded = true;
+        deleteReady = false;
+        loading = false;
+        await tick();
+        document.getElementById('confirm-google')?.focus();
+      } else {
+        deleteMessage = authError(cause);
+        deleteError = true;
+      }
     } finally {
       loading = false;
     }
@@ -156,154 +294,315 @@
   /></svelte:head
 >
 
-<header class="site-header">
-  <a class="brand" href={resolve('/')} aria-label="Enlace, início"
-    ><svg viewBox="0 0 36 36" aria-hidden="true"
-      ><ellipse cx="14" cy="18" rx="8" ry="11" /><ellipse cx="23" cy="18" rx="8" ry="11" /></svg
-    ><span>enlace</span></a
-  >
-  <nav aria-label="Principal">
-    <a class="header-link" href={resolve('/projetos')}
-      >Meus projetos <span aria-hidden="true">→</span></a
+{#if session && !checking}
+  <WorkspaceHeader current="conta" />
+{:else}
+  <header class="site-header">
+    <a class="brand" href={resolve('/')} aria-label="Enlace, início"
+      ><svg viewBox="0 0 36 36" aria-hidden="true"
+        ><ellipse cx="14" cy="18" rx="8" ry="11" /><ellipse cx="23" cy="18" rx="8" ry="11" /></svg
+      ><span>enlace</span></a
     >
-  </nav>
-</header>
-
-<main class="account-page">
-  <section class="account-intro">
-    <h1>Seu planejamento, de onde estiver.</h1>
-    <p>
-      Entre para abrir seus projetos em outros dispositivos. Você também pode continuar sem conta no
-      editor local.
-    </p>
-    <a class="local-link" href={resolve('/editor')}
-      >Continuar sem entrar <span aria-hidden="true">→</span></a
-    >
-  </section>
-
-  <section class="account-form" aria-labelledby="account-title">
-    {#if checking}<p role="status">Verificando sua sessão…</p>
-    {:else if session}
-      <h2 id="account-title">Olá, {session.user.name || session.user.email}</h2>
-      <p class="account-email">{session.user.email}</p>
-      <a class="button primary" href={resolve('/projetos')}>Abrir meus projetos</a>
-      <button class="button secondary" disabled={loading} onclick={logout}>Sair da conta</button>
-      <p class="local-draft-note">
-        Ao sair, os rascunhos desta conta são removidos deste navegador. Exporte alterações ainda
-        não salvas antes de sair.
-      </p>
-      <section class="danger-zone" aria-labelledby="delete-title">
-        <h3 id="delete-title">Excluir conta</h3>
-        <p>Esta ação é permanente. Seus projetos, convidados, lugares e sessões serão apagados.</p>
-        <form onsubmit={deleteAccount}>
-          <label for="delete-password">Confirme sua senha</label>
-          <input
-            id="delete-password"
-            type="password"
-            bind:value={deletePassword}
-            autocomplete="current-password"
-            aria-describedby={message ? 'delete-message' : undefined}
-            required
-            minlength="12"
-            maxlength="128"
-          />
-          <label for="delete-confirmation">Digite {session.user.email} para confirmar</label>
-          <input
-            id="delete-confirmation"
-            type="email"
-            bind:value={deleteConfirmation}
-            autocomplete="off"
-            required
-            maxlength="254"
-          />
-          <div id="delete-message" role={error ? 'alert' : 'status'}>
-            {#if message}<p class:message-error={error} class="message">{message}</p>{/if}
-          </div>
-          <button
-            class="button destructive"
-            disabled={loading || deleteConfirmation.trim() !== session.user.email}
-          >
-            {loading ? 'Aguarde…' : 'Excluir minha conta permanentemente'}
-          </button>
-        </form>
-      </section>
-    {:else}
-      {#key mode}
-        <h2 id="account-title" class="mode-copy">
-          {mode === 'signup'
-            ? 'Criar conta'
-            : mode === 'recover'
-              ? 'Recuperar acesso'
-              : mode === 'reset'
-                ? 'Criar nova senha'
-                : 'Bem-vinda(o) de volta'}
-        </h2>
-        <p class="mode-copy">
-          {mode === 'signup'
-            ? 'Guarde seus projetos e retome em outro dispositivo.'
-            : mode === 'recover'
-              ? 'Informe o e-mail usado na conta.'
-              : mode === 'reset'
-                ? 'Escolha uma senha nova para sua conta.'
-                : 'Entre para continuar de onde parou.'}
-        </p>
-      {/key}
-      <form onsubmit={submit}>
-        {#if mode === 'signup'}<label for="name">Seu nome</label><input
-            id="name"
-            bind:value={name}
-            autocomplete="name"
-            required
-            maxlength="100"
-          />{/if}
-        {#if mode !== 'reset'}<label for="email">E-mail</label><input
-            id="email"
-            type="email"
-            bind:value={email}
-            autocomplete="email"
-            aria-describedby={message ? 'account-message' : undefined}
-            required
-            maxlength="254"
-          />{/if}
-        {#if mode !== 'recover'}<label for="password"
-            >{mode === 'reset' ? 'Nova senha' : 'Senha'}</label
-          ><input
-            id="password"
-            type="password"
-            bind:value={password}
-            autocomplete={mode === 'login' ? 'current-password' : 'new-password'}
-            aria-describedby={message ? 'account-message' : undefined}
-            required
-            minlength={mode === 'login' ? 8 : 12}
-            maxlength="128"
-          />{/if}
-        <div id="account-message" role={error ? 'alert' : 'status'}>
-          {#if message}<p class:message-error={error} class="message">{message}</p>{/if}
-        </div>
-        <button class="button primary submit" disabled={loading}
-          >{loading
-            ? 'Aguarde…'
-            : mode === 'signup'
-              ? 'Criar minha conta'
-              : mode === 'recover'
-                ? 'Enviar instruções'
-                : mode === 'reset'
-                  ? 'Salvar nova senha'
-                  : 'Entrar'}</button
+    {#if !checking}
+      <nav aria-label="Principal">
+        <a class="header-link" href={resolve('/projetos')}
+          >Meus projetos <span aria-hidden="true">→</span></a
         >
-      </form>
-      <nav class="form-links" aria-label="Opções de conta">
-        {#if mode === 'login'}<button type="button" onclick={() => changeMode('signup')}
-            >Criar conta</button
-          >{#if resetAvailable}<button type="button" onclick={() => changeMode('recover')}
-              >Esqueci minha senha</button
-            >{/if}
-        {:else}<button type="button" onclick={() => changeMode('login')}>Voltar para entrar</button
-          >{/if}
       </nav>
     {/if}
-  </section>
-</main>
+  </header>
+{/if}
+
+{#if checking}
+  <main class="settings">
+    <div class="settings-heading">
+      <h1>Conta</h1>
+    </div>
+    <p role="status">Verificando sua sessão…</p>
+  </main>
+{:else if session}
+  <main class="settings">
+    <div class="settings-heading">
+      <h1>Minha conta</h1>
+      <a class="button primary" href={resolve('/projetos')}>Abrir meus projetos</a>
+    </div>
+    <div role={error ? 'alert' : 'status'}>
+      {#if message}<p class:message-error={error} class="message">{message}</p>{/if}
+    </div>
+    <div class="settings-sheet">
+      <section class="settings-section" aria-labelledby="profile-title">
+        <h2 id="profile-title">Perfil</h2>
+        <dl class="profile">
+          {#if session.user.name}
+            <div>
+              <dt>Nome</dt>
+              <dd>{session.user.name}</dd>
+            </div>
+          {/if}
+          <div>
+            <dt>E-mail</dt>
+            <dd>{session.user.email}</dd>
+          </div>
+        </dl>
+      </section>
+      <section class="settings-section" aria-labelledby="access-title">
+        <h2 id="access-title">Acesso</h2>
+        <div class="access-options">
+          {#if providers?.includes('credential')}
+            <p class="access-method">E-mail e senha</p>
+          {/if}
+          {#if googleLinked}
+            <p class="linked-ok">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+              Google conectado
+            </p>
+          {:else if googleAvailable}
+            <p>Vincule sua conta do Google para entrar com ela.</p>
+            <button class="button google" type="button" disabled={loading} onclick={connectGoogle}>
+              {@render googleLogo()}<span>Conectar Google</span>
+            </button>
+          {:else if !providers?.includes('credential')}
+            <p>Não foi possível consultar seus métodos de acesso.</p>
+          {/if}
+        </div>
+      </section>
+      <section class="settings-section" aria-labelledby="manage-title">
+        <h2 id="manage-title">Gerenciamento</h2>
+        <div>
+          <button class="button secondary" type="button" disabled={loading} onclick={logout}>
+            Sair da conta
+          </button>
+          <p class="local-draft-note">
+            Ao sair, os rascunhos desta conta são removidos deste navegador. Exporte alterações
+            ainda não salvas antes de sair.
+          </p>
+          <details class="danger-zone" id="danger-zone" bind:open={deleteOpen}>
+            <summary id="delete-summary">Excluir conta</summary>
+            <div class="delete-details">
+              <p>
+                Esta ação é permanente. Seus projetos, convidados, lugares e sessões serão apagados.
+              </p>
+              {#if deleteReady}
+                <p class="ready" role="status">
+                  Identidade confirmada. Você já pode confirmar a exclusão.
+                </p>
+              {/if}
+              <div id="delete-message" role={deleteError ? 'alert' : 'status'}>
+                {#if deleteMessage}<p class:message-error={deleteError} class="message">
+                    {deleteMessage}
+                  </p>{/if}
+              </div>
+              {#if reauthNeeded && !hasPassword}
+                <div class="reauth">
+                  <p id="reauth-help">Por segurança, confirme sua identidade com o Google.</p>
+                  <button
+                    id="confirm-google"
+                    class="button google"
+                    type="button"
+                    aria-describedby="reauth-help"
+                    disabled={loading}
+                    onclick={reauthenticateWithGoogle}
+                  >
+                    {@render googleLogo()}<span>Confirmar com o Google</span>
+                  </button>
+                </div>
+              {:else}
+                <form onsubmit={deleteAccount}>
+                  {#if hasPassword}
+                    <label for="delete-password">Confirme sua senha</label>
+                    <input
+                      id="delete-password"
+                      type="password"
+                      bind:value={deletePassword}
+                      autocomplete="current-password"
+                      aria-describedby={deleteMessage ? 'delete-message' : undefined}
+                      required
+                      minlength="12"
+                      maxlength="128"
+                    />
+                  {/if}
+                  <label for="delete-confirmation">Digite {session.user.email} para confirmar</label
+                  >
+                  <input
+                    id="delete-confirmation"
+                    type="email"
+                    bind:value={deleteConfirmation}
+                    autocomplete="off"
+                    aria-describedby={deleteMessage ? 'delete-message' : undefined}
+                    required
+                    maxlength="254"
+                  />
+                  <button
+                    class="button destructive"
+                    disabled={loading || deleteConfirmation.trim() !== session.user.email}
+                  >
+                    {loading ? 'Aguarde…' : 'Excluir minha conta permanentemente'}
+                  </button>
+                </form>
+              {/if}
+            </div>
+          </details>
+        </div>
+      </section>
+    </div>
+  </main>
+{:else}
+  <main class="account-page">
+    <section class="account-intro">
+      <h1>Seu planejamento, de onde estiver.</h1>
+      <p>
+        Entre para abrir seus projetos em outros dispositivos. Você também pode continuar sem conta
+        no editor local.
+      </p>
+      <a class="local-link" href={resolve('/editor')}
+        >Continuar sem entrar <span aria-hidden="true">→</span></a
+      >
+    </section>
+
+    <section class="account-form" aria-labelledby="account-title">
+      {#if mode !== 'reset'}
+        {#if googleAvailable && mode !== 'recover'}
+          <button
+            class="button google"
+            type="button"
+            disabled={loading}
+            onclick={continueWithGoogle}
+          >
+            {@render googleLogo()}<span>Continuar com o Google</span>
+          </button>
+          <p class="divider"><span>ou use seu e-mail</span></p>
+        {/if}
+        {#if mode !== 'recover'}
+          <div class="tabs" role="tablist" aria-label="Acesso por e-mail">
+            <button
+              type="button"
+              role="tab"
+              id="tab-login"
+              aria-selected={tabMode === 'login'}
+              aria-controls="auth-panel"
+              tabindex={tabMode === 'login' ? 0 : -1}
+              onclick={() => changeMode('login', false)}
+              onkeydown={onTabKeydown}>Entrar</button
+            >
+            <button
+              type="button"
+              role="tab"
+              id="tab-signup"
+              aria-selected={tabMode === 'signup'}
+              aria-controls="auth-panel"
+              tabindex={tabMode === 'signup' ? 0 : -1}
+              onclick={() => changeMode('signup', false)}
+              onkeydown={onTabKeydown}>Criar conta</button
+            >
+          </div>
+        {/if}
+      {/if}
+      <div
+        id="auth-panel"
+        role={mode === 'login' || mode === 'signup' ? 'tabpanel' : undefined}
+        aria-labelledby={mode === 'login' || mode === 'signup' ? `tab-${mode}` : 'account-title'}
+      >
+        {#key mode}
+          <h2 id="account-title" class="mode-copy">
+            {mode === 'signup'
+              ? 'Criar conta'
+              : mode === 'recover'
+                ? 'Recuperar acesso'
+                : mode === 'reset'
+                  ? 'Criar nova senha'
+                  : 'Bem-vinda(o) de volta'}
+          </h2>
+          <p class="mode-copy">
+            {mode === 'signup'
+              ? googleAvailable
+                ? 'Guarde seus projetos e retome em outro dispositivo. Com o Google, você não precisa criar senha.'
+                : 'Guarde seus projetos e retome em outro dispositivo.'
+              : mode === 'recover'
+                ? 'Informe o e-mail usado na conta.'
+                : mode === 'reset'
+                  ? 'Escolha uma senha nova para sua conta.'
+                  : 'Entre para continuar de onde parou.'}
+          </p>
+        {/key}
+        <form onsubmit={submit}>
+          {#if mode === 'signup'}<label for="name">Seu nome</label><input
+              id="name"
+              bind:value={name}
+              autocomplete="name"
+              required
+              maxlength="100"
+            />{/if}
+          {#if mode !== 'reset'}<label for="email">E-mail</label><input
+              id="email"
+              type="email"
+              bind:value={email}
+              autocomplete="email"
+              aria-describedby={message ? 'account-message' : undefined}
+              required
+              maxlength="254"
+            />{/if}
+          {#if mode !== 'recover'}<label for="password"
+              >{mode === 'reset' ? 'Nova senha' : 'Senha'}</label
+            ><input
+              id="password"
+              type="password"
+              bind:value={password}
+              autocomplete={mode === 'login' ? 'current-password' : 'new-password'}
+              aria-describedby={message ? 'account-message' : undefined}
+              required
+              minlength={mode === 'login' ? 8 : 12}
+              maxlength="128"
+            />{/if}
+          <div id="account-message" role={error ? 'alert' : 'status'} tabindex="-1">
+            {#if message}<p class:message-error={error} class="message">{message}</p>{/if}
+          </div>
+          <button class="button primary submit" disabled={loading}
+            >{loading
+              ? 'Aguarde…'
+              : mode === 'signup'
+                ? 'Criar minha conta'
+                : mode === 'recover'
+                  ? 'Enviar instruções'
+                  : mode === 'reset'
+                    ? 'Salvar nova senha'
+                    : 'Entrar'}</button
+          >
+        </form>
+        <nav class="form-links" aria-label="Opções de conta">
+          {#if mode === 'login'}{#if resetAvailable}<button
+                type="button"
+                onclick={() => changeMode('recover')}>Esqueci minha senha</button
+              >{/if}
+          {:else if mode === 'recover'}<button type="button" onclick={() => changeMode('login')}
+              >Voltar para entrar</button
+            >
+          {/if}
+        </nav>
+      </div>
+    </section>
+  </main>
+{/if}
+
+{#snippet googleLogo()}
+  <svg class="g-logo" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+    <path
+      fill="#EA4335"
+      d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
+    />
+    <path
+      fill="#4285F4"
+      d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
+    />
+    <path
+      fill="#FBBC05"
+      d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
+    />
+    <path
+      fill="#34A853"
+      d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
+    />
+  </svg>
+{/snippet}
 
 <style>
   .account-page {
@@ -350,16 +649,92 @@
       400 27px/1.2 Georgia,
       serif;
   }
-  .account-form > p {
+  .account-form p {
     margin: 0 0 22px;
     color: #626e63;
     line-height: 1.65;
   }
-  .account-email {
+  .settings {
+    max-width: 960px;
+    margin-inline: auto;
+    padding: 56px clamp(16px, 5vw, 52px) 72px;
+  }
+  .settings-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+  .settings-heading h1 {
+    margin: 0;
+    font:
+      400 2.5rem/1.12 Georgia,
+      serif;
+    letter-spacing: -0.035em;
+  }
+  .settings-sheet {
+    margin-top: 14px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+  }
+  .settings-section {
+    display: grid;
+    grid-template-columns: minmax(130px, 0.45fr) minmax(0, 1fr);
+    gap: 16px 28px;
+    padding: 25px clamp(18px, 4vw, 32px);
+    line-height: 1.6;
     overflow-wrap: anywhere;
   }
+  .settings-section + .settings-section {
+    border-top: 1px solid var(--line);
+  }
+  .settings-section h2 {
+    margin: 0;
+    font:
+      400 1.5rem/1.25 Georgia,
+      serif;
+  }
+  .settings-section p {
+    margin: 0;
+  }
+  .settings-section .secondary {
+    margin-top: 0;
+  }
+  .settings-section .google {
+    width: auto;
+    max-width: 100%;
+  }
+  .settings-section button:not(:disabled) {
+    cursor: pointer;
+  }
+  .profile {
+    display: grid;
+    gap: 16px;
+    margin: 0;
+  }
+  .profile dt {
+    color: var(--muted);
+    font-size: 0.875rem;
+  }
+  .profile dd {
+    margin: 0;
+    font-weight: 600;
+  }
+  .access-options {
+    display: grid;
+    gap: 10px;
+    justify-items: start;
+    color: var(--muted);
+  }
+  .access-method {
+    color: #27342c;
+    font-weight: 650;
+  }
   .local-draft-note {
-    margin: 8px 0 0;
+    margin: 8px 0 0 !important;
     color: #626e63;
     font-size: 13px;
     line-height: 1.55;
@@ -409,25 +784,135 @@
   .secondary:hover:not(:disabled) {
     background: #eaf1e9;
   }
+  /* Botão do Google: fundo branco, borda cinza e logotipo oficial, conforme as diretrizes de marca. */
+  .google {
+    width: 100%;
+    gap: 12px;
+    color: #1f1f1f;
+    background: #fff;
+    border-color: #747775;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background var(--dur-base) var(--ease-out);
+  }
+  .google:hover:not(:disabled) {
+    background: #f6f8f6;
+  }
+  .google:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+  .g-logo {
+    flex: none;
+    width: 20px;
+    height: 20px;
+  }
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 20px 0 !important;
+    color: #626e63;
+    font-size: 13px;
+  }
+  .divider::before,
+  .divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #dfe3da;
+  }
+  .tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    margin-bottom: 22px;
+    padding: 4px;
+    background: #eef1ea;
+    border-radius: 10px;
+  }
+  .tabs button {
+    min-height: 44px;
+    color: #3d4a40;
+    background: transparent;
+    border: 0;
+    border-radius: 7px;
+    font: inherit;
+    font-weight: 650;
+    cursor: pointer;
+    transition:
+      background var(--dur-base) var(--ease-out),
+      color var(--dur-base) var(--ease-out);
+  }
+  .tabs button[aria-selected='true'] {
+    color: #1e4433;
+    background: #fffefb;
+    box-shadow: 0 1px 3px rgb(39 52 44 / 0.18);
+  }
+  .tabs button:focus-visible,
+  .google:focus-visible,
+  .form-links button:focus-visible,
+  .danger-zone summary:focus-visible {
+    outline: 3px solid #295842;
+    outline-offset: 2px;
+  }
   .mode-copy {
     animation: rise-in var(--dur-base) var(--ease-out);
   }
+  .linked-ok {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #295842 !important;
+    font-weight: 650;
+  }
+  .linked-ok svg {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
   .danger-zone {
-    margin-top: 28px;
-    padding-top: 22px;
-    border-top: 1px solid #e5c9c3;
+    margin-top: 18px;
+    padding-top: 8px;
+    border-top: 1px solid var(--line);
   }
-  .danger-zone h3 {
-    margin: 0 0 8px;
+  .danger-zone summary {
+    min-height: 44px;
+    padding-block: 10px;
     color: #873d35;
-    font:
-      600 18px/1.3 Georgia,
-      serif;
+    font-weight: 650;
+    cursor: pointer;
   }
-  .danger-zone > p {
+  .danger-zone summary:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .delete-details > p {
     color: #6f514c;
     font-size: 14px;
     line-height: 1.6;
+  }
+  .delete-details > .ready {
+    margin-top: 8px;
+    color: #295842;
+    font-weight: 650;
+    animation: rise-in var(--dur-base) var(--ease-out);
+  }
+  .delete-details form,
+  .delete-details .reauth {
+    margin-top: 12px;
+  }
+  .delete-details form .button {
+    margin-top: 6px;
+  }
+  .reauth p {
+    margin: 0 0 12px;
+    color: #6f514c;
+    font-size: 14px;
   }
   .destructive {
     color: #fff;
@@ -446,6 +931,9 @@
     gap: 14px 22px;
     margin-top: 18px;
   }
+  .form-links:empty {
+    display: none;
+  }
   .form-links button {
     min-height: 32px;
     padding: 0;
@@ -456,7 +944,7 @@
     text-underline-offset: 4px;
   }
   .message {
-    margin: 5px 0;
+    margin: 5px 0 !important;
     color: #295842 !important;
     font-size: 14px;
     animation: rise-in var(--dur-base) var(--ease-out);
@@ -470,6 +958,18 @@
     content: 'Erro: ';
     font-weight: 700;
   }
+  @media (prefers-reduced-motion: reduce) {
+    .mode-copy,
+    .message,
+    .message-error,
+    .delete-details > .ready {
+      animation: none;
+    }
+    .google,
+    .tabs button {
+      transition: none;
+    }
+  }
   @media (max-width: 720px) {
     .account-page {
       grid-template-columns: 1fr;
@@ -478,6 +978,21 @@
     }
     .account-intro h1 {
       max-width: 14ch;
+    }
+  }
+  @media (max-width: 540px) {
+    .settings {
+      padding-block: 32px 56px;
+    }
+    .settings-heading {
+      margin-bottom: 18px;
+    }
+    .settings-heading h1 {
+      font-size: 2rem;
+    }
+    .settings-section {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 12px;
     }
   }
 </style>

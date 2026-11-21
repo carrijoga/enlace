@@ -4,7 +4,7 @@ Atualizado em 21/11/2026, America/Sao_Paulo.
 
 ## Colaboração e cópia entre contas — 21/11/2026
 
-Entrega concluída localmente na branch `carrijoga/link-compartilhamento-somente`, estendendo o compartilhamento (ADR-0014) com os dois modos autenticados de participação registrados no ADR-0016 (`docs/decisoes/0016-compartilhamento-colaborativo-e-copia.md`):
+Entrega concluída localmente na branch `carrijoga/compartilhamento-edicao-clonagem`, estendendo o compartilhamento (ADR-0014) com os dois modos autenticados de participação registrados no ADR-0016 (`docs/decisoes/0016-compartilhamento-colaborativo-e-copia.md`):
 - **Contratos e domínio**: `role: 'owner' | 'editor'` em `ProjectSummary` e `ProjectSnapshot`; `shareLinkModeSchema` com `'names' | 'plan' | 'edit' | 'clone'`; `redeemShareLinkRequestSchema` (`{ token, mode: 'edit' | 'clone' }`) e `redeemShareLinkResponseSchema` (`{ projectId }`).
 - **Banco e migração**: `0003_project_link_redemptions.sql` (`project_link_editors` e `project_link_clone_receipts` + constraint `project_share_links_mode_check` ampliada). Script `db:generate` em `apps/api/package.json` apontado para `../../node_modules/drizzle-kit/bin.cjs` (compatível com `nodeLinker: hoisted`).
 - **API e concorrência**: `POST /api/shared/redeem` (autenticado, liberado no proxy `/api/[...path]`); `store.list` e `store.get` retornam projetos próprios (`owner`) e compartilhados com link `'edit'` ativo (`editor`); `store.save` revalida a permissão após `FOR UPDATE` na linha do projeto e escopa `operationId` por `(project_id, actor_id, operation_id)`; `insertProjectCopy` clona o último snapshot salvo com título `Cópia de ...` e recibo deduplicado por `(link_id, user_id)` enquanto a cópia existir.
@@ -12,10 +12,57 @@ Entrega concluída localmente na branch `carrijoga/link-compartilhamento-somente
 
 Validação:
 - `pnpm run check` (`tsc` + `svelte-check`) e `pnpm run lint` (`eslint --max-warnings=0`): 0 erros e 0 avisos.
-- `vitest run` com PostgreSQL 18 (`humpback-postgres-1`): 25 arquivos / 190 testes passando (incluindo concorrência `save` vs `revoke`, deduplicação e recriação de cópia após exclusão, isolamento entre modos e contas).
-- Build de produção e `pnpm run measure:web` (meta < 150 KiB gzip): `/` 41,95 KiB, `/editor` 90,87 KiB, `/ver` 79,16 KiB, `/participar` 71,87 KiB.
+- `vitest run` com PostgreSQL 18 (`humpback-postgres-1`): 26 arquivos / 199 testes passando (incluindo concorrência `save` vs `revoke`, deduplicação e recriação de cópia após exclusão, isolamento entre modos e contas).
+- Build de produção e `pnpm run measure:web` (meta < 150 KiB gzip): `/` 43,53 KiB, `/editor` 90,87 KiB, `/ver` 79,18 KiB, `/participar` 71,87 KiB.
 
-Próximo passo: revisar e commitar as alterações na branch / atualizar o PR da fase 7, e validar o fluxo hospedado após o deploy com `0003_project_link_redemptions.sql`.
+Próximo passo: abrir e revisar o PR para a `main`, e validar o fluxo hospedado após o deploy com `0003_project_link_redemptions.sql`.
+
+## Conta, projetos e retorno à página inicial — 21/11/2026
+
+Revisão concluída na branch `carrijoga/feat-login-cadastro-google`, integrada diretamente à `main` em 21/11/2026 após o merge do PR #5. A raiz pública agora consulta a sessão e leva quem entrou aos projetos. Conta e projetos compartilham a navegação. A conta reúne perfil, métodos de acesso e gerenciamento. A lista de projetos permite buscar por nome e renomear no próprio item.
+
+Verificados no navegador com PostgreSQL 18 descartável: cadastro por e-mail, retorno à raiz, recarga, busca sem acentos, criação e renomeação, abertura do painel de compartilhamento, saída em outra aba e página inicial com a API indisponível. Conferidas as telas de conta e projetos em 1280 e 390 px. Check, lint, 196 testes e build para preview no Windows passaram. A raiz usa 43,52 KiB de JavaScript inicial gzip.
+
+Próximo passo: validar o retorno do Google em HTTPS no ambiente hospedado. [Evidências e limites](docs/validacao-fase3.md#retorno-à-página-inicial-e-navegação-da-conta).
+
+## Redesign da distribuição de `/ver` — 21/11/2026
+
+Concluído localmente na branch `carrijoga/redesign-pagina-ver-layout`, a partir do merge do PR #3 (`ae7cfee`). A planta ocupa a coluna flexível em telas largas, com dados da cerimônia, busca e lista na lateral. Em telas estreitas, o conteúdo segue em uma coluna. O mapa abre enquadrado e, após escolher um resultado de busca, a cadeira aparece destacada e o teclado segue no mapa. Dois subagents revisaram a composição e os limites de layout. [Guia da página](docs/surfaces/ver.md).
+
+Validação: check sem avisos, lint, build web para preview local no Windows e 180 testes com PostgreSQL 18 temporário. JavaScript inicial de `/ver` em cerca de 79,2 KiB gzip, dentro dos 150 KiB. No navegador Orca com dados fictícios, mapa e legenda couberam na primeira tela no cenário de 55 cadeiras em 1440 × 900 e 390 × 844. Conferidos o limite da grade em 991/992 px, 288 cadeiras e nomes longos a 320 px, busca sem acento por teclado, zoom a 200%, reenquadramento, link anônimo e estados de erro.
+
+Integração à `main` solicitada pelo usuário. Após o merge, o próximo passo da fase 7 é conferir `/ver` na hospedagem e validar a página no Moto G84 físico e com leitor de tela.
+
+## Vincular Google com e-mail diferente — 21/11/2026
+
+PR #5 mergeado. Num teste do usuário em produção, o "Conectar Google" voltava sem mudar nada. A conta de senha e a conta Google tinham e-mails diferentes, então o Better Auth recusou com `email_does_not_match`, e a tela só mostrou a mensagem genérica. Correção na branch `carrijoga/fix-vincular-google-email-diferente`: `allowDifferentEmails: true`, que vale só para a vinculação explícita com sessão, e mensagens para `account_already_linked_to_different_user` e `unable_to_link_account`. A entrada deslogada continua sem vinculação implícita. ADR-0015 revisado. Commit `287a183` levado direto à `main` por fast-forward, sem PR, a pedido do usuário. O usuário também tinha criado uma conta de teste só Google (gabriel30carrijo@gmail.com), que precisa ser excluída antes de conectar esse Google à conta de senha; senão o resultado é `account_already_linked_to_different_user`. Não verificado: a vinculação real em produção, até o deploy.
+
+## Login com Google e exclusão de conta concluídos localmente — 21/11/2026
+
+Pedido do usuário, na branch `carrijoga/anthias` (ADR-0015). Claude Opus coordenou. Dois subagents Sonnet trabalharam com arquivos exclusivos: um na API e outro na tela `/conta` com `lib/account`. O coordenador fez ADR, docs, revisão e a correção do proxy.
+- `/conta` abre com "Continuar com o Google". Depois vêm o divisor "ou use seu e-mail" e as abas Entrar e Criar conta. Logado, a tela mostra "Conectar Google" ou "Google conectado".
+- A API usa `socialProviders.google` só quando `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` existem juntas. `auth-capabilities` informa `google`. Os erros de OAuth voltam para `/conta?error=`. Não há vinculação implícita com contas de senha (`account_not_linked`).
+- Exclusão: quem tem senha continua digitando a senha. Uma conta só Google precisa de sessão com até 10 min (`REAUTH_WINDOW_SECONDS`); fora disso recebe `REAUTH_REQUIRED` e reconfirma com o Google (`?excluir=confirmar`).
+- `.railway/railway.ts` declara as duas variáveis com `preserve()`.
+- Defeito encontrado no teste local e corrigido: o `sign-in/social` responde 200 com `location` para o Google, e o proxy da web tratava isso como redirecionamento externo, devolvendo 503. Agora o proxy só trata `location` em respostas 3xx.
+
+Validação:
+- check, lint e 195 testes passaram com PostgreSQL 18 temporário. O único pulado precisa de `TEST_CREATE_DATABASE`.
+- No navegador local, com credenciais Google falsas:
+  - tela deslogada e logada;
+  - `sign-in/social` pelo proxy devolve a URL do Google com `redirect_uri` `/api/auth/callback/google`;
+  - callback forjado volta para `/conta?error=state_mismatch`;
+  - conta só Google simulada no banco: com sessão antiga, a tela pede reconfirmação; com sessão nova e `?excluir=confirmar`, a exclusão apagou usuário, conta e sessão.
+
+Não verificados:
+- OAuth real (falta o cliente no Google Cloud);
+- `account_not_linked` e `link-social` reais;
+- 390 px (o Chrome não redimensionou);
+- leitor de tela.
+
+Commits `fef2e03` (API), `76a9a41` (web) e `9d04088` (docs) na branch `carrijoga/feat-login-cadastro-google`. PR #5 aberto para a `main` em 21/11/2026, a pedido do usuário.
+
+Próximo passo: o usuário revisa e faz o merge do PR #5. Para ativar o Google em produção, criar o cliente OAuth e gravar as variáveis na Railway (runbook em `docs/desenvolvimento.md`, passo 6). Depois, aceite hospedado do roadmap.
 
 ## Fase 7, auditoria axe e sincronização com a main — 21/11/2026
 
