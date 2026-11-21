@@ -1,6 +1,14 @@
 # Memória do projeto — Enlace
 
-Atualizado em 20/11/2026, America/Sao_Paulo.
+Atualizado em 21/11/2026, America/Sao_Paulo.
+
+## Redesign da distribuição de `/ver` — 21/11/2026
+
+Concluído localmente na branch `carrijoga/redesign-pagina-ver-layout`, a partir do merge do PR #3 (`ae7cfee`). A planta ocupa a coluna flexível em telas largas, com dados da cerimônia, busca e lista na lateral. Em telas estreitas, o conteúdo segue em uma coluna. O mapa abre enquadrado e, após escolher um resultado de busca, a cadeira aparece destacada e o teclado segue no mapa. Dois subagents revisaram a composição e os limites de layout. [Guia da página](docs/surfaces/ver.md).
+
+Validação: check sem avisos, lint, build web para preview local no Windows e 180 testes com PostgreSQL 18 temporário. JavaScript inicial de `/ver` em cerca de 79,2 KiB gzip, dentro dos 150 KiB. No navegador Orca com dados fictícios, mapa e legenda couberam na primeira tela no cenário de 55 cadeiras em 1440 × 900 e 390 × 844. Conferidos o limite da grade em 991/992 px, 288 cadeiras e nomes longos a 320 px, busca sem acento por teclado, zoom a 200%, reenquadramento, link anônimo e estados de erro.
+
+Integração à `main` solicitada pelo usuário. Após o merge, o próximo passo da fase 7 é conferir `/ver` na hospedagem e validar a página no Moto G84 físico e com leitor de tela.
 
 ## Fase 7, auditoria axe e sincronização com a main — 21/11/2026
 
