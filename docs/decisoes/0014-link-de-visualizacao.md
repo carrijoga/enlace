@@ -1,6 +1,6 @@
 # ADR-0014 — Link de visualização somente leitura
 
-Status: proposta em 20/11/2026. As escolhas marcadas como "decisão do usuário" estão confirmadas. O resto é proposta técnica e pode mudar na implementação. Nada deste documento está implementado.
+Status: proposta em 20/11/2026. As escolhas marcadas como "decisão do usuário" estão confirmadas. O resto é proposta técnica e pode mudar na implementação. Em 20/11/2026 foram implementados só os contratos e a projeção `toSharedView` (etapa 1, ver [contratos](../contratos.md#link-de-visualização--fase-7-etapa-1)). Tabela, token, rotas e página ainda não existem. Na implementação, o título do projeto ficou fora da projeção até a questão aberta ser decidida.
 
 ## Contexto
 

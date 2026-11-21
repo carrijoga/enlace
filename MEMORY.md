@@ -2,6 +2,16 @@
 
 Atualizado em 20/11/2026, America/Sao_Paulo.
 
+## Fase 7, etapa 1 (contratos e projeção) concluída localmente — 20/11/2026
+
+Pedido do usuário. Em `@enlace/contracts`: `createShareLinkRequestSchema`, `shareLinkSchema`, `shareLinkListResponseSchema`, `sharedViewRequestSchema`, `sharedViewSchema` (união `names`/`plan`, estrita, layout sem `linkedCounts`), `MAX_ACTIVE_SHARE_LINKS` (10) e `SHARE_TOKEN_LENGTH` (64). Em `@enlace/domain`: `toSharedView(project, mode)`, com cópia campo a campo, só pessoas sentadas, na ordem da planta. O título ficou fora da projeção (questão aberta no ADR). Documentado em `docs/contratos.md`.
+
+Validação: 133 testes passaram (15 integrados pulados, sem PostgreSQL), check/lint/prettier ok. Os testes verificam no JSON serializado a ausência de notas, título, IDs e convidados sem lugar, e de nomes e categorias no modo `plan`. Neste worktree foi preciso `pnpm install --frozen-lockfile` e `svelte-kit sync` antes dos testes web. Cuidado: `prettier --write` troca CRLF por LF em arquivos não alterados; restaurar antes de commitar.
+
+Correção de estado: o PR #1 já integrou `codex/ceremony-editor` à `main` (`3e32527`), então o bloqueio "main atrasada" da seção de deploy está resolvido. Continua pendente a aprovação do usuário para `railway config apply`.
+
+Próximo passo do tema: etapa 2. Tabela `project_share_links` e migração; token HMAC com `SHARE_LINK_SECRET` (`node:crypto`, `timingSafeEqual`); rotas de gerenciamento por dono e `POST /api/shared/view`; limite de requisições; allowlist do proxy; testes integrados de acesso cruzado, revogação, validade e limite de 10 sob concorrência. A API passa a depender de `@enlace/domain`.
+
 ## Link de visualização proposto como fase 7 — 20/11/2026
 
 Pedido do usuário, só documentado, sem código. Registrado em ADR-0014 (proposta), na fase 7 do roadmap e numa seção do `PRODUCT.md`. A tabela de evoluções em `modelo-de-dados.md` foi atualizada. Decisões do usuário: link para quem não tem conta, somente leitura; vários links com nome por projeto; o dono escolhe em cada link o modo "Com nomes" ou "Só a planta" e a validade (7, 30, 90 dias ou sem prazo); a execução vem antes da festa (fase 6), depois do aceite hospedado da fase 5. A numeração 7 foi mantida para não renumerar a festa. Proposta técnica: tabela `project_share_links` sem o token; token = `linkId` + HMAC (`SHARE_LINK_SECRET`) no fragmento `/ver#…`, enviado no corpo de `POST /api/shared/view`; projeção pura `toSharedView` sem notas, IDs, dono nem convidados sem lugar; limite de 10 links ativos; sem rastrear quem vê. Próximo passo do tema: o mesmo da fase 5 (aceite hospedado) e, em seguida, a etapa 1 da fase 7 (contratos e projeção).
