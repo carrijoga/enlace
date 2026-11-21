@@ -99,6 +99,17 @@ export function oauthErrorMessage(code: string): { text: string; alert: boolean 
       text: 'Tudo bem, você cancelou a entrada com o Google. Quando quiser, é só tentar de novo.',
       alert: false,
     };
+  // Erros do "Conectar Google" (link-social), que só acontece com a pessoa logada.
+  if (code === 'account_already_linked_to_different_user')
+    return {
+      text: 'Essa conta Google já está ligada a outra conta do Enlace. Escolha outra conta Google ou, se quiser trazê-la para cá, entre com ela, exclua aquela conta e conecte de novo.',
+      alert: true,
+    };
+  if (code === 'unable_to_link_account' || code === 'email_does_not_match')
+    return {
+      text: 'Não foi possível conectar o Google à sua conta. Tente novamente.',
+      alert: true,
+    };
   return { text: 'Não foi possível entrar com o Google. Tente novamente.', alert: true };
 }
 

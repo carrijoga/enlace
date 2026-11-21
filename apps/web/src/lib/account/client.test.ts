@@ -72,6 +72,10 @@ describe('oauthErrorMessage', () => {
   it('mapeia os códigos', () => {
     expect(oauthErrorMessage('account_not_linked').text).toContain('Já existe uma conta');
     expect(oauthErrorMessage('access_denied').alert).toBe(false);
+    expect(oauthErrorMessage('account_already_linked_to_different_user').text).toContain(
+      'já está ligada a outra conta',
+    );
+    expect(oauthErrorMessage('unable_to_link_account').text).toContain('conectar o Google');
     expect(oauthErrorMessage('qualquer').text).toBe(
       'Não foi possível entrar com o Google. Tente novamente.',
     );

@@ -70,6 +70,7 @@ describe('Better Auth configuration', () => {
     expect(auth.options.account?.accountLinking).toEqual({
       enabled: true,
       requireLocalEmailVerified: true,
+      allowDifferentEmails: true,
     });
     expect(auth.options.onAPIError?.errorURL).toBe('http://localhost:5173/conta');
     expect(auth.options.rateLimit?.customRules?.['/sign-in/social']).toEqual({

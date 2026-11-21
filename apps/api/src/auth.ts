@@ -59,8 +59,14 @@ export function createAuth(pool: Pool, config: ApiConfig, mailSender = createMai
     account: {
       // Contas por senha não têm e-mail verificado: entrar com Google no mesmo e-mail NÃO vincula
       // sozinho (evita sequestro por pré-cadastro; resulta em account_not_linked). Vincular só
-      // explicitamente, logado, via link-social, com o mesmo e-mail.
-      accountLinking: { enabled: true, requireLocalEmailVerified: true },
+      // explicitamente, logado, via link-social. Ali a pessoa já provou ser a dona da conta, então
+      // a conta Google pode ter outro e-mail (ADR-0015). `allowDifferentEmails` só vale para a
+      // vinculação explícita; o e-mail da conta não muda (`updateUserInfoOnLink` fica desligado).
+      accountLinking: {
+        enabled: true,
+        requireLocalEmailVerified: true,
+        allowDifferentEmails: true,
+      },
     },
     rateLimit: {
       enabled: true,

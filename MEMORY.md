@@ -18,6 +18,10 @@ Validação: check sem avisos, lint, build web para preview local no Windows e 1
 
 Integração à `main` solicitada pelo usuário. Após o merge, o próximo passo da fase 7 é conferir `/ver` na hospedagem e validar a página no Moto G84 físico e com leitor de tela.
 
+## Vincular Google com e-mail diferente — 21/11/2026
+
+PR #5 mergeado. Num teste do usuário em produção, o "Conectar Google" voltava sem mudar nada. A conta de senha e a conta Google tinham e-mails diferentes, então o Better Auth recusou com `email_does_not_match`, e a tela só mostrou a mensagem genérica. Correção na branch `carrijoga/fix-vincular-google-email-diferente`: `allowDifferentEmails: true`, que vale só para a vinculação explícita com sessão, e mensagens para `account_already_linked_to_different_user` e `unable_to_link_account`. A entrada deslogada continua sem vinculação implícita. ADR-0015 revisado. Não verificado: a vinculação real em produção, até o deploy.
+
 ## Login com Google e exclusão de conta concluídos localmente — 21/11/2026
 
 Pedido do usuário, na branch `carrijoga/anthias` (ADR-0015). Claude Opus coordenou. Dois subagents Sonnet trabalharam com arquivos exclusivos: um na API e outro na tela `/conta` com `lib/account`. O coordenador fez ADR, docs, revisão e a correção do proxy.
