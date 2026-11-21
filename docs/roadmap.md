@@ -118,7 +118,7 @@ Etapas, nesta ordem por dependência:
 1. Contratos (entrada e projeção) e `toSharedView` puro, com testes de ausência de dados **Feito em 20/11/2026** ([contratos](contratos.md#link-de-visualização--fase-7-etapa-1)).
 2. Tabela `project_share_links`, migração, token HMAC, rotas de gerenciamento e leitura pública, limite de requisições e allowlist do proxy. **Feito em 20/11/2026**, com testes integrados em PostgreSQL 17.
 3. Página `/ver` com `PlanCanvas`/`SeatList` em modo somente leitura e busca "Encontre seu lugar"; painel "Compartilhar" no editor e em `/projetos`. **Feito em 21/11/2026**, verificado no navegador local (ver ADR-0014).
-4. Fechamento: acessibilidade, celular (Moto G84), medição do bundle e runbook com `SHARE_LINK_SECRET`. Bundle medido e runbook feito; faltam a auditoria axe de `/ver` e do diálogo, leitor de tela, Moto G84 e um teste pela hospedagem.
+4. Fechamento: acessibilidade, celular (Moto G84), medição do bundle e runbook com `SHARE_LINK_SECRET`. Bundle medido, runbook feito e auditoria axe feita em 21/11/2026 (diálogo sem violações; `/ver` só com a regra das cadeiras aceita no ADR-0009). Faltam leitor de tela, Moto G84 e um teste pela hospedagem.
 
 Depois dos contratos, a API (etapa 2) e a página de visualização (etapa 3) podem andar em paralelo com arquivos exclusivos.
 

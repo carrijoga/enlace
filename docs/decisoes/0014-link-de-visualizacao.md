@@ -92,6 +92,16 @@ Todas as consultas de gerenciamento incluem o dono, como no restante da API. O l
 - O diálogo "Compartilhar" é carregado só ao clicar (3,2 KiB gzip), no editor de projeto da conta e em `/projetos`. Copia pela área de transferência, com o campo selecionado como alternativa, usa a folha de compartilhamento do aparelho quando existe e pede confirmação para desativar.
 - JavaScript inicial: `/ver` com 78,8 KiB gzip, a maior parte em Zod e contratos, que a página usa para validar a resposta; `/editor` com 90,5 KiB (eram 88,4); `/` com 41,9 KiB (eram 41,5). Todos abaixo do orçamento de 150 KiB.
 
+## Auditoria de acessibilidade (21/11/2026)
+
+axe-core 4.14.1 com Playwright 1.65.1 e Chromium headless, regras WCAG 2.0, 2.1 e 2.2 nos níveis A e AA, em 1280×900 e 390×844. Dados fictícios e servidor local; o visitante sem cookies. Scripts fora do repositório, como na fase 5.
+
+- **Diálogo "Compartilhar"** no editor, com a confirmação de desativar, e em `/projetos`: nenhuma violação nos dois tamanhos. A primeira rodada acusou contraste em `/projetos` porque o axe mediu durante a animação de entrada (cores intermediárias e texto escalado); esperando a animação terminar, não há violação.
+- **`/ver`** com nomes, com busca aberta, com cadeira escolhida, com a lista aberta, no modo "Só a planta" e na tela de erro: só `label-content-name-mismatch` nas cadeiras do SVG, a mesma do editor, aceita no ADR-0009. O nome acessível descreve fileira, lado, cadeira e pessoa; o número curto visível fica de fora. A tela de erro não tem violação.
+- Revisão visual das capturas: busca, destaque da cadeira escolhida e rolagem até ela, legenda do modo "Só a planta" e diálogo no celular sem sobreposição. No celular, com zoom de 100%, a planta é mais larga que a tela, como no editor; o botão "Ajustar" enquadra tudo.
+
+Pendentes: leitor de tela real (NVDA ou TalkBack) e o Moto G84.
+
 ## Questões abertas
 
 - Mostrar no link o título do projeto ou só casal e data.

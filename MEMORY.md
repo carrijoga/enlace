@@ -2,6 +2,17 @@
 
 Atualizado em 20/11/2026, America/Sao_Paulo.
 
+## Fase 7, auditoria axe e sincronização com a main — 21/11/2026
+
+PR #2 mergeado pelo usuário. A `main` foi integrada a esta branch (`94cb8f9`): Railway, CI, Compose e operação ficaram idênticos à `main`, `config plan` está em dia, e a seção duplicada do PostgreSQL 18 na memória foi removida.
+
+Auditoria, a pedido do usuário. Playwright 1.65.1, axe-core 4.14.1 e Chromium, instalados no scratchpad da sessão e fora do repositório. Resultado:
+- diálogo "Compartilhar" (editor, confirmação e `/projetos`, desktop e celular): sem violações. Contraste só falha se medido durante a animação de entrada;
+- `/ver`: só `label-content-name-mismatch` nas cadeiras do SVG, a mesma regra aceita no ADR-0009 para o editor. Ela pega também cadeiras vazias, e `docs/revisao-ui-fase5.md` foi corrigido.
+- Capturas revisadas sem problema visual.
+
+Próximo: abrir o PR da fase 7 para a `main`, com o aval do usuário. Pendentes registráveis no PR: leitor de tela, Moto G84 e teste hospedado. Depois do merge, a festa renumera a migração dela para `0003`.
+
 ## Fase 7, etapa 3 (página /ver e painel Compartilhar) concluída localmente — 21/11/2026
 
 Pedido do usuário, na branch `carrijoga/link-compartilhamento-somente`.
