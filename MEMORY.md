@@ -2,6 +2,14 @@
 
 Atualizado em 20/11/2026, America/Sao_Paulo.
 
+## PostgreSQL da Railway travado e correção para 18 — 20/11/2026
+
+Após `railway config apply` do usuário (rodado em `Documents/dev/enlace`, branch `codex/ceremony-editor`, com `postgres-ssl:17`), o serviço `postgres` ficou CRASHED: "This image runs PostgreSQL 17 but the data directory holds major version 18". O volume nasceu em 18.6 (padrão do SDK) e já tinha contas e projetos; a API seguia no ar com `/health` 200 e `/ready` 503. Decisão do usuário: manter os dados e ir para 18.
+
+Feito neste worktree: cherry-pick de `e800544` (`PORT=3000`, só existia em `codex/ceremony-editor`; sem ele o plano apagava `api.PORT`). Imagem `postgres-ssl:18` em `.railway/railway.ts`, `postgres:18-alpine` na CI e no Compose (volume novo `enlace_postgres18_data` em `/var/lib/postgresql`; o antigo, da 17, fica intocado), `pg_dump` 18 em `docs/operacao.md` e revisão no ADR-0013. Suíte completa (173) passou em PostgreSQL 18.7 num contêiner temporário. O worktree foi vinculado ao projeto Railway (`railway link`). `railway config plan` daqui: 0 a adicionar, 1 a mudar (imagem para `ghcr.io/railwayapp-templates/postgres-ssl:18` no grafo desejado; a CLI exibe "postgres:18"), 0 a destruir.
+
+Pendente: o usuário rodar `railway config apply` a partir deste worktree e conferir os logs do postgres e `/ready` 200. Não rodar `apply` de `Documents/dev/enlace` enquanto ele declarar 17. Levar esta correção à `main`. Definir `SHARE_LINK_SECRET` no serviço `api` antes de a fase 7 chegar à `main`.
+
 ## Fase 7, etapa 2 (API dos links) concluída localmente — 20/11/2026
 
 Pedido do usuário.

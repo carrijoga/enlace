@@ -18,7 +18,7 @@ Comandos na raiz: `db:backup`, `db:restore:drill` (somente destino descartável)
 
 ## Backup lógico e ensaio de restauração
 
-Instale `pg_dump` e `pg_restore` compatíveis com PostgreSQL 17 no `PATH`. O backup custom inclui tabelas e dados da aplicação e autenticação; portanto, contém dados pessoais e deve ser armazenado com acesso restrito e retenção definida pelo operador. Os scripts não imprimem URL, senha, argumentos de conexão ou saída bruta dos utilitários.
+Instale `pg_dump` e `pg_restore` compatíveis com PostgreSQL 18 (mesma versão maior do servidor ou mais nova) no `PATH`. O backup custom inclui tabelas e dados da aplicação e autenticação; portanto, contém dados pessoais e deve ser armazenado com acesso restrito e retenção definida pelo operador. Os scripts não imprimem URL, senha, argumentos de conexão ou saída bruta dos utilitários.
 
 Backup não sobrescreve um arquivo existente:
 
