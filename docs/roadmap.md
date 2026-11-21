@@ -132,6 +132,18 @@ Aceite:
 - O token não aparece em logs da API nem da Vercel, nem em eventos de analytics.
 - `/ver` não carrega código do editor, funciona por toque e teclado, tem alternativa em lista e cumpre WCAG 2.2 AA na auditoria automatizada.
 
+## Login com Google e exclusão de conta — implementado localmente; aceite hospedado pendente
+
+Pedido do usuário em 21/11/2026 ([ADR-0015](decisoes/0015-login-com-google.md)). `/conta` passa a abrir com "Continuar com o Google" e deixa e-mail e senha como segunda opção. Contas só Google também podem ser excluídas, com login recente.
+
+Aceite:
+
+- Entrar e criar conta pelo Google na hospedagem real, com o cookie de sessão na origem da Vercel.
+- Entrar pelo Google com o e-mail de uma conta por senha não abre essa conta. A tela orienta a entrar com a senha e conectar o Google.
+- Uma conta só Google exclui a própria conta depois de confirmar com o Google, e projetos, links e o vínculo somem do banco.
+- Quem tem senha continua precisando dela para excluir a conta.
+- Sem as credenciais do Google, a tela funciona só com e-mail, sem erro.
+
 ## Questões de produto para resolver no momento certo
 
 | Questão | Padrão provisório | Quando resolver |
