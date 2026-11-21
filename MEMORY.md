@@ -2,6 +2,14 @@
 
 Atualizado em 21/11/2026, America/Sao_Paulo.
 
+## Conta, projetos e retorno à página inicial — 21/11/2026
+
+Revisão concluída na branch `carrijoga/feat-login-cadastro-google`, integrada diretamente à `main` em 21/11/2026 após o merge do PR #5. A raiz pública agora consulta a sessão e leva quem entrou aos projetos. Conta e projetos compartilham a navegação. A conta reúne perfil, métodos de acesso e gerenciamento. A lista de projetos permite buscar por nome e renomear no próprio item.
+
+Verificados no navegador com PostgreSQL 18 descartável: cadastro por e-mail, retorno à raiz, recarga, busca sem acentos, criação e renomeação, abertura do painel de compartilhamento, saída em outra aba e página inicial com a API indisponível. Conferidas as telas de conta e projetos em 1280 e 390 px. Check, lint, 196 testes e build para preview no Windows passaram. A raiz usa 43,52 KiB de JavaScript inicial gzip.
+
+Próximo passo: validar o retorno do Google em HTTPS no ambiente hospedado. [Evidências e limites](docs/validacao-fase3.md#retorno-à-página-inicial-e-navegação-da-conta).
+
 ## Redesign da distribuição de `/ver` — 21/11/2026
 
 Concluído localmente na branch `carrijoga/redesign-pagina-ver-layout`, a partir do merge do PR #3 (`ae7cfee`). A planta ocupa a coluna flexível em telas largas, com dados da cerimônia, busca e lista na lateral. Em telas estreitas, o conteúdo segue em uma coluna. O mapa abre enquadrado e, após escolher um resultado de busca, a cadeira aparece destacada e o teclado segue no mapa. Dois subagents revisaram a composição e os limites de layout. [Guia da página](docs/surfaces/ver.md).

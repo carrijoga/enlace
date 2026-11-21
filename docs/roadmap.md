@@ -146,6 +146,8 @@ Aceite:
 - Quem tem senha continua precisando dela para excluir a conta.
 - Sem as credenciais do Google, a tela funciona só com e-mail, sem erro.
 
+Em 21/11/2026 foi concluída localmente a revisão de Minha conta e Meus projetos. A página inicial reconhece a sessão ativa e permite retomar os projetos depois de voltar ou recarregar. O aceite em HTTPS com Google continua pendente. [Validação da navegação](validacao-fase3.md#retorno-à-página-inicial-e-navegação-da-conta).
+
 ## Questões de produto para resolver no momento certo
 
 | Questão | Padrão provisório | Quando resolver |

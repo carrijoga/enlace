@@ -19,6 +19,8 @@ A fase 2 está concluída. O editor local deve continuar utilizável, enquanto c
 
 ## Consequências e validação
 
+Complemento aceito em 21/11/2026. A página inicial continua pré-renderizada e pública. O navegador consulta a sessão pelo proxy sem cache para oferecer acesso aos projetos salvos. Ao retomar a página ou receber o aviso de saída de outra aba, consulta novamente o servidor. Enquanto o estado é desconhecido, o atalho “Conta” e o editor local continuam acessíveis. A identificação da pessoa fica fora do HTML estático.
+
 Testar duas contas com chamadas diretas, sessões expiradas, concorrência, repetição após confirmação perdida, rollback e exclusão com dependências. Testes PostgreSQL devem usar banco/schema isolado e dados fictícios. O teste local não substitui cookies/origem na Vercel/Railway ou recebimento de e-mail real. CSV continua na fase 4.
 
 Referências: [Better Auth com Hono](https://better-auth.com/docs/integrations/hono), [adaptador Drizzle](https://better-auth.com/docs/adapters/drizzle), [e-mail e senha](https://better-auth.com/docs/authentication/email-password).
