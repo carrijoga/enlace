@@ -32,7 +32,7 @@ O controle de frequência da autenticação é persistido no PostgreSQL. Como n�
 
 ## Link de visualização
 
-Implementado na API em 20/11/2026 ([ADR-0014](decisoes/0014-link-de-visualizacao.md)); a página `/ver` ainda não existe. `POST /api/shared/view` é a única rota que devolve dados de projeto sem sessão. Ela recebe o token no corpo, confere o HMAC antes de consultar o banco e devolve só a projeção de `toSharedView`. O token não vale como sessão em nenhuma outra rota. Gerenciar links segue as regras das demais escritas: sessão, origem exata, dono na consulta e bloqueio da linha do projeto. O limite de leituras é por link e por instância (600 por minuto), pois a API só vê o IP do proxy, a mesma limitação da autenticação.
+Implementado em 20–21/11/2026 ([ADR-0014](decisoes/0014-link-de-visualizacao.md)): API, página pública `/ver` e diálogo "Compartilhar". A página não carrega o código do editor e reaproveita `PlanCanvas` e `SeatList` com `readonly`. `POST /api/shared/view` é a única rota que devolve dados de projeto sem sessão. Ela recebe o token no corpo, confere o HMAC antes de consultar o banco e devolve só a projeção de `toSharedView`. O token não vale como sessão em nenhuma outra rota. Gerenciar links segue as regras das demais escritas: sessão, origem exata, dono na consulta e bloqueio da linha do projeto. O limite de leituras é por link e por instância (600 por minuto), pois a API só vê o IP do proxy, a mesma limitação da autenticação.
 
 ## Agregado, transações e conflitos
 

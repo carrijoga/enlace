@@ -2,6 +2,32 @@
 
 Atualizado em 20/11/2026, America/Sao_Paulo.
 
+## Fase 7, etapa 3 (página /ver e painel Compartilhar) concluída localmente — 21/11/2026
+
+Pedido do usuário, na branch `carrijoga/link-compartilhamento-somente`.
+- `apps/web/src/routes/ver/` é pré-renderizada, com noindex e `no-referrer`, e lê o token do fragmento. Tem a busca "Encontre seu lugar", sem diferença de acento, zoom e `SeatList` somente leitura.
+- `lib/share/client.ts` faz as chamadas, o `toViewProject` e a validação da resposta. `lib/share/ShareDialog.svelte` carrega sob demanda no editor (só projeto da conta) e em `/projetos`.
+- `PlanCanvas` ganhou `readonly`, `anonymous` e `reveal(seatId)`. `SeatList` ganhou `readonly` e `anonymous`. `scripts/measure-web.mjs` mede `/ver` também.
+
+Validação:
+- check, lint e 180 testes, com PostgreSQL 18.7 no Compose novo.
+- Bundle: `/ver` 78,8 KiB, `/editor` 90,5 (base 88,4), `/` 41,9 (base 41,5).
+- Navegador local (Chrome do usuário pela extensão; o Playwright do plugin não acha o Chrome):
+  - diálogo no editor cria o link;
+  - `/ver` mostra título, data e 5 de 40 ocupados, sem vazar nota, convidado sem lugar nem título;
+  - busca "joao" acha "João" e destaca a cadeira;
+  - modo planta sem nomes; desativado e incompleto mostram a mensagem certa;
+  - a lista não tem seletor;
+  - logs da API sem token.
+- Correção do teste: o `title` no botão "Compartilhar" do editor trocava o nome acessível, então foi removido.
+
+Não verificados:
+- capturas de tela: o Chrome limitava a janela a 2 quadros por segundo;
+- clique no diálogo de `/projetos`: outra extensão do Chrome bloqueou a automação, mas a árvore mostrou "Links ativos 1 de 10" carregados;
+- celular, leitor de tela e axe.
+
+Próximo passo: etapa 4 (axe em `/ver` e no diálogo, NVDA/TalkBack, Moto G84, olhar visual pelo usuário) e PR da fase 7 para a `main`, depois do merge do PR #2. A festa renumera a migração dela para `0003` ao entrar depois.
+
 ## PostgreSQL da Railway travado e correção para 18 — 20/11/2026
 
 Após `railway config apply` do usuário (rodado em `Documents/dev/enlace`, branch `codex/ceremony-editor`, com `postgres-ssl:17`), o serviço `postgres` ficou CRASHED: "This image runs PostgreSQL 17 but the data directory holds major version 18". O volume nasceu em 18.6 (padrão do SDK) e já tinha contas e projetos; a API seguia no ar com `/health` 200 e `/ready` 503. Decisão do usuário: manter os dados e ir para 18.

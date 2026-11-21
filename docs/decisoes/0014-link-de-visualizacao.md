@@ -1,6 +1,6 @@
 # ADR-0014 — Link de visualização somente leitura
 
-Status: proposta em 20/11/2026. As escolhas marcadas como "decisão do usuário" estão confirmadas. O resto é proposta técnica e pode mudar na implementação. Em 20/11/2026 foram implementados os contratos e a projeção `toSharedView` (etapa 1) e a tabela, o token e as rotas da API (etapa 2), ver [contratos](../contratos.md#link-de-visualização--fase-7-etapa-1). A página `/ver` e o painel "Compartilhar" ainda não existem. Na implementação, o título do projeto ficou fora da projeção até a questão aberta ser decidida.
+Status: proposta em 20/11/2026. As escolhas marcadas como "decisão do usuário" estão confirmadas. O resto é proposta técnica e pode mudar na implementação. Em 20/11/2026 foram implementados os contratos e a projeção `toSharedView` (etapa 1) e a tabela, o token e as rotas da API (etapa 2), ver [contratos](../contratos.md#link-de-visualização--fase-7-etapa-1). Em 20–21/11/2026 vieram a página `/ver` e o painel "Compartilhar" (etapa 3). Falta o fechamento (etapa 4). Escolhas da implementação: o título do projeto fica fora da projeção, e a página mostra "Cerimônia de A & B"; "Baixar meu mapa" não entrou; `PlanCanvas` e `SeatList` ganharam as propriedades `readonly` e `anonymous`, e um adaptador (`toViewProject`) converte a projeção no formato que eles já desenham, com o id da cadeira como id da pessoa.
 
 ## Contexto
 
@@ -83,6 +83,14 @@ Todas as consultas de gerenciamento incluem o dono, como no restante da API. O l
 - O bundle de `/ver` é separado do editor e reaproveita `PlanCanvas` e `SeatList` num modo somente leitura. O modo somente leitura precisa ser uma propriedade explícita desses componentes, não uma página com eventos desligados.
 - **Festa:** quando a fase 6 existir, a projeção ganha o salão e, no modo "Com nomes", a mesa de cada pessoa. A regra muda nesse momento e precisa ser registrada: links já criados passam a mostrar a festa, e o modo "Só a planta" continua sem nomes.
 - Não altera o contrato JSON, a migração v1/v3 nem o editor de outros donos. É uma entrega pequena perto da fase 6.
+
+## Implementação da etapa 3 (20–21/11/2026)
+
+- `/ver` é pré-renderizada, lê o token do fragmento, valida o formato antes de chamar a API e confere a resposta com `sharedViewSchema` antes de exibir. Outro link colado na mesma aba recarrega pela mudança do fragmento.
+- Busca "Encontre seu lugar" sem diferença de acento e de maiúsculas, com até 8 resultados e o lugar de cada um, o que resolve homônimos. Escolher um resultado destaca a cadeira, centraliza a planta nela (`PlanCanvas.reveal`) e repete o aro dourado de chegada.
+- `readonly` tira os eventos de arrastar e soltar das cadeiras e o seletor de ocupante da lista. `anonymous` mostra "Ocupada", sem nome nem categoria, numa cor própria.
+- O diálogo "Compartilhar" é carregado só ao clicar (3,2 KiB gzip), no editor de projeto da conta e em `/projetos`. Copia pela área de transferência, com o campo selecionado como alternativa, usa a folha de compartilhamento do aparelho quando existe e pede confirmação para desativar.
+- JavaScript inicial: `/ver` com 78,8 KiB gzip, a maior parte em Zod e contratos, que a página usa para validar a resposta; `/editor` com 90,5 KiB (eram 88,4); `/` com 41,9 KiB (eram 41,5). Todos abaixo do orçamento de 150 KiB.
 
 ## Questões abertas
 

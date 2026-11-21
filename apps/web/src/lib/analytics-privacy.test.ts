@@ -11,6 +11,16 @@ describe('privacidade das page views', () => {
     ).toEqual({ type: 'pageview', url: 'https://enlace.example/editor' });
   });
 
+  it('não envia o token do link de visualização (ADR-0014)', () => {
+    const token = 'A'.repeat(64);
+    const event = sanitizeAnalyticsEvent(
+      { type: 'pageview', url: `/ver#${token}` },
+      'https://enlace.example',
+    );
+    expect(event).toEqual({ type: 'pageview', url: 'https://enlace.example/ver' });
+    expect(JSON.stringify(event)).not.toContain(token);
+  });
+
   it.each(['/conta?token=segredo', '/conta/redefinir/senha-token', '/projetos?id=privado'])(
     'descarta rota privada %s',
     (url) => {

@@ -25,7 +25,7 @@ As metas abaixo são orçamentos de engenharia ajustáveis, não resultados obti
 
 | Área | Meta inicial | Como verificar |
 | --- | --- | --- |
-| JavaScript inicial do editor | Até 150 KiB gzip | Somar todos os chunks de JavaScript necessários à primeira abertura da rota, incluindo os compartilhados. Medir build de produção, com cache vazio; excluir apenas recursos carregados após ação explícita. |
+| JavaScript inicial do editor (e de `/ver`, medido desde 21/11/2026: 78,8 KiB) | Até 150 KiB gzip | Somar todos os chunks de JavaScript necessários à primeira abertura da rota, incluindo os compartilhados. Medir build de produção, com cache vazio; excluir apenas recursos carregados após ação explícita. |
 | Resposta das ações locais | p95 até 50 ms | Medir do início do comando até o primeiro quadro que mostra seu resultado, no aparelho de referência. Cobrir seleção, mover/trocar lugar, editar quantidades e filtrar convidados. |
 | Rede durante edição | Sem requisição necessária para selecionar ou mover uma pessoa | Conferir painel de rede e editar com a conexão indisponível. O salvamento posterior pode usar rede; a resposta visual local não depende dele. |
 | Salvamento | No máximo uma requisição de gravação em andamento por projeto | Executar alterações rápidas e verificar agrupamento, revisão, fila e estados de pendência/erro. |

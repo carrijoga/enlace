@@ -29,6 +29,11 @@
   let importRequest = $state<CreateProjectRequest | null>(null);
   let titleDrafts = $state<Record<string, string>>({});
   let deleting = $state<ProjectSummary | null>(null);
+  let sharing = $state<ProjectSummary | null>(null);
+  let shareDialog = $state<typeof import('../../lib/share/ShareDialog.svelte').default | null>(
+    null,
+  );
+  let shareTrigger: HTMLButtonElement | null = null;
   let deleteDialog: HTMLDialogElement;
   let createRequest: CreateProjectRequest | null = null;
   let importInput: HTMLInputElement;
@@ -255,6 +260,19 @@
       void restoreFocus(previous);
     }
   }
+  async function openShare(item: ProjectSummary, trigger: HTMLButtonElement) {
+    shareTrigger = trigger;
+    try {
+      shareDialog ??= (await import('../../lib/share/ShareDialog.svelte')).default;
+      sharing = item;
+    } catch {
+      error = 'Não foi possível abrir o compartilhamento. Verifique a conexão.';
+    }
+  }
+  function closeShare() {
+    sharing = null;
+    void tick().then(() => shareTrigger?.focus());
+  }
   function askDelete(item: ProjectSummary) {
     error = '';
     deleting = item;
@@ -430,6 +448,9 @@
               bind:value={titleDrafts[item.id]}
               onkeydown={(event) => event.key === 'Enter' && rename(item)}
             /><button disabled={busy} onclick={() => rename(item)}>Renomear</button><button
+              disabled={busy}
+              onclick={(event) => openShare(item, event.currentTarget)}>Compartilhar</button
+            ><button
               class="delete"
               disabled={busy}
               onclick={() => askDelete(item)}>Excluir</button
@@ -439,6 +460,11 @@
       {/each}
     </ul>{/if}
 </main>
+
+{#if shareDialog && sharing}
+  {@const ShareDialog = shareDialog}
+  <ShareDialog projectId={sharing.id} projectTitle={sharing.title} onClose={closeShare} />
+{/if}
 
 <dialog
   bind:this={deleteDialog}
