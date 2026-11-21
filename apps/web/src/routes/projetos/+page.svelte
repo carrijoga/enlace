@@ -450,11 +450,7 @@
             /><button disabled={busy} onclick={() => rename(item)}>Renomear</button><button
               disabled={busy}
               onclick={(event) => openShare(item, event.currentTarget)}>Compartilhar</button
-            ><button
-              class="delete"
-              disabled={busy}
-              onclick={() => askDelete(item)}>Excluir</button
-            >
+            ><button class="delete" disabled={busy} onclick={() => askDelete(item)}>Excluir</button>
           </div>
         </li>
       {/each}
