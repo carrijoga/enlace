@@ -67,6 +67,28 @@ describe('proxy autenticado same-origin', () => {
       (await proxyApi(new Request(web + '/api/auth/reset-password/token'), origin, fetcher)).status,
     ).toBe(503);
   });
+  it('descarta location externo em resposta 200 (sign-in social) sem falhar', async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        Response.json(
+          { url: 'https://accounts.google.com/o/oauth2/v2/auth', redirect: true },
+          { headers: { location: 'https://accounts.google.com/o/oauth2/v2/auth' } },
+        ),
+      );
+    const response = await proxyApi(
+      new Request(web + '/api/auth/sign-in/social', {
+        method: 'POST',
+        headers: { origin: web, 'content-type': 'application/json' },
+        body: '{"provider":"google"}',
+      }),
+      origin,
+      fetcher,
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.has('location')).toBe(false);
+    expect(await response.json()).toMatchObject({ redirect: true });
+  });
   it('libera só as rotas de links de visualização previstas', async () => {
     const id = '1a2b3c4d-1111-4111-8111-111111111111';
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({}));
