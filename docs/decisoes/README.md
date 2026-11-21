@@ -46,4 +46,4 @@ Não decididos: recursos na Railway, orçamento, transporte de e-mail, versões 
 
 ## 0013 — Infraestrutura Railway como código
 
-[ADR-0013](0013-infraestrutura-railway-como-codigo.md): aceita; validada em contêineres, provisionamento pendente. `.railway/railway.ts` substitui `railway.toml`, região US East, PostgreSQL 17, migração no pré-deploy com credencial própria e sem proxy Cloudflare na API.
+[ADR-0013](0013-infraestrutura-railway-como-codigo.md): aceita; validada em contêineres, provisionamento pendente. `.railway/railway.ts` substitui `railway.toml`, região US East, PostgreSQL 18 (era 17; revisado em 20/11/2026 para preservar o volume de produção), migração no pré-deploy com credencial própria e sem proxy Cloudflare na API.

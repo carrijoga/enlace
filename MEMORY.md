@@ -2,6 +2,10 @@
 
 Atualizado em 09/11/2026, America/Sao_Paulo.
 
+## PostgreSQL da Railway travado e correção para 18 — 20/11/2026
+
+Um `railway config apply` com `postgres-ssl:17` travou o banco de produção: o volume nasceu em 18.6 (padrão do SDK) e já tinha contas e projetos. Decisão do usuário: manter os dados e ir para 18. Imagem `postgres-ssl:18` em `.railway/railway.ts`, `postgres:18-alpine` na CI e no Compose (volume novo `enlace_postgres18_data` em `/var/lib/postgresql`; o antigo, da 17, fica intocado), `pg_dump` 18 em `docs/operacao.md` e revisão no ADR-0013. O banco voltou em 21/11/2026 01:08 UTC com os dados, e `/ready` responde 200. `.railway/railway.ts` declara também `PORT=3000` e `SHARE_LINK_SECRET` (`preserve()`): variáveis não declaradas são apagadas pelo `apply`. Regra: nunca reduzir a versão maior da imagem de um banco com dados e sempre ler o plano antes de aplicar.
+
 ## Deploy da API na Railway em preparação — 09/11/2026
 
 ADR-0013. Pedido do usuário. `railway.toml` removido (Railway descontinuou; leitura termina em 01/12/2026) e substituído por `.railway/railway.ts` com SDK `railway` 3.16.0: serviço `api` da branch `main` (alterado pelo usuário), US East, PostgreSQL 17, pré-deploy `node apps/api/dist/db/migrate.js`. Novos: `MIGRATOR_DATABASE_URL` em `migrate.ts` e `scripts/db-bootstrap-roles.mjs`. Sem Cloudflare na API (o navegador só fala com a Vercel).

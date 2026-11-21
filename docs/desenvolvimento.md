@@ -47,7 +47,7 @@ A landing `/` e `/editor` anônimo continuam funcionando sem conta/banco. Copie 
 
 A API carrega `.env` pelo Node e a web pela configuração Vite. Reinicie após mudar variáveis. Para gerar o segredo, use gerador criptográfico local e armazene somente no ambiente. Sem segredo/banco, autenticação responde indisponível; não há login fictício.
 
-Com Docker Desktop ativo, `pnpm run db:up` usa explicitamente `docker-compose.yml`. PostgreSQL 17 escuta apenas `127.0.0.1:5432`, em volume nomeado. Os dados/credenciais de Compose são exclusivos de desenvolvimento. O daemon foi iniciado e o banco real validado nesta entrega; nenhuma infraestrutura remota foi criada.
+Com Docker Desktop ativo, `pnpm run db:up` usa explicitamente `docker-compose.yml`. PostgreSQL 18 escuta apenas `127.0.0.1:5432`, no volume nomeado `enlace_postgres18_data`. O volume antigo `enlace_postgres_data`, da versão 17, não é montado nem apagado; remova-o manualmente quando não precisar mais dele. Os dados/credenciais de Compose são exclusivos de desenvolvimento. O daemon foi iniciado e o banco real validado nesta entrega; nenhuma infraestrutura remota foi criada.
 
 Aplique `pnpm run db:migrate` com `DATABASE_URL` do ambiente de migração, depois inicie os apps. Contas em `/conta`, lista em `/projetos`, editor remoto em `/editor?project=UUID`. Para preview local com API HTTP, iniciar o comando de preview com `NODE_ENV=development` (o bundle já é de produção); a validação HTTPS permanece obrigatória no ambiente hospedado. Para preview em 4173, a API precisa de `WEB_ORIGIN=http://localhost:4173`; origem diferente deve ser recusada.
 
@@ -57,7 +57,7 @@ O proxy encaminha cookies de primeira parte sem expor o destino ao cliente. `WEB
 
 O rascunho anônimo usa `enlace:draft:anonymous:v1`; os remotos têm prefixo isolado por conta e projeto. Nenhum token é armazenado junto do rascunho. JSON permite backup manual; PNG não faz upload. Logout limpa a recuperação local da conta.
 
-Para testes PostgreSQL, defina `TEST_DATABASE_URL` e execute `pnpm test`. Sem a variável, suites integradas são explicitamente ignoradas; isso não comprova persistência. A CI inclui serviço PostgreSQL 17. Testes usam somente contas/dados fictícios, incluindo captura local de recuperação de senha sem envio externo.
+Para testes PostgreSQL, defina `TEST_DATABASE_URL` e execute `pnpm test`. Sem a variável, suites integradas são explicitamente ignoradas; isso não comprova persistência. A CI inclui serviço PostgreSQL 18. Testes usam somente contas/dados fictícios, incluindo captura local de recuperação de senha sem envio externo.
 
 ## Migrações e permissões
 
