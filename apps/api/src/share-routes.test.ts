@@ -21,6 +21,7 @@ function setup(session: string | null = 'owner-a') {
     create: vi.fn(async () => ({ id: linkId })),
     revoke: vi.fn(async () => undefined),
     view: vi.fn(async () => ({ mode: 'plan' })),
+    redeem: vi.fn(async () => ({ projectId })),
   } satisfies ShareLinkStore;
   const getSession = vi.fn(async () => (session ? { user: { id: session } } : null));
   const app = createApp(config, {
@@ -106,6 +107,28 @@ describe('rotas de gerenciamento de links', () => {
     const response = await app.request(`/api/projects/${projectId}/share-links`);
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({ error: 'sharing_unavailable' });
+  });
+});
+
+describe('resgate de links para contas', () => {
+  const path = '/api/shared/redeem';
+  const send = (app: ReturnType<typeof createApp>, input: unknown, headers = json) =>
+    app.request(path, { method: 'POST', headers, body: JSON.stringify(input) });
+
+  it('exige sessão, origem e modo de participação explícito', async () => {
+    const input = { mode: 'edit', token };
+    const { app, shareLinks } = setup('destinatario');
+    expect((await send(setup(null).app, input)).status).toBe(401);
+    expect((await send(app, input, { ...json, origin: 'https://outra.example' })).status).toBe(403);
+    for (const body of [{ token }, { token, mode: 'names' }, { ...input, userId: 'outro' }])
+      expect((await send(app, body)).status).toBe(400);
+    expect(shareLinks.redeem).not.toHaveBeenCalled();
+    for (const mode of ['edit', 'clone']) {
+      const response = await send(app, { token, mode });
+      expect(await response.json()).toEqual({ projectId });
+      expect(response.headers.get('cache-control')).toBe('no-store');
+      expect(shareLinks.redeem).toHaveBeenCalledWith('destinatario', { token, mode });
+    }
   });
 });
 

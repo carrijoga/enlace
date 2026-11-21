@@ -4,7 +4,6 @@ import {
   sharedViewSchema,
   type CeremonyProject,
   type SharedView,
-  type ShareLinkMode,
 } from '@enlace/contracts';
 
 export type SeatGeometry = {
@@ -324,7 +323,7 @@ export function getGuestSeatId(project: CeremonyProject, guestId: string): strin
  * espalhar o projeto: notas, IDs de convidados, título, `linkedCounts` e convidados sem lugar
  * nunca saem. No modo `plan` nenhum dado de convidado sai. A ordem segue a planta, não a lista.
  */
-export function toSharedView(project: CeremonyProject, mode: ShareLinkMode): SharedView {
+export function toSharedView(project: CeremonyProject, mode: SharedView['mode']): SharedView {
   const { layout } = project;
   const seatOrder = layout.rows.flatMap((row) => [...row.leftSeatIds, ...row.rightSeatIds]);
   const guestBySeat = new Map(

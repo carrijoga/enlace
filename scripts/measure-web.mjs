@@ -89,6 +89,6 @@ function measure(route) {
   };
 }
 
-const results = ['/', '/editor', '/ver'].map(measure);
+const results = ['/', '/editor', '/ver', '/participar'].map(measure);
 console.log(JSON.stringify(results, null, 2));
 if (results.some((result) => !result.withinBudget)) process.exitCode = 1;

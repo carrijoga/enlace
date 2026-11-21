@@ -89,13 +89,14 @@ describe('proxy autenticado same-origin', () => {
     expect(response.headers.has('location')).toBe(false);
     expect(await response.json()).toMatchObject({ redirect: true });
   });
-  it('libera só as rotas de links de visualização previstas', async () => {
+  it('libera só as rotas de compartilhamento previstas', async () => {
     const id = '1a2b3c4d-1111-4111-8111-111111111111';
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({}));
     for (const path of [
       `/api/projects/${id}/share-links`,
       `/api/projects/${id}/share-links/${id}`,
       '/api/shared/view',
+      '/api/shared/redeem',
     ]) {
       const result = await proxyApi(
         new Request(web + path, {
@@ -108,15 +109,16 @@ describe('proxy autenticado same-origin', () => {
       );
       expect(result.status).toBe(200);
     }
-    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(fetcher).toHaveBeenCalledTimes(4);
     for (const path of [
       `/api/projects/${id}/share-links/${id}/extra`,
       `/api/projects/${id}/share-link`,
       '/api/shared/view/token',
+      '/api/shared/redeem/token',
       '/api/shared',
     ])
       expect((await proxyApi(new Request(web + path), origin, fetcher)).status).toBe(404);
-    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(fetcher).toHaveBeenCalledTimes(4);
   });
   it('preserva conflitos e falhas sem cache', async () => {
     const fetcher = vi

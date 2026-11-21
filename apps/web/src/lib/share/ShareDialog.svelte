@@ -10,7 +10,7 @@
     shareUrl,
   } from './client';
 
-  // Painel de links de visualização (ADR-0014), carregado sob demanda pelo editor e por /projetos.
+  // Carregado sob demanda pelo editor e por /projetos.
   let {
     projectId,
     projectTitle,
@@ -32,8 +32,31 @@
   const canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
   const full = $derived(links.length >= MAX_ACTIVE_SHARE_LINKS);
   const dateFormat = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' });
+  const modes = {
+    names: {
+      label: 'Com nomes',
+      description: 'Mostra a planta, os nomes nas cadeiras, as categorias e a busca de lugares.',
+      revoke: 'Quem tem este link deixa de conseguir ver a planta.',
+    },
+    plan: {
+      label: 'Só a planta',
+      description: 'Mostra as cadeiras ocupadas e livres. Os dados dos convidados ficam privados.',
+      revoke: 'Quem tem este link deixa de conseguir ver a planta.',
+    },
+    edit: {
+      label: 'Permitir edição',
+      description: 'Abre o projeto original para editar a planta, os convidados e as observações.',
+      revoke: 'O acesso de edição concedido por este link termina.',
+    },
+    clone: {
+      label: 'Permitir cópia',
+      description: 'Cria uma cópia independente com a planta, os convidados e as observações.',
+      revoke: 'O link deixa de criar cópias. As cópias já criadas continuam nas contas de destino.',
+    },
+  } satisfies Record<ShareLinkMode, { label: string; description: string; revoke: string }>;
+  const modeOptions = ['names', 'plan', 'edit', 'clone'] as const;
 
-  const urlOf = (link: ShareLink) => shareUrl(location.origin, link.token);
+  const urlOf = (link: ShareLink) => shareUrl(location.origin, link.token, link.mode);
   const message = (cause: unknown) =>
     cause instanceof ShareError ? cause.message : 'Não foi possível concluir. Tente novamente.';
 
@@ -64,7 +87,7 @@
       });
       links = [...links, link];
       label = '';
-      notice = `Link "${link.label}" criado. Copie e envie para quem vai ver.`;
+      notice = `Link "${link.label}" criado. Copie para compartilhar.`;
       await tick();
       document.getElementById(`copy-${link.id}`)?.focus();
     } catch (cause) {
@@ -108,7 +131,7 @@
       await revokeShareLink(projectId, link.id);
       links = links.filter((item) => item.id !== link.id);
       confirmRevoke = null;
-      notice = `Link "${link.label}" desativado. Quem tiver esse link não consegue mais abrir.`;
+      notice = `Link "${link.label}" desativado. ${modes[link.mode].revoke}`;
     } catch (cause) {
       error = message(cause);
     } finally {
@@ -137,10 +160,10 @@
     if (busy) event.preventDefault();
   }}
 >
-  <h2 id="share-title">Compartilhar planta</h2>
+  <h2 id="share-title">Compartilhar projeto</h2>
   <p class="lead" id="share-intro">
-    Quem receber o link vê a planta no celular ou no computador, sem conta e sem poder editar. O
-    link mostra sempre a última versão salva.
+    Escolha o que qualquer pessoa com o link pode fazer. Para editar ou copiar, é preciso ter uma
+    conta no Enlace.
   </p>
 
   <form class="create" onsubmit={create}>
@@ -157,25 +180,38 @@
     >
 
     <fieldset>
-      <legend>O que aparece</legend>
-      <label class="choice"
-        ><input type="radio" name="share-mode" value="names" bind:group={mode} disabled={busy} />
-        <span
-          ><strong>Com nomes</strong> Planta, nome de cada pessoa na cadeira, categorias e a busca "Encontre
-          seu lugar".</span
-        ></label
-      >
-      <label class="choice"
-        ><input type="radio" name="share-mode" value="plan" bind:group={mode} disabled={busy} />
-        <span
-          ><strong>Só a planta</strong> Cadeiras ocupadas e livres, sem nenhum dado de convidado.</span
-        ></label
-      >
+      <legend>O que o link permite</legend>
+      {#each modeOptions as option (option)}
+        <label class="choice">
+          <input
+            type="radio"
+            name="share-mode"
+            value={option}
+            bind:group={mode}
+            disabled={busy}
+            aria-describedby={`share-mode-${option}`}
+          />
+          <span>
+            <strong>{modes[option].label}</strong>
+            <span id={`share-mode-${option}`}>{modes[option].description}</span>
+          </span>
+        </label>
+      {/each}
     </fieldset>
     {#if mode === 'names'}
       <p class="warn">
-        Qualquer pessoa com este link verá os nomes dos convidados, e o link pode ser repassado. As
-        observações nunca aparecem.
+        Quem tiver o link verá os nomes nas cadeiras, mesmo sem conta. As observações ficam
+        privadas.
+      </p>
+    {:else if mode === 'edit'}
+      <p class="warn">
+        Quem tiver o link e uma conta pode alterar o projeto original. O acesso de edição por este
+        link termina quando ele vence ou é desativado.
+      </p>
+    {:else if mode === 'clone'}
+      <p class="warn">
+        Quem tiver o link e uma conta pode copiar a última versão salva. As cópias já criadas
+        continuam nas contas de destino depois que o link vence ou é desativado.
       </p>
     {/if}
 
@@ -214,7 +250,7 @@
             <div class="link-copy">
               <strong>{link.label}</strong>
               <span
-                >{link.mode === 'names' ? 'Com nomes' : 'Só a planta'} · {expiryText(link)} · criado em
+                >{modes[link.mode].label} · {expiryText(link)} · criado em
                 {dateFormat.format(new Date(link.createdAt))}</span
               >
               <label class="sr-only" for={`url-${link.id}`}>Endereço do link {link.label}</label>
@@ -234,9 +270,7 @@
                 >{confirmRevoke === link.id ? 'Confirmar desativação' : 'Desativar'}</button
               >
               {#if confirmRevoke === link.id}
-                <span class="revoke-note" id={`revoke-${link.id}`}
-                  >Quem tem este link deixa de conseguir abrir.</span
-                >
+                <span class="revoke-note" id={`revoke-${link.id}`}>{modes[link.mode].revoke}</span>
                 <button type="button" onclick={() => (confirmRevoke = null)}>Manter</button>
               {/if}
             </div>

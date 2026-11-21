@@ -338,16 +338,19 @@ export function createDemoDocument(): ProjectDocument {
   });
 }
 const revisionSchema = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+const projectRoleSchema = z.enum(['owner', 'editor']);
 export const projectSummarySchema = z
   .object({
     id: z.uuid(),
     title: z.string().min(1).max(120),
+    role: projectRoleSchema,
     revision: revisionSchema,
     updatedAt: z.iso.datetime(),
   })
   .strict();
-export const projectWriteResponseSchema = projectSummarySchema.omit({ title: true });
+export const projectWriteResponseSchema = projectSummarySchema.omit({ title: true, role: true });
 export const projectSnapshotSchema = projectWriteResponseSchema.extend({
+  role: projectRoleSchema,
   project: ceremonyProjectSchema,
 });
 export const projectListResponseSchema = z
@@ -374,13 +377,14 @@ export type ProjectWriteResponse = z.infer<typeof projectWriteResponseSchema>;
 export type CreateProjectRequest = z.infer<typeof createProjectRequestSchema>;
 export type SaveProjectRequest = z.infer<typeof saveProjectRequestSchema>;
 
-// Link de visualização somente leitura (ADR-0014). Nenhum destes schemas concede escrita.
+// Visualização pública (ADR-0014) e participação autenticada (ADR-0016).
 
 export const MAX_ACTIVE_SHARE_LINKS = 10;
 /** `base64url(linkId[16 bytes] ‖ HMAC-SHA256[32 bytes])`, sem preenchimento: 64 caracteres. */
 export const SHARE_TOKEN_LENGTH = 64;
 
-export const shareLinkModeSchema = z.enum(['names', 'plan']);
+const participationModeSchema = z.enum(['edit', 'clone']);
+export const shareLinkModeSchema = z.enum(['names', 'plan', ...participationModeSchema.options]);
 export const shareLinkExpirySchema = z.union([
   z.literal(7),
   z.literal(30),
@@ -417,6 +421,10 @@ export const shareLinkListResponseSchema = z
   .object({ links: z.array(shareLinkSchema).max(MAX_ACTIVE_SHARE_LINKS) })
   .strict();
 export const sharedViewRequestSchema = z.object({ token: shareTokenSchema }).strict();
+export const redeemShareLinkRequestSchema = sharedViewRequestSchema.extend({
+  mode: participationModeSchema,
+});
+export const redeemShareLinkResponseSchema = z.object({ projectId: uuidSchema }).strict();
 /** Corpo vazio: métodos que alteram dados sempre mandam JSON pelo proxy. */
 export const revokeShareLinkRequestSchema = z.object({}).strict();
 
@@ -481,4 +489,5 @@ export type ShareLinkMode = z.infer<typeof shareLinkModeSchema>;
 export type CreateShareLinkRequest = z.infer<typeof createShareLinkRequestSchema>;
 export type ShareLink = z.infer<typeof shareLinkSchema>;
 export type SharedViewRequest = z.infer<typeof sharedViewRequestSchema>;
+export type RedeemShareLinkRequest = z.infer<typeof redeemShareLinkRequestSchema>;
 export type SharedView = z.infer<typeof sharedViewSchema>;

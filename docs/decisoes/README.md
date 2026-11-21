@@ -1,6 +1,6 @@
 # Registro de decisões
 
-Atualizado em 20/11/2026. Use ADRs numerados com contexto, decisão, status e consequências. Status possíveis: proposta, aceita, substituída ou rejeitada. Um documento de arquitetura proposto não é uma implementação.
+Atualizado em 21/11/2026. Use ADRs numerados com contexto, decisão, status e consequências. Status possíveis: proposta, aceita, substituída ou rejeitada. Um documento de arquitetura proposto não é uma implementação.
 
 | Registro | Status | Referência |
 | --- | --- | --- |
@@ -18,7 +18,7 @@ Atualizado em 20/11/2026. Use ADRs numerados com contexto, decisão, status e co
 
 O ADR-0003 registra a direção atual. Antes de adicionar integrações, validar e fixar versões compatíveis; mudanças relevantes de direção exigem atualizar o registro. Não é necessário interromper o trabalho para escolhas rotineiras já autorizadas pelo escopo; documente a decisão e avance.
 
-Não decididos: recursos na Railway, orçamento, transporte de e-mail, versões das integrações, identidade visual final, domínio público, modelo comercial, colaboração entre contas e suporte a múltiplos cenários dentro do mesmo projeto.
+Não decididos: recursos na Railway, orçamento, transporte de e-mail, versões das integrações, identidade visual final, domínio público, modelo comercial e suporte a múltiplos cenários dentro do mesmo projeto.
 
 ## 0007 — Contas e salvamento transacional
 
@@ -55,3 +55,7 @@ Não decididos: recursos na Railway, orçamento, transporte de e-mail, versões 
 ## 0015 — Login com Google e exclusão de contas sem senha
 
 [ADR-0015](0015-login-com-google.md): aceita e implementada localmente; aceite hospedado pendente das credenciais OAuth. Google em destaque em `/conta`, e-mail como segunda opção, sem vinculação implícita com contas de senha e exclusão de contas só Google com login recente (10 min).
+
+## 0016 — Compartilhamento colaborativo com edição e cópia entre contas
+
+[ADR-0016](0016-compartilhamento-colaborativo-e-copia.md): aceita e implementada localmente em 21/11/2026. Estende os links de compartilhamento com os modos `edit` (edição do projeto original por conta autenticada enquanto o link estiver ativo, com `role: 'owner' | 'editor'` e controle de revisão concorrente) e `clone` (cópia independente na conta de destino, idempotente por link e usuário), resgatados com confirmação explícita em `/participar`.

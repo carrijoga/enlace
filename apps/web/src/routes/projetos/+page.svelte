@@ -334,7 +334,7 @@
       }
       if (!response.ok) throw new Error('Não foi possível renomear o projeto.');
       const updated = projectWriteResponseSchema.parse(await response.json());
-      const updatedItem = { ...updated, title };
+      const updatedItem = { ...item, ...updated, title };
       listMotion = !searchQuery;
       projects = projects
         .map((project) => (project.id === item.id ? updatedItem : project))
@@ -541,7 +541,12 @@
                 <span class="project-copy">
                   <span class="project-title" id={`title-${item.id}`}>{item.title}</span>
                   <span class="project-date">
-                    Atualizado em <time datetime={item.updatedAt}
+                    {#if item.role === 'editor'}<span class="role-badge"
+                        >Compartilhado com você</span
+                      >
+                      ·
+                    {/if}Atualizado em
+                    <time datetime={item.updatedAt}
                       >{updatedAtFormat.format(new Date(item.updatedAt))}</time
                     >
                   </span>
@@ -606,14 +611,19 @@
                       disabled={busy}
                       onclick={() => startRename(item)}>Renomear</button
                     >
-                    <button
-                      class="secondary"
-                      disabled={busy}
-                      onclick={(event) => openShare(item, event.currentTarget)}>Compartilhar</button
-                    >
-                    <button class="secondary delete" disabled={busy} onclick={() => askDelete(item)}
-                      >Excluir</button
-                    >
+                    {#if item.role === 'owner'}
+                      <button
+                        class="secondary"
+                        disabled={busy}
+                        onclick={(event) => openShare(item, event.currentTarget)}
+                        >Compartilhar</button
+                      >
+                      <button
+                        class="secondary delete"
+                        disabled={busy}
+                        onclick={() => askDelete(item)}>Excluir</button
+                      >
+                    {/if}
                   </div>
                 {/if}
               {/if}
@@ -796,6 +806,16 @@
     color: var(--muted);
     font-size: 0.8125rem;
     font-variant-numeric: tabular-nums;
+  }
+  .role-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    color: #295842;
+    background: #eaf1e9;
+    border: 1px solid #cbd7c6;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
   }
   .open-label {
     display: flex;

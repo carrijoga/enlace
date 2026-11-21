@@ -1,7 +1,7 @@
 import { MAX_PROJECT_FILE_BYTES } from '@enlace/contracts';
 
 const allowedPath =
-  /^\/api\/(?:auth\/[a-z0-9/-]+|auth-capabilities|projects(?:\/[0-9a-f-]{36}(?:\/share-links(?:\/[0-9a-f-]{36})?)?)?|shared\/view)$/i;
+  /^\/api\/(?:auth\/[a-z0-9/-]+|auth-capabilities|projects(?:\/[0-9a-f-]{36}(?:\/share-links(?:\/[0-9a-f-]{36})?)?)?|shared\/(?:view|redeem))$/i;
 const safeMethods = new Set(['GET', 'HEAD']);
 
 /** Fixed upstream, bounded bodies and explicit header allowlists. Never an open proxy. */

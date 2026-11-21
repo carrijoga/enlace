@@ -11,13 +11,13 @@ describe('privacidade das page views', () => {
     ).toEqual({ type: 'pageview', url: 'https://enlace.example/editor' });
   });
 
-  it('não envia o token do link de visualização (ADR-0014)', () => {
+  it.each(['/ver', '/participar'])('remove o fragmento de compartilhamento de %s', (path) => {
     const token = 'A'.repeat(64);
     const event = sanitizeAnalyticsEvent(
-      { type: 'pageview', url: `/ver#${token}` },
+      { type: 'pageview', url: `${path}#${token}` },
       'https://enlace.example',
     );
-    expect(event).toEqual({ type: 'pageview', url: 'https://enlace.example/ver' });
+    expect(event).toEqual({ type: 'pageview', url: `https://enlace.example${path}` });
     expect(JSON.stringify(event)).not.toContain(token);
   });
 
