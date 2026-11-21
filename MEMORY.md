@@ -1,6 +1,14 @@
 # Memória do projeto — Enlace
 
-Atualizado em 20/11/2026, America/Sao_Paulo.
+Atualizado em 21/11/2026, America/Sao_Paulo.
+
+## Conta, projetos e retorno à página inicial — 21/11/2026
+
+Revisão concluída na branch `carrijoga/feat-login-cadastro-google`, com integração direta à `main` solicitada em 21/11/2026 após o merge do PR #5. A raiz pública agora consulta a sessão e leva quem entrou aos projetos. Conta e projetos compartilham a navegação. A conta reúne perfil, métodos de acesso e gerenciamento. A lista de projetos permite buscar por nome e renomear no próprio item.
+
+Verificados no navegador com PostgreSQL 18 descartável: cadastro por e-mail, retorno à raiz, recarga, busca sem acentos, criação e renomeação, abertura do painel de compartilhamento, saída em outra aba e página inicial com a API indisponível. Conferidas as telas de conta e projetos em 1280 e 390 px. Check, lint, 196 testes e build para preview no Windows passaram. A raiz usa 43,52 KiB de JavaScript inicial gzip.
+
+Próximo passo: validar o retorno do Google em HTTPS no ambiente hospedado. [Evidências e limites](docs/validacao-fase3.md#retorno-à-página-inicial-e-navegação-da-conta).
 
 ## Login com Google e exclusão de conta concluídos localmente — 21/11/2026
 

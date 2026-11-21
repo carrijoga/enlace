@@ -752,9 +752,7 @@
       >
     </div>
     <nav class="account-tools" aria-label="Conta e projetos">
-      {#if projectId}<a href={resolve('/projetos')}>Meus projetos</a>{:else}<a
-          href={resolve('/conta')}>Entrar e salvar na conta</a
-        >{/if}
+      <a href={resolve('/projetos')}>Meus projetos</a>
     </nav>
     <div class="header-tools">
       <div class="history-tools">

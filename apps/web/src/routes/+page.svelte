@@ -1,6 +1,49 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
+  import { onMount } from 'svelte';
+  import WorkspaceHeader from '../lib/account/WorkspaceHeader.svelte';
+  import { readSession } from '../lib/account/client';
   import { GUEST_CATEGORIES, type GuestCategory } from '../lib/editor/guest-categories';
+
+  let access = $state<'unknown' | 'guest' | 'member'>('unknown');
+
+  onMount(() => {
+    let pending: AbortController | undefined;
+    async function refresh() {
+      pending?.abort();
+      const request = new AbortController();
+      pending = request;
+      try {
+        const session = await readSession(request.signal);
+        if (!request.signal.aborted) access = session ? 'member' : 'guest';
+      } catch {
+        if (!request.signal.aborted) access = 'unknown';
+      }
+    }
+    function onVisibility() {
+      if (document.visibilityState === 'visible') void refresh();
+    }
+    function onRestore(event: PageTransitionEvent) {
+      if (event.persisted) void refresh();
+    }
+    function onStorage(event: StorageEvent) {
+      if (event.key?.startsWith('enlace:account-logout:v1:')) void refresh();
+    }
+    void refresh();
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pageshow', onRestore);
+    window.addEventListener('online', refresh);
+    window.addEventListener('focus', refresh);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      pending?.abort();
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pageshow', onRestore);
+      window.removeEventListener('online', refresh);
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('storage', onStorage);
+    };
+  });
 
   // Ordem em que as primeiras pessoas chegam à planta ilustrativa.
   const arrivals = new Map<string, { category: GuestCategory; order: number }>(
@@ -44,28 +87,10 @@
   />
 </svelte:head>
 
-<header class="site-header">
-  <a class="brand" href={resolve('/')} aria-label="Enlace, início">
-    <svg viewBox="0 0 36 36" aria-hidden="true"
-      ><ellipse class="ring" pathLength="1" cx="14" cy="18" rx="8" ry="11" /><ellipse
-        class="ring"
-        pathLength="1"
-        cx="23"
-        cy="18"
-        rx="8"
-        ry="11"
-      /></svg
-    >
-    <span>enlace</span>
-  </a>
-  <a class="header-link" href={resolve('/editor')}
-    >Abrir meu planejamento <span class="arrow" aria-hidden="true">→</span></a
-  >
-  <nav class="account-nav" aria-label="Acesso à conta">
-    <a href={resolve('/conta')}>Entrar</a>
-    <a href={resolve('/projetos')}>Meus projetos</a>
-  </nav>
-</header>
+<WorkspaceHeader
+  current="inicio"
+  accountLabel={access === 'member' ? 'Minha conta' : access === 'guest' ? 'Entrar' : 'Conta'}
+/>
 
 <main>
   <section class="workspace" aria-label="Planeje sua cerimônia">
@@ -76,14 +101,22 @@
         da sua história.
       </p>
       <div class="actions">
-        <a class="button primary" href={resolve('/editor')}>
-          Planejar minha cerimônia
+        <a class="button primary" href={resolve(access === 'member' ? '/projetos' : '/editor')}>
+          {access === 'member'
+            ? 'Abrir meus projetos'
+            : access === 'guest'
+              ? 'Planejar minha cerimônia'
+              : 'Abrir editor local'}
           <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 10h13m-5-5 5 5-5 5" /></svg>
         </a>
         <a class="button secondary" href="#como-funciona">Como funciona</a>
       </div>
       <p class="small-note">
-        Comece sem cadastro. O rascunho fica neste navegador e você pode baixar JSON.
+        {#if access === 'member'}
+          Retome uma cerimônia salva ou crie um projeto na sua conta.
+        {:else}
+          O rascunho do editor local fica neste navegador e pode ser baixado em JSON.
+        {/if}
       </p>
     </div>
 
@@ -189,13 +222,13 @@
 <footer class="site-footer">
   <span>enlace</span>
   <p>Planejar com clareza. Celebrar com presença.</p>
-  <a href={resolve('/editor')}
-    >Abrir meu planejamento <span class="arrow" aria-hidden="true">→</span></a
+  <a href={resolve(access === 'member' ? '/projetos' : '/editor')}
+    >{access === 'member' ? 'Meus projetos' : 'Abrir editor local'}
+    <span class="arrow" aria-hidden="true">→</span></a
   >
 </footer>
 
 <style>
-  .header-link,
   .site-footer a {
     display: inline-flex;
     align-items: center;
@@ -205,21 +238,6 @@
     font-weight: 600;
     text-decoration: none;
   }
-  .account-nav {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    margin-left: 20px;
-  }
-  .account-nav a {
-    display: inline-flex;
-    align-items: center;
-    min-height: 24px;
-    color: var(--muted);
-    font-size: 13px;
-    text-underline-offset: 4px;
-  }
-  .header-link:hover,
   .site-footer a:hover {
     text-decoration: underline;
     text-underline-offset: 4px;
@@ -246,29 +264,15 @@
   .seat:hover rect:not(.arrived) {
     fill: #eaf1e9;
   }
-  .ring {
-    transition: transform var(--dur-slow) var(--ease-out);
-  }
   /* A planta se arma e as primeiras pessoas chegam. Sem animação, o estado final já está no SVG. */
   @media (prefers-reduced-motion: no-preference) {
-    .brand:hover .ring:first-child {
-      transform: translateX(1.5px);
-    }
-    .brand:hover .ring:last-child {
-      transform: translateX(-1.5px);
-    }
     .button:hover svg,
-    .header-link:hover .arrow,
     .site-footer a:hover .arrow {
       transform: translateX(3px);
     }
-    .ring,
     .altar-trace {
       stroke-dasharray: 1;
       animation: trace 760ms cubic-bezier(0.45, 0, 0.2, 1) backwards;
-    }
-    .ring:last-child {
-      animation-delay: 160ms;
     }
     .aisle-trace {
       animation: walk-down 760ms var(--ease-out) 240ms backwards;
@@ -370,18 +374,6 @@
     font-size: 11px;
   }
   @media (max-width: 680px) {
-    .site-header {
-      flex-wrap: wrap;
-      gap: 12px;
-      padding-block: 16px;
-    }
-    .account-nav {
-      margin-left: auto;
-      gap: 10px;
-    }
-    .header-link {
-      font-size: 11px;
-    }
     .steps {
       grid-template-columns: 1fr;
       gap: 28px;

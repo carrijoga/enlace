@@ -17,8 +17,12 @@ export class AuthRequestError extends Error {
   }
 }
 
-export async function readSession(): Promise<AccountSession | null> {
-  const response = await fetch('/api/auth/get-session', { credentials: 'same-origin' });
+export async function readSession(signal?: AbortSignal): Promise<AccountSession | null> {
+  const response = await fetch('/api/auth/get-session', {
+    credentials: 'same-origin',
+    cache: 'no-store',
+    signal,
+  });
   if (!response.ok) throw new Error('Não foi possível consultar sua conta.');
   return (await response.json()) as AccountSession | null;
 }
