@@ -11,7 +11,7 @@ Auditoria, a pedido do usuário. Playwright 1.65.1, axe-core 4.14.1 e Chromium, 
 - `/ver`: só `label-content-name-mismatch` nas cadeiras do SVG, a mesma regra aceita no ADR-0009 para o editor. Ela pega também cadeiras vazias, e `docs/revisao-ui-fase5.md` foi corrigido.
 - Capturas revisadas sem problema visual.
 
-Próximo: abrir o PR da fase 7 para a `main`, com o aval do usuário. Pendentes registráveis no PR: leitor de tela, Moto G84 e teste hospedado. Depois do merge, a festa renumera a migração dela para `0003`.
+PR #3 da fase 7 aberto para a `main` em 21/11/2026, com o aval do usuário; CI verde depois do commit de formatação `cab432b`. Próximo: o usuário revisa e faz o merge. Pendentes registráveis no PR: leitor de tela, Moto G84 e teste hospedado. Depois do merge, a festa renumera a migração dela para `0003`.
 
 ## Fase 7, etapa 3 (página /ver e painel Compartilhar) concluída localmente — 21/11/2026
 
