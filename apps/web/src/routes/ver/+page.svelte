@@ -57,7 +57,12 @@
     );
   });
 
+  // Cada carga recebe um número; só a mais recente pode trocar a tela, para que a resposta
+  // atrasada de um link anterior não substitua o link colado depois na mesma aba.
+  let generation = 0;
+
   async function load() {
+    const current = ++generation;
     const token = tokenFromHash(location.hash);
     selectedSeatId = null;
     query = '';
@@ -71,8 +76,11 @@
     }
     screen = { kind: 'loading' };
     try {
-      screen = { kind: 'ready', view: await fetchSharedView(token) };
+      const view = await fetchSharedView(token);
+      if (current !== generation) return;
+      screen = { kind: 'ready', view };
     } catch (error) {
+      if (current !== generation) return;
       const notFound = error instanceof ShareError && error.code === 'not_found';
       screen = {
         kind: 'error',

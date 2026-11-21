@@ -51,7 +51,8 @@
 
   async function create(event: SubmitEvent) {
     event.preventDefault();
-    if (busy || full || !label.trim()) return;
+    // Criar antes da lista inicial chegar deixaria a resposta atrasada apagar o link novo.
+    if (busy || loading || full || !label.trim()) return;
     busy = true;
     error = '';
     notice = '';
@@ -187,7 +188,7 @@
       </select></label
     >
 
-    <button class="primary" type="submit" disabled={busy || full || !label.trim()}
+    <button class="primary" type="submit" disabled={busy || loading || full || !label.trim()}
       >{busy ? 'Criando…' : 'Criar link'}</button
     >
     {#if full}<p class="hint">
