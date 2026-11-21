@@ -8,7 +8,7 @@ Após `railway config apply` do usuário (rodado em `Documents/dev/enlace`, bran
 
 Feito neste worktree: cherry-pick de `e800544` (`PORT=3000`, só existia em `codex/ceremony-editor`; sem ele o plano apagava `api.PORT`). Imagem `postgres-ssl:18` em `.railway/railway.ts`, `postgres:18-alpine` na CI e no Compose (volume novo `enlace_postgres18_data` em `/var/lib/postgresql`; o antigo, da 17, fica intocado), `pg_dump` 18 em `docs/operacao.md` e revisão no ADR-0013. Suíte completa (173) passou em PostgreSQL 18.7 num contêiner temporário. O worktree foi vinculado ao projeto Railway (`railway link`). `railway config plan` daqui: 0 a adicionar, 1 a mudar (imagem para `ghcr.io/railwayapp-templates/postgres-ssl:18` no grafo desejado; a CLI exibe "postgres:18"), 0 a destruir.
 
-Pendente: o usuário rodar `railway config apply` a partir deste worktree e conferir os logs do postgres e `/ready` 200. Não rodar `apply` de `Documents/dev/enlace` enquanto ele declarar 17. Levar esta correção à `main`. Definir `SHARE_LINK_SECRET` no serviço `api` antes de a fase 7 chegar à `main`.
+Resolvido em 21/11/2026 01:08 UTC: o usuário rodou `apply` deste worktree. O postgres voltou a SUCCESS em 18.6, com "Skipping initialization" e desligamento limpo anterior (dados preservados). `/ready` responde 200, a API atende `/api/projects/:id` com 200, e `config plan` está em dia. Não rodar `apply` de `Documents/dev/enlace` enquanto ele declarar 17. Levar esta correção à `main`. Definir `SHARE_LINK_SECRET` no serviço `api` antes de a fase 7 chegar à `main`.
 
 ## Fase 7, etapa 2 (API dos links) concluída localmente — 20/11/2026
 
