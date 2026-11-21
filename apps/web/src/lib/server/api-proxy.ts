@@ -74,8 +74,11 @@ export async function proxyApi(request: Request, origin: URL, fetcher: typeof fe
       if (value) outgoing.set(name, value);
     }
     for (const cookie of upstream.headers.getSetCookie()) outgoing.append('set-cookie', cookie);
-    // Better Auth recovery redirects may only return to this frontend origin.
-    const location = upstream.headers.get('location');
+    // Better Auth recovery redirects may only return to this frontend origin. A 200 response
+    // (e.g. sign-in/social, whose JSON carries the Google URL) also sends `location`; the
+    // browser ignores it outside 3xx, so it is dropped instead of forwarded.
+    const location =
+      upstream.status >= 300 && upstream.status < 400 ? upstream.headers.get('location') : null;
     if (location) {
       const redirect = new URL(location, incoming.origin);
       if (redirect.origin !== incoming.origin) throw new Error('invalid_redirect');

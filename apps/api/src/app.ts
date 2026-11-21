@@ -118,6 +118,7 @@ export function createApp(config: ApiConfig, dependencies: AppDependencies) {
       passwordReset: Boolean(
         dependencies.auth && config.smtpHost && config.smtpPort && config.smtpFrom,
       ),
+      google: Boolean(dependencies.auth && config.googleClientId && config.googleClientSecret),
     }),
   );
   app.on(['GET', 'POST'], '/api/auth/*', async (c) => {

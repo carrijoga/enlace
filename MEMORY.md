@@ -10,6 +10,33 @@ Validação: check sem avisos, lint, build web para preview local no Windows e 1
 
 Integração à `main` solicitada pelo usuário. Após o merge, o próximo passo da fase 7 é conferir `/ver` na hospedagem e validar a página no Moto G84 físico e com leitor de tela.
 
+## Login com Google e exclusão de conta concluídos localmente — 21/11/2026
+
+Pedido do usuário, na branch `carrijoga/anthias` (ADR-0015). Claude Opus coordenou. Dois subagents Sonnet trabalharam com arquivos exclusivos: um na API e outro na tela `/conta` com `lib/account`. O coordenador fez ADR, docs, revisão e a correção do proxy.
+- `/conta` abre com "Continuar com o Google". Depois vêm o divisor "ou use seu e-mail" e as abas Entrar e Criar conta. Logado, a tela mostra "Conectar Google" ou "Google conectado".
+- A API usa `socialProviders.google` só quando `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` existem juntas. `auth-capabilities` informa `google`. Os erros de OAuth voltam para `/conta?error=`. Não há vinculação implícita com contas de senha (`account_not_linked`).
+- Exclusão: quem tem senha continua digitando a senha. Uma conta só Google precisa de sessão com até 10 min (`REAUTH_WINDOW_SECONDS`); fora disso recebe `REAUTH_REQUIRED` e reconfirma com o Google (`?excluir=confirmar`).
+- `.railway/railway.ts` declara as duas variáveis com `preserve()`.
+- Defeito encontrado no teste local e corrigido: o `sign-in/social` responde 200 com `location` para o Google, e o proxy da web tratava isso como redirecionamento externo, devolvendo 503. Agora o proxy só trata `location` em respostas 3xx.
+
+Validação:
+- check, lint e 195 testes passaram com PostgreSQL 18 temporário. O único pulado precisa de `TEST_CREATE_DATABASE`.
+- No navegador local, com credenciais Google falsas:
+  - tela deslogada e logada;
+  - `sign-in/social` pelo proxy devolve a URL do Google com `redirect_uri` `/api/auth/callback/google`;
+  - callback forjado volta para `/conta?error=state_mismatch`;
+  - conta só Google simulada no banco: com sessão antiga, a tela pede reconfirmação; com sessão nova e `?excluir=confirmar`, a exclusão apagou usuário, conta e sessão.
+
+Não verificados:
+- OAuth real (falta o cliente no Google Cloud);
+- `account_not_linked` e `link-social` reais;
+- 390 px (o Chrome não redimensionou);
+- leitor de tela.
+
+Commits `fef2e03` (API), `76a9a41` (web) e `9d04088` (docs) na branch `carrijoga/feat-login-cadastro-google`. PR #5 aberto para a `main` em 21/11/2026, a pedido do usuário.
+
+Próximo passo: o usuário revisa e faz o merge do PR #5. Para ativar o Google em produção, criar o cliente OAuth e gravar as variáveis na Railway (runbook em `docs/desenvolvimento.md`, passo 6). Depois, aceite hospedado do roadmap.
+
 ## Fase 7, auditoria axe e sincronização com a main — 21/11/2026
 
 PR #2 mergeado pelo usuário. A `main` foi integrada a esta branch (`94cb8f9`): Railway, CI, Compose e operação ficaram idênticos à `main`, `config plan` está em dia, e a seção duplicada do PostgreSQL 18 na memória foi removida.

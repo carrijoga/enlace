@@ -29,6 +29,9 @@ export default defineRailway(() => {
       BETTER_AUTH_SECRET: preserve(),
       // Gravado na Railway para os links de visualização (ADR-0014). Declarado para o apply não apagá-lo.
       SHARE_LINK_SECRET: preserve(),
+      // Login com Google (opcional, as duas juntas). Declaradas para o apply não apagá-las.
+      GOOGLE_CLIENT_ID: preserve(),
+      GOOGLE_CLIENT_SECRET: preserve(),
       DATABASE_URL: preserve(),
       MIGRATOR_DATABASE_URL: preserve(),
     },
