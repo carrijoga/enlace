@@ -373,3 +373,112 @@ export type ProjectSnapshot = z.infer<typeof projectSnapshotSchema>;
 export type ProjectWriteResponse = z.infer<typeof projectWriteResponseSchema>;
 export type CreateProjectRequest = z.infer<typeof createProjectRequestSchema>;
 export type SaveProjectRequest = z.infer<typeof saveProjectRequestSchema>;
+
+// Link de visualização somente leitura (ADR-0014). Nenhum destes schemas concede escrita.
+
+export const MAX_ACTIVE_SHARE_LINKS = 10;
+/** `base64url(linkId[16 bytes] ‖ HMAC-SHA256[32 bytes])`, sem preenchimento: 64 caracteres. */
+export const SHARE_TOKEN_LENGTH = 64;
+
+export const shareLinkModeSchema = z.enum(['names', 'plan']);
+export const shareLinkExpirySchema = z.union([
+  z.literal(7),
+  z.literal(30),
+  z.literal(90),
+  z.null(),
+]);
+const shareLinkLabelSchema = z
+  .string()
+  .min(1)
+  .max(60)
+  .refine((value) => value.trim().length > 0, 'Nome do link não pode conter apenas espaços');
+export const shareTokenSchema = z
+  .string()
+  .regex(new RegExp(`^[A-Za-z0-9_-]{${SHARE_TOKEN_LENGTH}}$`), 'Link inválido');
+
+export const createShareLinkRequestSchema = z
+  .object({
+    label: shareLinkLabelSchema,
+    mode: shareLinkModeSchema,
+    expiresInDays: shareLinkExpirySchema,
+  })
+  .strict();
+export const shareLinkSchema = z
+  .object({
+    id: uuidSchema,
+    label: shareLinkLabelSchema,
+    mode: shareLinkModeSchema,
+    createdAt: z.iso.datetime(),
+    expiresAt: z.iso.datetime().nullable(),
+    token: shareTokenSchema,
+  })
+  .strict();
+export const shareLinkListResponseSchema = z
+  .object({ links: z.array(shareLinkSchema).max(MAX_ACTIVE_SHARE_LINKS) })
+  .strict();
+export const sharedViewRequestSchema = z.object({ token: shareTokenSchema }).strict();
+/** Corpo vazio: métodos que alteram dados sempre mandam JSON pelo proxy. */
+export const revokeShareLinkRequestSchema = z.object({}).strict();
+
+/** Planta sem `linkedCounts`, que é preferência do editor e não interessa a quem só vê. */
+const sharedLayoutSchema = layoutSchema.omit({ linkedCounts: true });
+const sharedBaseShape = {
+  couple: z.object({ first: z.string().max(80), second: z.string().max(80) }).strict(),
+  weddingDate: dateSchema.nullable(),
+  layout: sharedLayoutSchema,
+};
+const sharedSeatSchema = z
+  .object({
+    seatId: uuidSchema,
+    name: guestSchema.shape.name,
+    category: guestSchema.shape.category,
+  })
+  .strict();
+
+export const sharedViewSchema = z
+  .discriminatedUnion('mode', [
+    z
+      .object({
+        mode: z.literal('names'),
+        ...sharedBaseShape,
+        seats: z.array(sharedSeatSchema).max(300),
+      })
+      .strict(),
+    z
+      .object({
+        mode: z.literal('plan'),
+        ...sharedBaseShape,
+        occupiedSeatIds: z.array(uuidSchema).max(300),
+      })
+      .strict(),
+  ])
+  .superRefine((view, ctx) => {
+    const seats = new Set<string>();
+    view.layout.rows.forEach((row, index) => {
+      for (const seatId of [...row.leftSeatIds, ...row.rightSeatIds]) {
+        if (seats.has(seatId))
+          ctx.addIssue({
+            code: 'custom',
+            path: ['layout', 'rows', index],
+            message: 'ID de cadeira duplicado',
+          });
+        seats.add(seatId);
+      }
+    });
+    const occupied =
+      view.mode === 'names' ? view.seats.map((seat) => seat.seatId) : view.occupiedSeatIds;
+    const seen = new Set<string>();
+    occupied.forEach((seatId, index) => {
+      const path = view.mode === 'names' ? ['seats', index, 'seatId'] : ['occupiedSeatIds', index];
+      if (!seats.has(seatId))
+        ctx.addIssue({ code: 'custom', path, message: 'Cadeira inexistente' });
+      if (seen.has(seatId)) ctx.addIssue({ code: 'custom', path, message: 'Cadeira repetida' });
+      seen.add(seatId);
+    });
+  });
+
+export type ShareLinkMode = z.infer<typeof shareLinkModeSchema>;
+export type CreateShareLinkRequest = z.infer<typeof createShareLinkRequestSchema>;
+export type ShareLink = z.infer<typeof shareLinkSchema>;
+export type SharedViewRequest = z.infer<typeof sharedViewRequestSchema>;
+export type SharedView = z.infer<typeof sharedViewSchema>;

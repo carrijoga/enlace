@@ -237,13 +237,21 @@ migrationSuite('PostgreSQL migration runner (temporary database)', () => {
       await admin.query(`CREATE DATABASE "${dbName}"`);
       const first = await migrate(tempUrl.toString());
       const second = await migrate(tempUrl.toString());
-      expect(first).toEqual(['0000_initial.sql', '0001_remove_receipt_date_index.sql']);
+      expect(first).toEqual([
+        '0000_initial.sql',
+        '0001_remove_receipt_date_index.sql',
+        '0002_share_links.sql',
+      ]);
       expect(second).toEqual([]);
       tempPool = new Pool({ connectionString: tempUrl.toString() });
       const tables = await tempPool.query(
-        "SELECT to_regclass('public.projects') AS projects, to_regclass('public.user') AS auth_user",
+        "SELECT to_regclass('public.projects') AS projects, to_regclass('public.user') AS auth_user, to_regclass('public.project_share_links') AS share_links",
       );
-      expect(tables.rows[0]).toEqual({ projects: 'projects', auth_user: '"user"' });
+      expect(tables.rows[0]).toEqual({
+        projects: 'projects',
+        auth_user: '"user"',
+        share_links: 'project_share_links',
+      });
     } finally {
       await tempPool?.end();
       await admin.query(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`).catch(() => undefined);

@@ -13,6 +13,8 @@
     zoom,
     onSeatSelect,
     onGuestDrop,
+    readonly = false,
+    anonymous = false,
   }: {
     project: CeremonyProject;
     geometry: LayoutGeometry;
@@ -20,8 +22,14 @@
     selectedSeatId: string | null;
     zoom: number;
     onSeatSelect: (id: string) => void;
-    onGuestDrop: (guestId: string, seatId: string) => void;
+    onGuestDrop?: (guestId: string, seatId: string) => void;
+    /** Visualização por link (ADR-0014): seleciona para destacar, mas não aceita soltar pessoas. */
+    readonly?: boolean;
+    /** Modo "Só a planta": cadeira ocupada sem nome nem categoria. */
+    anonymous?: boolean;
   } = $props();
+  // Cadeira ocupada sem categoria (modo anônimo): mesmo verde da marca, contraste 3:1 no contorno.
+  const OCCUPIED = { fill: '#e3ebe1', stroke: '#5f825f', text: '#294b32' };
   let viewport: HTMLDivElement;
   let svg: SVGSVGElement;
   // Intermediários por referência: trocar só o formato não reconstrói os mapas (ADR-0005).
@@ -108,6 +116,19 @@
     welcomeSeat(seat, arrivalRing);
   }
 
+  /** Rola a planta até a cadeira, sem mover a página inteira. */
+  export function reveal(seatId: string) {
+    const seat = svg.querySelector<SVGGElement>(`[data-seat-id="${seatId}"]`);
+    if (!seat || !viewport) return;
+    const box = seat.getBoundingClientRect();
+    const frame = viewport.getBoundingClientRect();
+    viewport.scrollBy({
+      left: box.left + box.width / 2 - (frame.left + frame.width / 2),
+      top: box.top + box.height / 2 - (frame.top + frame.height / 2),
+      behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+    });
+  }
+
   function seatKey(event: KeyboardEvent, listed: SeatGeometry) {
     // Posição atual (a de `seatList` pode ser de outro formato).
     const seat = positions.get(listed.id) ?? listed;
@@ -147,7 +168,7 @@
     const guestId =
       event.dataTransfer?.getData('application/x-enlace-guest') ||
       event.dataTransfer?.getData('text/plain');
-    if (guestId && guests.has(guestId)) onGuestDrop(guestId, id);
+    if (guestId && guests.has(guestId)) onGuestDrop?.(guestId, id);
   }
 </script>
 
@@ -202,27 +223,37 @@
     </g>
     {#each seatList as seat (seat.id)}
       {@const guest = guests.get(assignments.get(seat.id) ?? '')}
-      {@const category = guest ? GUEST_CATEGORIES[guest.category] : null}
+      {@const category = guest && !anonymous ? GUEST_CATEGORIES[guest.category] : null}
       {@const active = selectedSeatId === seat.id || Boolean(guest && selectedGuestId === guest.id)}
       <g
         data-seat-id={seat.id}
         role="button"
         tabindex={tabStopId === seat.id ? 0 : -1}
         aria-label={guest
-          ? `${guest.name}, ${seat.label}, ${category?.label}`
+          ? anonymous
+            ? `${seat.label}: ocupada`
+            : `${guest.name}, ${seat.label}, ${category?.label}`
           : `${seat.label}: disponível`}
         aria-pressed={active}
         transform={transformOf(seat.id)}
         onclick={() => onSeatSelect(seat.id)}
         onkeydown={(event) => seatKey(event, seat)}
-        ondragover={(event) => {
-          event.preventDefault();
-          hovered = seat.id;
-        }}
-        ondragleave={() => (hovered = null)}
-        ondrop={(event) => dropGuest(event, seat.id)}
+        ondragover={readonly
+          ? undefined
+          : (event) => {
+              event.preventDefault();
+              hovered = seat.id;
+            }}
+        ondragleave={readonly ? undefined : () => (hovered = null)}
+        ondrop={readonly ? undefined : (event) => dropGuest(event, seat.id)}
       >
-        <title>{seat.label}{guest ? ` — ${guest.name}` : ' — disponível'}</title>
+        <title
+          >{seat.label}{guest
+            ? anonymous
+              ? ' — ocupada'
+              : ` — ${guest.name}`
+            : ' — disponível'}</title
+        >
         <rect x="-34" y="-41" width="68" height="85" fill="transparent" />
         {#if active || hovered === seat.id}<rect
             class="selection-ring"
@@ -236,19 +267,33 @@
             stroke-width="2"
             stroke-dasharray={hovered === seat.id ? '0' : '4 4'}
           />{/if}
-        <rect x="-25" y="-27" width="50" height="9" rx="3" fill={category?.stroke ?? '#ccd4c8'} />
+        <rect
+          x="-25"
+          y="-27"
+          width="50"
+          height="9"
+          rx="3"
+          fill={category?.stroke ?? (guest ? OCCUPIED.stroke : '#ccd4c8')}
+        />
         <rect
           x="-25"
           y="-19"
           width="50"
           height="51"
           rx="8"
-          fill={category?.fill ?? '#fffefb'}
-          stroke={category?.stroke ?? '#b7c4b3'}
+          fill={category?.fill ?? (guest ? OCCUPIED.fill : '#fffefb')}
+          stroke={category?.stroke ?? (guest ? OCCUPIED.stroke : '#b7c4b3')}
           stroke-width={active ? 2 : 1.4}
         />
         <path d="M -23 22 H 23" stroke={category?.stroke ?? '#d8ded3'} />
-        {#if guest}
+        {#if guest && anonymous}
+          <text x="0" y="1" text-anchor="middle" fill={OCCUPIED.text} class="guest-name"
+            >Ocupada</text
+          >
+          <text x="0" y="17" text-anchor="middle" fill={OCCUPIED.text} class="seat-number"
+            >{seat.rowIndex + 1} · {seat.index + 1}</text
+          >
+        {:else if guest}
           {@const first = guest.name.trim().split(/\s+/)[0]}
           <text x="0" y="1" text-anchor="middle" fill={category?.text} class="guest-name"
             >{first.length > 10 ? `${first.slice(0, 9)}…` : first}</text

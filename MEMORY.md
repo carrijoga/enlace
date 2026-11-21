@@ -1,10 +1,91 @@
 # Memória do projeto — Enlace
 
-Atualizado em 09/11/2026, America/Sao_Paulo.
+Atualizado em 20/11/2026, America/Sao_Paulo.
+
+## Fase 7, auditoria axe e sincronização com a main — 21/11/2026
+
+PR #2 mergeado pelo usuário. A `main` foi integrada a esta branch (`94cb8f9`): Railway, CI, Compose e operação ficaram idênticos à `main`, `config plan` está em dia, e a seção duplicada do PostgreSQL 18 na memória foi removida.
+
+Auditoria, a pedido do usuário. Playwright 1.65.1, axe-core 4.14.1 e Chromium, instalados no scratchpad da sessão e fora do repositório. Resultado:
+- diálogo "Compartilhar" (editor, confirmação e `/projetos`, desktop e celular): sem violações. Contraste só falha se medido durante a animação de entrada;
+- `/ver`: só `label-content-name-mismatch` nas cadeiras do SVG, a mesma regra aceita no ADR-0009 para o editor. Ela pega também cadeiras vazias, e `docs/revisao-ui-fase5.md` foi corrigido.
+- Capturas revisadas sem problema visual.
+
+PR #3 da fase 7 aberto para a `main` em 21/11/2026, com o aval do usuário; CI verde depois do commit de formatação `cab432b`. Próximo: o usuário revisa e faz o merge. Pendentes registráveis no PR: leitor de tela, Moto G84 e teste hospedado. Depois do merge, a festa renumera a migração dela para `0003`.
+
+## Fase 7, etapa 3 (página /ver e painel Compartilhar) concluída localmente — 21/11/2026
+
+Pedido do usuário, na branch `carrijoga/link-compartilhamento-somente`.
+- `apps/web/src/routes/ver/` é pré-renderizada, com noindex e `no-referrer`, e lê o token do fragmento. Tem a busca "Encontre seu lugar", sem diferença de acento, zoom e `SeatList` somente leitura.
+- `lib/share/client.ts` faz as chamadas, o `toViewProject` e a validação da resposta. `lib/share/ShareDialog.svelte` carrega sob demanda no editor (só projeto da conta) e em `/projetos`.
+- `PlanCanvas` ganhou `readonly`, `anonymous` e `reveal(seatId)`. `SeatList` ganhou `readonly` e `anonymous`. `scripts/measure-web.mjs` mede `/ver` também.
+
+Validação:
+- check, lint e 180 testes, com PostgreSQL 18.7 no Compose novo.
+- Bundle: `/ver` 78,8 KiB, `/editor` 90,5 (base 88,4), `/` 41,9 (base 41,5).
+- Navegador local (Chrome do usuário pela extensão; o Playwright do plugin não acha o Chrome):
+  - diálogo no editor cria o link;
+  - `/ver` mostra título, data e 5 de 40 ocupados, sem vazar nota, convidado sem lugar nem título;
+  - busca "joao" acha "João" e destaca a cadeira;
+  - modo planta sem nomes; desativado e incompleto mostram a mensagem certa;
+  - a lista não tem seletor;
+  - logs da API sem token.
+- Correção do teste: o `title` no botão "Compartilhar" do editor trocava o nome acessível, então foi removido.
+
+Não verificados:
+- capturas de tela: o Chrome limitava a janela a 2 quadros por segundo;
+- clique no diálogo de `/projetos`: outra extensão do Chrome bloqueou a automação, mas a árvore mostrou "Links ativos 1 de 10" carregados;
+- celular, leitor de tela e axe.
+
+Próximo passo: etapa 4 (axe em `/ver` e no diálogo, NVDA/TalkBack, Moto G84, olhar visual pelo usuário) e PR da fase 7 para a `main`, depois do merge do PR #2. A festa renumera a migração dela para `0003` ao entrar depois.
 
 ## PostgreSQL da Railway travado e correção para 18 — 20/11/2026
 
-Um `railway config apply` com `postgres-ssl:17` travou o banco de produção: o volume nasceu em 18.6 (padrão do SDK) e já tinha contas e projetos. Decisão do usuário: manter os dados e ir para 18. Imagem `postgres-ssl:18` em `.railway/railway.ts`, `postgres:18-alpine` na CI e no Compose (volume novo `enlace_postgres18_data` em `/var/lib/postgresql`; o antigo, da 17, fica intocado), `pg_dump` 18 em `docs/operacao.md` e revisão no ADR-0013. O banco voltou em 21/11/2026 01:08 UTC com os dados, e `/ready` responde 200. `.railway/railway.ts` declara também `PORT=3000` e `SHARE_LINK_SECRET` (`preserve()`): variáveis não declaradas são apagadas pelo `apply`. Regra: nunca reduzir a versão maior da imagem de um banco com dados e sempre ler o plano antes de aplicar.
+Após `railway config apply` do usuário (rodado em `Documents/dev/enlace`, branch `codex/ceremony-editor`, com `postgres-ssl:17`), o serviço `postgres` ficou CRASHED: "This image runs PostgreSQL 17 but the data directory holds major version 18". O volume nasceu em 18.6 (padrão do SDK) e já tinha contas e projetos; a API seguia no ar com `/health` 200 e `/ready` 503. Decisão do usuário: manter os dados e ir para 18.
+
+Feito neste worktree: cherry-pick de `e800544` (`PORT=3000`, só existia em `codex/ceremony-editor`; sem ele o plano apagava `api.PORT`). Imagem `postgres-ssl:18` em `.railway/railway.ts`, `postgres:18-alpine` na CI e no Compose (volume novo `enlace_postgres18_data` em `/var/lib/postgresql`; o antigo, da 17, fica intocado), `pg_dump` 18 em `docs/operacao.md` e revisão no ADR-0013. Suíte completa (173) passou em PostgreSQL 18.7 num contêiner temporário. O worktree foi vinculado ao projeto Railway (`railway link`). `railway config plan` daqui: 0 a adicionar, 1 a mudar (imagem para `ghcr.io/railwayapp-templates/postgres-ssl:18` no grafo desejado; a CLI exibe "postgres:18"), 0 a destruir.
+
+`.railway/railway.ts` declara `PORT=3000` e `SHARE_LINK_SECRET` (`preserve()`): variáveis não declaradas são apagadas pelo `apply`. Correção levada à `main` pelo PR #2 (mergeado em 21/11/2026). Resolvido em 21/11/2026 01:08 UTC: o usuário rodou `apply` deste worktree. O postgres voltou a SUCCESS em 18.6, com "Skipping initialization" e desligamento limpo anterior (dados preservados). `/ready` responde 200, a API atende `/api/projects/:id` com 200, e `config plan` está em dia. Não rodar `apply` de `Documents/dev/enlace` enquanto ele declarar 17. Levar esta correção à `main`. `SHARE_LINK_SECRET` gravado no serviço `api` em 21/11/2026, a pedido do usuário: 64 caracteres aleatórios, enviados por stdin e nunca exibidos, diferente de `BETTER_AUTH_SECRET`. Foi usado `--skip-deploys`, então vale a partir do próximo deploy.
+
+## Fase 7, etapa 2 (API dos links) concluída localmente — 20/11/2026
+
+Pedido do usuário.
+- Migração `0002_share_links.sql`: tabela `project_share_links`, sem o token.
+- `apps/api/src/projects/share-token.ts`: HMAC-SHA256 com contexto `enlace-share-link:v1:` e `timingSafeEqual`, recusando codificação não canônica.
+- `share-links.ts`: list, create com a linha do projeto bloqueada e limite de 10, revoke idempotente com corpo `{}`, e view com `REPEATABLE READ`, `readSnapshot` e `toSharedView`.
+- Rotas no `app.ts`, com `sameOriginJson` separado de `writable` para não exigir o store de projetos.
+- `store.ts` passou a exportar `transaction` e `readSnapshot`.
+- Proxy liberou `projects/:id/share-links[/:linkId]` e `shared/view`.
+- A API depende de `@enlace/domain`, e `build:api` compila o domínio.
+- `SHARE_LINK_SECRET` é obrigatória em produção, com 32+ caracteres e diferente de `BETTER_AUTH_SECRET`. Foi incluída em `.railway/railway.ts` (`preserve()`), `.env.example` e no runbook. O primeiro deploy precisa dela, ou a API não sobe.
+- Desvio registrado no ADR: o limite é por link e por instância (600/min), não por IP, porque a API só vê o proxy.
+
+Validação: 173 testes passaram com PostgreSQL 17 local (`TEST_DATABASE_URL` no contêiner `humpback-postgres-1`, criado por este worktree com volume próprio; `--maxWorkers=2 --testTimeout=30000`). check, lint, prettier (arquivos alterados) e `build:api` ok. O integrado cobre:
+- os dois modos sem dados privados no JSON;
+- última revisão salva, e links não mudam a revisão;
+- isolamento entre contas;
+- token recusado como Bearer ou cookie de sessão;
+- desativado, vencido e de outro segredo respondem 404;
+- limite de 10 com 13 criações simultâneas;
+- cascata ao excluir o projeto.
+
+Não verificados: role de runtime real com a tabela nova (coberta por `ALTER DEFAULT PRIVILEGES`, sem teste próprio), proxy Vercel→Railway hospedado.
+
+Próximo passo do tema: etapa 3. Página `/ver` pré-renderizada, com token no fragmento e `POST /api/shared/view`; `PlanCanvas`/`SeatList` com modo somente leitura explícito; busca "Encontre seu lugar"; noindex e `Referrer-Policy: no-referrer`; painel "Compartilhar" no editor e em `/projetos`.
+
+## Fase 7, etapa 1 (contratos e projeção) concluída localmente — 20/11/2026
+
+Pedido do usuário. Em `@enlace/contracts`: `createShareLinkRequestSchema`, `shareLinkSchema`, `shareLinkListResponseSchema`, `sharedViewRequestSchema`, `sharedViewSchema` (união `names`/`plan`, estrita, layout sem `linkedCounts`), `MAX_ACTIVE_SHARE_LINKS` (10) e `SHARE_TOKEN_LENGTH` (64). Em `@enlace/domain`: `toSharedView(project, mode)`, com cópia campo a campo, só pessoas sentadas, na ordem da planta. O título ficou fora da projeção (questão aberta no ADR). Documentado em `docs/contratos.md`.
+
+Validação: 133 testes passaram (15 integrados pulados, sem PostgreSQL), check/lint/prettier ok. Os testes verificam no JSON serializado a ausência de notas, título, IDs e convidados sem lugar, e de nomes e categorias no modo `plan`. Neste worktree foi preciso `pnpm install --frozen-lockfile` e `svelte-kit sync` antes dos testes web. Cuidado: `prettier --write` troca CRLF por LF em arquivos não alterados; restaurar antes de commitar.
+
+Correção de estado: o PR #1 já integrou `codex/ceremony-editor` à `main` (`3e32527`), então o bloqueio "main atrasada" da seção de deploy está resolvido. Continua pendente a aprovação do usuário para `railway config apply`.
+
+Próximo passo do tema: etapa 2. Tabela `project_share_links` e migração; token HMAC com `SHARE_LINK_SECRET` (`node:crypto`, `timingSafeEqual`); rotas de gerenciamento por dono e `POST /api/shared/view`; limite de requisições; allowlist do proxy; testes integrados de acesso cruzado, revogação, validade e limite de 10 sob concorrência. A API passa a depender de `@enlace/domain`.
+
+## Link de visualização proposto como fase 7 — 20/11/2026
+
+Pedido do usuário, só documentado, sem código. Registrado em ADR-0014 (proposta), na fase 7 do roadmap e numa seção do `PRODUCT.md`. A tabela de evoluções em `modelo-de-dados.md` foi atualizada. Decisões do usuário: link para quem não tem conta, somente leitura; vários links com nome por projeto; o dono escolhe em cada link o modo "Com nomes" ou "Só a planta" e a validade (7, 30, 90 dias ou sem prazo); a execução vem antes da festa (fase 6), depois do aceite hospedado da fase 5. A numeração 7 foi mantida para não renumerar a festa. Proposta técnica: tabela `project_share_links` sem o token; token = `linkId` + HMAC (`SHARE_LINK_SECRET`) no fragmento `/ver#…`, enviado no corpo de `POST /api/shared/view`; projeção pura `toSharedView` sem notas, IDs, dono nem convidados sem lugar; limite de 10 links ativos; sem rastrear quem vê. Próximo passo do tema: o mesmo da fase 5 (aceite hospedado) e, em seguida, a etapa 1 da fase 7 (contratos e projeção).
 
 ## Deploy da API na Railway em preparação — 09/11/2026
 

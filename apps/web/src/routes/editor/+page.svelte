@@ -65,6 +65,10 @@
     null,
   );
   let csvTrigger: HTMLButtonElement | null = null;
+  let shareDialog = $state<typeof import('../../lib/share/ShareDialog.svelte').default | null>(
+    null,
+  );
+  let shareTrigger: HTMLButtonElement | null = null;
   let feedback = $state('');
   let feedbackError = $state(false);
   let rawDraft = $state<string | null>(null);
@@ -584,6 +588,18 @@
       announce('Não foi possível abrir a importação. Verifique a conexão e tente novamente.', true);
     }
   }
+  async function openShare(trigger: HTMLButtonElement) {
+    shareTrigger = trigger;
+    try {
+      shareDialog = (await import('../../lib/share/ShareDialog.svelte')).default;
+    } catch {
+      announce('Não foi possível abrir o compartilhamento. Verifique a conexão.', true);
+    }
+  }
+  function closeShare() {
+    shareDialog = null;
+    void tick().then(() => shareTrigger?.focus());
+  }
   function closeCsvImport() {
     csvDialog = null;
     void tick().then(() => csvTrigger?.focus());
@@ -760,6 +776,10 @@
           ></button
         >
       </div>
+      {#if projectId && project}<button
+          class="editor-button"
+          onclick={(event) => openShare(event.currentTarget)}>Compartilhar</button
+        >{/if}
       <button class="editor-button" onclick={() => fileInput.click()} disabled={!project}
         >Abrir JSON</button
       >
@@ -1054,6 +1074,10 @@
       <p>Carregando o planejamento deste navegador.</p>
     </main>{/if}
 
+  {#if shareDialog && project && projectId}
+    {@const ShareDialog = shareDialog}
+    <ShareDialog {projectId} projectTitle={project.title} onClose={closeShare} />
+  {/if}
   {#if csvDialog && project}
     {@const CsvDialog = csvDialog}
     <CsvDialog

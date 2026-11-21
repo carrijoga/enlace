@@ -38,6 +38,7 @@ A landing `/` e `/editor` anônimo continuam funcionando sem conta/banco. Copie 
 | API | `WEB_ORIGIN` | Origem pública exata da web, incluindo porta local; HTTPS obrigatório em produção |
 | API | `DATABASE_URL` | Conexão privada exclusiva da API |
 | API | `BETTER_AUTH_SECRET` | Segredo aleatório com pelo menos 32 caracteres; obrigatório em produção |
+| API | `SHARE_LINK_SECRET` | Assina os links de visualização ([ADR-0014](decisoes/0014-link-de-visualizacao.md)). Aleatório, 32+ caracteres, diferente de `BETTER_AUTH_SECRET`; obrigatório em produção. Sem ele, em desenvolvimento, as rotas de compartilhamento respondem 503. Trocá-lo invalida todos os links. |
 | API | `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM` | Transporte de recuperação de senha; sem esses valores o recurso é indisponível |
 | API | `SMTP_USER`, `SMTP_PASSWORD` | Credenciais SMTP quando o transporte as exigir |
 | API | `NODE_ENV` | `production` na Railway |
@@ -78,7 +79,7 @@ Sequência do primeiro ambiente, com CLI autenticada e diretório vinculado:
 1. `railway config plan`, conferir e `railway config apply`. O primeiro deploy da API falha até as variáveis existirem.
 2. Conferir no painel que API e PostgreSQL estão em US East.
 3. Em arquivo novo fora do repositório, gerar as credenciais: `BOOTSTRAP_OUTPUT_FILE=<arquivo>` e `railway run --service postgres node scripts/db-bootstrap-roles.mjs`. O banco criado pelo `apply` nasce sem acesso público e sem `DATABASE_PUBLIC_URL`: criar proxy temporário com `railway tcp-proxy create --port 5432 --service postgres` e informar `BOOTSTRAP_DATABASE_URL` montada com o endereço do proxy, as credenciais `PG*` e `sslmode=no-verify` (o SQL contém senhas; não conectar sem TLS). A saída contém `DATABASE_URL` e `MIGRATOR_DATABASE_URL` com referências privadas.
-4. Definir no serviço `api` as duas URLs, `BETTER_AUTH_SECRET` (aleatório, 32+ caracteres) e `WEB_ORIGIN` (origem HTTPS exata da web). Apagar o arquivo.
+4. Definir no serviço `api` as duas URLs, `BETTER_AUTH_SECRET` e `SHARE_LINK_SECRET` (aleatórios, 32+ caracteres, diferentes entre si) e `WEB_ORIGIN` (origem HTTPS exata da web). Apagar o arquivo.
 5. Remover o proxy com `railway tcp-proxy delete <id> --service postgres --yes`, refazer o deploy e gerar o domínio com `railway domain --service api --port 3000` (a API declara `PORT=3000`). Nunca usar `--confirm-destructive` sem ler o plano: mudar a imagem do PostgreSQL de versão maior em volume existente pode impedir o banco de iniciar.
 6. Conferir `/health` e `/ready`, configurar `API_ORIGIN` na Vercel e testar cadastro, login e salvamento pela web.
 

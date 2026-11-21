@@ -33,6 +33,10 @@ As listas de cadeiras são a fonte da quantidade por lado. Não persistir també
 
 Manter limites iniciais compatíveis com a capacidade observada do protótipo: 1–12 fileiras, 0–12 cadeiras por lado/fileira e até 300 convidados. Esses limites precisam ser aplicados também aos caminhos de cadastro e lote, não só à importação. Rever os números após testar desempenho e UX. Comprimentos de campos, corredor, curvatura, tamanho máximo e notas estão formalizados nos contratos executáveis; cliente e servidor validam o mesmo agregado.
 
+### Links de visualização
+
+`project_share_links` (`id`, `project_id`, `label`, `mode`, `created_at`, `expires_at`, `revoked_at`) foi implementada em 20/11/2026 ([ADR-0014](decisoes/0014-link-de-visualizacao.md)). Tem FK para `projects` com cascata, índice por projeto e checks de modo (`names` ou `plan`), de nome (1–60 caracteres, não só espaços) e de validade posterior à criação. O token não é guardado: o servidor o recalcula do `id` com `SHARE_LINK_SECRET`. Ativo quer dizer `revoked_at` nulo e `expires_at` nulo ou futuro. Desativar preenche `revoked_at`, sem apagar a linha. Links não alteram `projects.revision` nem entram no JSON exportado. O limite de 10 ativos é aplicado com a linha do projeto bloqueada.
+
 ## Identidade, acesso e conexão
 
 Better Auth executa no servidor da API; a sessão é validada no backend e identifica o usuário por operação. Tabelas de autenticação devem seguir esquema gerado e revisado, com migrações versionadas. Não criar tabela paralela de senhas nem mecanismo próprio de tokens. O frontend deve encaminhar requisições autenticadas pelo seu domínio para API, evitando cookies third-party entre domínios Vercel/Railway. Validar origem/CSRF e cookies no desenho final; CORS não concede autorização. A integração de referência é a [documentação do adaptador Drizzle](https://www.better-auth.com/docs/adapters/drizzle).
@@ -109,4 +113,4 @@ Criar uma projeção própria para exportação individual: geometria necessári
 - Histórico de versões e recuperação, com retenção e restauração transacional.
 - Grupos familiares e restrições de posição configuráveis, se validados como necessidade do produto.
 - Normalização das cadeiras caso sejam editadas/consultadas independentemente da planta.
-- Links de visualização individual com tokens limitados e revogáveis, caso o produto venha a oferecer compartilhamento por URL.
+- Links de visualização: a tabela `project_share_links` foi implementada (migração `0002_share_links.sql`, ver acima). A página pública ainda não existe.

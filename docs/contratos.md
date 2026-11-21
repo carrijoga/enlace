@@ -77,3 +77,28 @@ O formato portátil JSON v1 permanece inalterado. O transporte remoto tem schema
 IDs de projeto/operação são UUIDs. Revisões são inteiros positivos seguros; timestamps são ISO UTC. Campos de proprietário são recusados: a API determina a identidade pela sessão. Erros usam `{ error: código }`: `unauthenticated` (401), `not_found` (404), `revision_conflict`/`operation_reused` (409) e `invalid_request` (400). Indisponibilidade não deve ser tratada como confirmação de salvamento.
 
 Exports: `createProjectRequestSchema`, `saveProjectRequestSchema`, `deleteProjectRequestSchema`, `projectSummarySchema`, `projectSnapshotSchema`, `projectListResponseSchema`, `projectWriteResponseSchema` e os tipos correspondentes. A revisão remota não entra no arquivo exportado. O recibo de repetição de PUT confirma sua revisão original; o conteúdo atual exige GET separado. Ver [ADR-0007](decisoes/0007-contas-e-salvamento-transacional.md).
+
+## Link de visualização — fase 7, etapa 1
+
+Implementados em 20/11/2026 os schemas e a projeção do [ADR-0014](decisoes/0014-link-de-visualizacao.md). As rotas, a tabela e o token vieram na etapa 2 (tabela abaixo); a página `/ver` ainda não existe.
+
+| Schema | Forma | Regras |
+| --- | --- | --- |
+| `createShareLinkRequestSchema` | `{ label, mode, expiresInDays }` | Nome com 1–60 caracteres, não só espaços; `mode` é `names` ou `plan`; validade `7`, `30`, `90` ou `null` (sem prazo), sempre explícita. Campos desconhecidos, como `projectId` ou `ownerId`, são recusados. |
+| `shareLinkSchema` / `shareLinkListResponseSchema` | `{ id, label, mode, createdAt, expiresAt, token }` / `{ links }` | Visão do dono. No máximo `MAX_ACTIVE_SHARE_LINKS` (10). |
+| `sharedViewRequestSchema` | `{ token }` | Token base64url sem preenchimento, com exatamente `SHARE_TOKEN_LENGTH` (64) caracteres: 16 bytes do `linkId` mais 32 do HMAC. O formato não prova validade; a verificação é do servidor. |
+| `sharedViewSchema` | União por `mode` | Base: `couple`, `weddingDate` e `layout` sem `linkedCounts`. `names` acrescenta `seats: [{ seatId, name, category }]`; `plan` acrescenta só `occupiedSeatIds`. Estrito: título, notas, IDs de convidado, revisão e dono são recusados. Cada cadeira citada existe na planta e aparece uma vez. |
+
+`toSharedView(project, mode)`, em `@enlace/domain`, monta a projeção a partir do agregado validado. Cada campo é copiado explicitamente, sem espalhar o projeto, e o resultado passa por `sharedViewSchema`. Só pessoas com lugar aparecem, na ordem da planta (fileira, esquerda, direita), não na ordem da lista. Os testes em `packages/domain/test/shared-view.test.ts` verificam no JSON serializado a ausência de notas, título, IDs e nomes de convidados (este último no modo `plan`) e de convidados sem lugar.
+
+### Rotas (etapa 2)
+
+| Operação | Entrada | Resposta |
+| --- | --- | --- |
+| `GET /api/projects/:id/share-links` | Sessão por cookie | `{ links: [{ id, label, mode, createdAt, expiresAt, token }] }`, só os ativos |
+| `POST /api/projects/:id/share-links` | `{ label, mode, expiresInDays }` | `201` com o link |
+| `DELETE /api/projects/:id/share-links/:linkId` | `{}` (o proxy exige JSON em métodos que alteram dados) | `204`, também quando o link já estava desativado |
+| `POST /api/shared/view` | `{ token }`, sem sessão | Projeção `sharedViewSchema` |
+
+Erros novos: `share_link_limit` (409) ao passar de 10 links ativos, `sharing_unavailable` (503) sem banco ou sem `SHARE_LINK_SECRET`, e `rate_limited` (429, com `Retry-After`) acima de 600 leituras por minuto num link. Na leitura pública, token malformado, forjado, de outro segredo, desativado, vencido ou de projeto excluído dá sempre `404 { error: 'not_found' }`. Projeto de outra conta dá 404 nas rotas do dono. Export novo: `revokeShareLinkRequestSchema`.
+

@@ -11,13 +11,19 @@
     onSeatSelect,
     onAssignGuest,
     onUnassignSeat,
+    readonly = false,
+    anonymous = false,
   }: {
     project: CeremonyProject;
     selectedGuestId: string | null;
     selectedSeatId: string | null;
     onSeatSelect: (id: string) => void;
-    onAssignGuest: (guestId: string, seatId: string) => void;
-    onUnassignSeat: (seatId: string) => void;
+    onAssignGuest?: (guestId: string, seatId: string) => void;
+    onUnassignSeat?: (seatId: string) => void;
+    /** Visualização por link (ADR-0014): sem trocar quem senta. */
+    readonly?: boolean;
+    /** Modo "Só a planta": ocupada ou disponível, sem nome nem categoria. */
+    anonymous?: boolean;
   } = $props();
 
   let open = $state(false);
@@ -33,8 +39,8 @@
 
   function changeOccupant(event: Event, seatId: string) {
     const guestId = (event.currentTarget as HTMLSelectElement).value;
-    if (guestId) onAssignGuest(guestId, seatId);
-    else onUnassignSeat(seatId);
+    if (guestId) onAssignGuest?.(guestId, seatId);
+    else onUnassignSeat?.(seatId);
   }
 </script>
 
@@ -49,10 +55,14 @@
     >
       <span class="seat-label">{label}</span>
       <span class="occupant" class:free={!guest}
-        >{guest ? `${guest.name} · ${GUEST_CATEGORIES[guest.category].label}` : 'Disponível'}</span
+        >{guest
+          ? anonymous
+            ? 'Ocupada'
+            : `${guest.name} · ${GUEST_CATEGORIES[guest.category].label}`
+          : 'Disponível'}</span
       >
     </button>
-    {#if selectedSeatId === seatId}
+    {#if selectedSeatId === seatId && !readonly}
       <div class="occupant-editor">
         <label for="seat-list-guest">Pessoa em {label.toLocaleLowerCase('pt-BR')}</label>
         <select
@@ -80,7 +90,9 @@
     <p class="help">
       {selectedGuestName
         ? `Escolha a cadeira de ${selectedGuestName}.`
-        : 'A mesma planta em texto, do altar para a entrada. Selecione uma cadeira para definir quem senta nela.'}
+        : readonly
+          ? 'A mesma planta em texto, do altar para a entrada.'
+          : 'A mesma planta em texto, do altar para a entrada. Selecione uma cadeira para definir quem senta nela.'}
     </p>
     <div class="rows">
       {#each rows as row, rowIndex (row.id)}
