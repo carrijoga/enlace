@@ -15,6 +15,7 @@ import {
   duplicateItem,
   duplicateTable,
   formatMeters,
+  getDoorGeometry,
   getGuestTableId,
   getReceptionWarnings,
   getRoomChangeImpact,
@@ -23,11 +24,14 @@ import {
   getTableSeatReductionImpact,
   normalizeRotation,
   parseMeters,
+  placeDoorNear,
+  removeDoor,
   removeTable,
   setRoomOutline,
   setTableSeats,
   snapToGrid,
   unassignGuestFromTable,
+  updateDoor,
   updateItem,
   updateTable,
 } from '../src/reception.js';
@@ -118,6 +122,59 @@ describe('contornos', () => {
     const next = setRoomOutline(project, smaller);
     expect(next.reception!.room.doors).toHaveLength(1);
     expect(next.reception!.room.doors[0]!.offset).toBe(100);
+  });
+});
+
+describe('portas', () => {
+  it('nova porta abre para dentro e muda de abertura, parede e posição', () => {
+    let project = addDoor(room(), { wall: 0, offset: 100, width: 100 });
+    const door = project.reception!.room.doors[0]!;
+    expect(door.opening).toBe('inward');
+    project = updateDoor(project, door.id, { opening: 'sliding' });
+    project = updateDoor(project, door.id, { wall: 1, offset: 300 });
+    expect(project.reception!.room.doors[0]).toMatchObject({
+      opening: 'sliding',
+      wall: 1,
+      offset: 300,
+    });
+    expect(projectSchema.parse(project)).toBeTruthy();
+    expect(removeDoor(project, door.id).reception!.room.doors).toHaveLength(0);
+  });
+
+  it('recusa porta que deixa de caber ou inexistente', () => {
+    const project = addDoor(room(), { wall: 1, offset: 0, width: 100 });
+    const id = project.reception!.room.doors[0]!.id;
+    expect(() => updateDoor(project, id, { offset: 950 })).toThrow(/não cabe/);
+    expect(() => updateDoor(project, 'x', { offset: 0 })).toThrow(/inexistente/);
+  });
+
+  it('encaixa a porta na parede mais próxima, na grade e dentro da parede', () => {
+    const outline = createRectangleOutline(2000, 1000);
+    expect(placeDoorNear(outline, { x: 503, y: 40 }, 100)).toEqual({ wall: 0, offset: 450 });
+    expect(placeDoorNear(outline, { x: 1960, y: 700 }, 100)).toEqual({ wall: 1, offset: 650 });
+    // Perto do canto: a porta fica inteira na parede.
+    expect(placeDoorNear(outline, { x: 1990, y: 10 }, 120)).toEqual({ wall: 0, offset: 1880 });
+    // Fora do salão também projeta na parede mais próxima.
+    expect(placeDoorNear(outline, { x: -300, y: 500 }, 100)).toEqual({ wall: 3, offset: 450 });
+    // Paredes curtas demais são ignoradas.
+    expect(placeDoorNear(createRectangleOutline(100, 1000), { x: 50, y: 0 }, 200)).toMatchObject({
+      wall: 1,
+    });
+  });
+
+  it('geometria aponta a normal para dentro do salão nas duas orientações', () => {
+    const outline = createRectangleOutline(2000, 1000);
+    expect(getDoorGeometry(outline, { wall: 0, offset: 100, width: 100 })).toEqual({
+      start: { x: 100, y: 0 },
+      end: { x: 200, y: 0 },
+      along: { x: 1, y: 0 },
+      inward: { x: 0, y: 1 },
+    });
+    const reversed = [...outline].reverse();
+    const geometry = getDoorGeometry(reversed, { wall: 0, offset: 0, width: 100 })!;
+    // Parede de (0,1000) a (2000,1000): o interior fica acima.
+    expect(geometry.inward).toEqual({ x: 0, y: -1 });
+    expect(getDoorGeometry(outline, { wall: 9, offset: 0, width: 100 })).toBeNull();
   });
 });
 

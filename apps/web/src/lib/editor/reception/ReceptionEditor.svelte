@@ -16,6 +16,7 @@
     getTableSeatReductionImpact,
     removeColumn,
     removeDoor,
+    updateDoor,
     removeItem,
     removeTable,
     setRoomOutline,
@@ -32,7 +33,7 @@
   import ElementInspector from './ElementInspector.svelte';
   import TableGuests from './TableGuests.svelte';
   import ElementList from './ElementList.svelte';
-  import { sameRef, type ReceptionElementRef } from './contracts';
+  import { sameRef, type ReceptionElementRef, type ReceptionSelection } from './contracts';
 
   type Action = (current: Project) => Project;
   let {
@@ -47,7 +48,9 @@
     confirm: (action: Action, title: string, detail: string) => void;
   } = $props();
 
-  let picked = $state<ReceptionElementRef | null>(null);
+  let picked = $state<ReceptionSelection | null>(null);
+  let warningsOpen = $state(false);
+  let warningsBox = $state<HTMLDetailsElement>();
   let pickedGuestId = $state<string | null>(null);
   let mobilePanel = $state<'room' | 'guests'>('room');
 
@@ -60,9 +63,13 @@
         ? reception.tables
         : picked.kind === 'item'
           ? reception.items
-          : reception.room.columns;
+          : picked.kind === 'door'
+            ? reception.room.doors
+            : reception.room.columns;
     return list.some((entry) => entry.id === picked!.id) ? picked : null;
   });
+  // A lista de elementos e os avisos tratam só mesas, elementos e colunas.
+  const selectedElement = $derived(selected?.kind === 'door' ? null : selected);
   const selectedGuestId = $derived(
     pickedGuestId && project.guests.some((guest) => guest.id === pickedGuestId)
       ? pickedGuestId
@@ -85,11 +92,12 @@
             ...reception.room.columns.map(
               (column, index) => [column.id, `Coluna ${index + 1}`] as const,
             ),
+            ...reception.room.doors.map((door, index) => [door.id, `Porta ${index + 1}`] as const),
           ]
         : [],
     ),
   );
-  const nameOf = (ref: ReceptionElementRef) => names.get(ref.id) ?? 'Elemento';
+  const nameOf = (ref: ReceptionSelection) => names.get(ref.id) ?? 'Elemento';
   const meters = (cm: number) => `${formatMeters(cm)} m`;
 
   function describe(warning: ReceptionWarning): string {
@@ -138,6 +146,10 @@
       y: snapToGrid((Math.min(...ys) + Math.max(...ys)) / 2),
     };
   }
+  function selectNewestDoor() {
+    const newest = project.reception?.room.doors.at(-1);
+    if (newest) picked = { kind: 'door', id: newest.id };
+  }
   /** Seleciona o elemento recém-criado, sempre o último da lista. */
   function selectNewest(kind: ReceptionElementRef['kind']) {
     const current = project.reception;
@@ -166,7 +178,7 @@
     else mutate((p) => setRoomOutline(p, outline), 'Salão atualizado.');
   }
 
-  function select(ref: ReceptionElementRef | null) {
+  function select(ref: ReceptionSelection | null) {
     if (ref?.kind === 'table' && selectedGuestId) {
       assign(selectedGuestId, ref.id);
       return;
@@ -181,6 +193,9 @@
           ? (p) => updateItem(p, ref.id, { x, y })
           : (p) => updateColumn(p, ref.id, { x, y });
     if (mutate(action)) picked = ref;
+  }
+  function moveDoor(id: string, wall: number, offset: number) {
+    if (mutate((p) => updateDoor(p, id, { wall, offset }))) picked = { kind: 'door', id };
   }
   function assign(guestId: string, tableId: string) {
     const guest = project.guests.find((entry) => entry.id === guestId)?.name ?? 'Convidado';
@@ -208,7 +223,7 @@
       );
     else mutate((p) => setTableSeats(p, id, count), 'Cadeiras atualizadas.');
   }
-  function remove(ref: ReceptionElementRef) {
+  function remove(ref: ReceptionSelection) {
     if (ref.kind === 'table') {
       const seated = getTableGuestIds(project, ref.id);
       if (seated.length) {
@@ -221,6 +236,7 @@
       }
       mutate((p) => removeTable(p, ref.id), 'Mesa removida.');
     } else if (ref.kind === 'item') mutate((p) => removeItem(p, ref.id), 'Elemento removido.');
+    else if (ref.kind === 'door') mutate((p) => removeDoor(p, ref.id), 'Porta removida.');
     else mutate((p) => removeColumn(p, ref.id), 'Coluna removida.');
   }
   function duplicate(ref: ReceptionElementRef) {
@@ -232,6 +248,18 @@
     if (ok) selectNewest(ref.kind);
   }
 </script>
+
+<svelte:window
+  onpointerdown={(event) => {
+    if (warningsOpen && !warningsBox?.contains(event.target as Node)) warningsOpen = false;
+  }}
+  onkeydown={(event) => {
+    if (event.key !== 'Escape' || !warningsOpen) return;
+    event.preventDefault();
+    warningsOpen = false;
+    warningsBox?.querySelector('summary')?.focus();
+  }}
+/>
 
 {#if !reception}
   <div class="reception-start">
@@ -248,6 +276,8 @@
         onApplyOutline={applyOutline}
         onAddDoor={() => {}}
         onRemoveDoor={() => {}}
+        selectedDoorId={null}
+        onSelectDoor={() => {}}
         onAddColumn={() => {}}
       />
     </div>
@@ -287,6 +317,7 @@
           mutate((p) => updateItem(p, id, patch), 'Elemento atualizado.')}
         onUpdateColumn={(id, patch) =>
           mutate((p) => updateColumn(p, id, patch), 'Coluna atualizada.')}
+        onUpdateDoor={(id, patch) => mutate((p) => updateDoor(p, id, patch), 'Porta atualizada.')}
         onDuplicate={duplicate}
         onRemove={remove}
         onClose={() => (picked = null)}
@@ -295,8 +326,15 @@
         outline={reception.room.outline}
         doors={reception.room.doors}
         onApplyOutline={applyOutline}
-        onAddDoor={(door) => mutate((p) => addDoor(p, door), 'Porta adicionada.')}
+        onAddDoor={(door) => {
+          if (
+            mutate((p) => addDoor(p, door), 'Porta adicionada. Arraste-a na planta para ajustar.')
+          )
+            selectNewestDoor();
+        }}
         onRemoveDoor={(id) => mutate((p) => removeDoor(p, id), 'Porta removida.')}
+        selectedDoorId={selected?.kind === 'door' ? selected.id : null}
+        onSelectDoor={(id) => (picked = { kind: 'door', id })}
         onAddColumn={() => {
           if (
             mutate(
@@ -311,15 +349,59 @@
 
     <main id="planta-festa" class="reception-plan" aria-label="Planta da festa">
       <div class="plan-heading">
-        <h2>A festa</h2>
-        <p>
-          {plural(reception.tables.length, 'mesa', 'mesas')} · {plural(
-            seats,
-            'cadeira',
-            'cadeiras',
-          )}
-          · {seatedGuests} de {project.guests.length} convidados com mesa
-        </p>
+        <div>
+          <h2>A festa</h2>
+          <p>
+            {plural(reception.tables.length, 'mesa', 'mesas')} · {plural(
+              seats,
+              'cadeira',
+              'cadeiras',
+            )}
+            · {seatedGuests} de {project.guests.length} convidados com mesa
+          </p>
+        </div>
+        <!-- Menu suspenso sobre a planta: avisos novos não mudam a altura nem a escala da planta. -->
+        <details
+          class="warnings"
+          class:has-warnings={warnings.length > 0}
+          bind:open={warningsOpen}
+          bind:this={warningsBox}
+        >
+          <summary>
+            {warnings.length ? plural(warnings.length, 'aviso', 'avisos') : 'Nenhum aviso'}
+          </summary>
+          <div class="warnings-panel">
+            {#if warnings.length}
+              <ul>
+                {#each warnings.slice(0, 30) as warning, index (index)}
+                  <li>
+                    <button
+                      type="button"
+                      onclick={() => {
+                        warningsOpen = false;
+                        select(
+                          warning.code === 'outside_room'
+                            ? warning.element
+                            : warning.code === 'table_over_capacity'
+                              ? { kind: 'table', id: warning.tableId }
+                              : warning.first,
+                        );
+                      }}>{describe(warning)}</button
+                    >
+                  </li>
+                {/each}
+              </ul>
+              {#if warnings.length > 30}<p>E mais {warnings.length - 30} avisos.</p>{/if}
+            {:else}
+              <p>Nada a revisar na disposição atual.</p>
+            {/if}
+            <p class="disclaimer">
+              Avisos são indicativos e não bloqueiam a edição. A passagem de referência é de
+              {meters(MIN_PASSAGE_CM)}; as medidas não substituem o projeto do local nem as normas
+              de segurança.
+            </p>
+          </div>
+        </details>
       </div>
       <div class="canvas-slot">
         <ReceptionCanvas
@@ -330,47 +412,20 @@
           assigning={Boolean(selectedGuestId)}
           onSelect={select}
           onMove={move}
+          onMoveDoor={moveDoor}
         />
       </div>
       <div class="plan-context" class:waiting={selectedGuestId}>
         <p>
           {selectedGuestName
             ? `Toque na mesa de ${selectedGuestName}.`
-            : selected
-              ? `${nameOf(selected)} selecionado. Arraste ou use as setas para mover 10 cm (Shift: 50 cm).`
-              : 'Toque num elemento para editar. Arraste para mover; a grade encaixa a cada 10 cm.'}
+            : selected?.kind === 'door'
+              ? `${nameOf(selected)} selecionada. Arraste ao longo das paredes ou use as setas para mover 10 cm (Shift: 50 cm).`
+              : selected
+                ? `${nameOf(selected)} selecionado. Arraste ou use as setas para mover 10 cm (Shift: 50 cm).`
+                : 'Toque num elemento para editar. Arraste para mover; a grade encaixa a cada 10 cm.'}
         </p>
       </div>
-      <section class="warnings" aria-labelledby="festa-avisos">
-        <h3 id="festa-avisos">
-          {warnings.length ? plural(warnings.length, 'aviso', 'avisos') : 'Nenhum aviso'}
-        </h3>
-        {#if warnings.length}
-          <ul>
-            {#each warnings.slice(0, 30) as warning, index (index)}
-              <li>
-                <button
-                  type="button"
-                  onclick={() =>
-                    select(
-                      warning.code === 'outside_room'
-                        ? warning.element
-                        : warning.code === 'table_over_capacity'
-                          ? { kind: 'table', id: warning.tableId }
-                          : warning.first,
-                    )}>{describe(warning)}</button
-                >
-              </li>
-            {/each}
-          </ul>
-          {#if warnings.length > 30}<p>E mais {warnings.length - 30} avisos.</p>{/if}
-        {/if}
-        <p class="disclaimer">
-          Avisos são indicativos e não bloqueiam a edição. A passagem de referência é de
-          {meters(MIN_PASSAGE_CM)}; as medidas não substituem o projeto do local nem as normas de
-          segurança.
-        </p>
-      </section>
     </main>
 
     <nav
@@ -406,7 +461,7 @@
         {reception}
         {occupancy}
         {warningsById}
-        {selected}
+        selected={selectedElement}
         onSelect={(ref) => {
           picked = sameRef(picked, ref) ? null : ref;
           mobilePanel = 'room';
@@ -479,6 +534,11 @@
     overflow: hidden;
   }
   .plan-heading {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
     padding: 19px 22px 12px;
     border-bottom: 1px solid #eef0e9;
   }
@@ -493,7 +553,12 @@
     display: flex;
     flex-direction: column;
   }
+  /* Altura fixa de duas linhas: trocar o texto não muda a escala da planta. */
   .plan-context {
+    flex: none;
+    box-sizing: border-box;
+    height: calc(2 * 1.6 * 11px + 22px);
+    overflow: hidden;
     padding: 11px 19px;
     background: #f3f6ee;
     border-top: 1px solid #e3e9dd;
@@ -508,17 +573,67 @@
     line-height: 1.6;
   }
   .warnings {
-    padding: 10px 19px 12px;
-    max-height: 30%;
-    overflow-y: auto;
-    border-top: 1px solid #e3e9dd;
+    flex: none;
     font-size: 11px;
   }
-  .warnings h3 {
-    font-size: 11px;
+  .warnings summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 32px;
+    padding: 0 12px;
+    border: 1px solid #dfe3da;
+    border-radius: 999px;
+    background: #fffefb;
+    color: #626e63;
     font-weight: 650;
-    margin: 0 0 4px;
-    color: #27342c;
+    cursor: pointer;
+    list-style: none;
+    white-space: nowrap;
+  }
+  .warnings summary::-webkit-details-marker {
+    display: none;
+  }
+  .warnings summary::after {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: translateY(-2px) rotate(45deg);
+  }
+  .warnings[open] summary::after {
+    transform: translateY(1px) rotate(-135deg);
+  }
+  .warnings.has-warnings summary {
+    border-color: #e5c9c2;
+    background: #fbf1ee;
+    color: #923d35;
+  }
+  .warnings summary:focus-visible {
+    outline: 3px solid #6d936f;
+    outline-offset: 2px;
+  }
+  .warnings-panel {
+    position: absolute;
+    z-index: 5;
+    top: calc(100% - 4px);
+    right: 16px;
+    width: min(360px, calc(100% - 32px));
+    max-height: min(320px, 50vh);
+    overflow-y: auto;
+    box-sizing: border-box;
+    padding: 10px 14px 12px;
+    background: #fffefb;
+    border: 1px solid #dfe3da;
+    border-radius: 10px;
+    box-shadow: 0 10px 28px rgb(39 52 44 / 14%);
+    overscroll-behavior: contain;
+  }
+  .warnings-panel > p {
+    margin: 0;
+    color: #36543d;
+    line-height: 1.6;
   }
   .warnings ul {
     list-style: none;
@@ -528,7 +643,7 @@
   .warnings button {
     border: 0;
     background: none;
-    padding: 3px 0;
+    padding: 4px 0;
     color: #923d35;
     text-align: left;
     font-size: 11px;
@@ -538,9 +653,15 @@
   .warnings button:hover {
     text-decoration: underline;
   }
-  .disclaimer {
+  .warnings button:focus-visible {
+    outline: 2px solid #6d936f;
+    outline-offset: 1px;
+  }
+  .warnings-panel .disclaimer {
     color: #626e63;
-    margin: 6px 0 0;
+    margin: 8px 0 0;
+    padding-top: 8px;
+    border-top: 1px solid #eef0e9;
     line-height: 1.6;
   }
   .reception-tabs {
@@ -568,8 +689,8 @@
       min-height: 340px;
       margin: 12px 12px 0;
     }
-    .warnings {
-      max-height: 120px;
+    .warnings-panel {
+      max-height: 240px;
     }
     .reception-tabs {
       order: 1;

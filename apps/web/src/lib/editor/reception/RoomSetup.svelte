@@ -1,5 +1,11 @@
 <script lang="ts">
-  import { RECEPTION_LIMITS, findRoomOutlineError, type RoomPoint } from '@enlace/contracts';
+  import {
+    RECEPTION_DOOR_OPENINGS,
+    RECEPTION_LIMITS,
+    findRoomOutlineError,
+    type ReceptionDoor,
+    type RoomPoint,
+  } from '@enlace/contracts';
   import {
     createLShapeOutline,
     createOutlineFromWalls,
@@ -11,8 +17,22 @@
   } from '@enlace/domain/reception';
   import type { RoomSetupProps } from './contracts';
 
-  let { outline, doors, onApplyOutline, onAddDoor, onRemoveDoor, onAddColumn }: RoomSetupProps =
-    $props();
+  let {
+    outline,
+    doors,
+    onApplyOutline,
+    onAddDoor,
+    onRemoveDoor,
+    selectedDoorId,
+    onSelectDoor,
+    onAddColumn,
+  }: RoomSetupProps = $props();
+
+  const openingLabels: Record<ReceptionDoor['opening'], string> = {
+    inward: 'Para dentro',
+    outward: 'Para fora',
+    sliding: 'De correr',
+  };
 
   type Kind = 'rect' | 'square' | 'l' | 'manual';
   type WallRow = { id: number; direction: WallDirection; length: string };
@@ -51,6 +71,7 @@
   let doorWall = $state('0');
   let doorOffset = $state('1');
   let doorWidth = $state('1,2');
+  let doorOpening = $state<ReceptionDoor['opening']>('inward');
   let doorError = $state('');
 
   // Preenche largura e profundidade quando o contorno atual é um retângulo.
@@ -147,7 +168,7 @@
       doorError = `A porta não cabe: a parede tem ${formatMeters(length)} m.`;
     } else {
       doorError = '';
-      onAddDoor({ wall, offset, width: doorWidthCm });
+      onAddDoor({ wall, offset, width: doorWidthCm, opening: doorOpening });
     }
   }
 
@@ -265,17 +286,22 @@
       </div>
       {#if doors.length > 0}
         <ul class="door-list">
-          {#each doors as door (door.id)}
-            <li>
-              <span
-                >Porta na parede {door.wall + 1}, a {formatMeters(door.offset)} m do início, {formatMeters(
-                  door.width,
-                )} m de largura</span
+          {#each doors as door, index (door.id)}
+            <li class:selected={door.id === selectedDoorId}>
+              <button
+                type="button"
+                class="door-select"
+                aria-current={door.id === selectedDoorId ? 'true' : undefined}
+                aria-label={`Editar porta ${index + 1}`}
+                onclick={() => onSelectDoor(door.id)}
               >
+                Porta {index + 1} · parede {door.wall + 1} · a {formatMeters(door.offset)} m do início
+                · {formatMeters(door.width)} m · {openingLabels[door.opening].toLowerCase()}
+              </button>
               <button
                 type="button"
                 class="ghost small"
-                aria-label={`Remover porta na parede ${door.wall + 1}, a ${formatMeters(door.offset)} m do início`}
+                aria-label={`Remover porta ${index + 1}`}
                 onclick={() => onRemoveDoor(door.id)}>Remover</button
               >
             </li>
@@ -313,6 +339,20 @@
             />
           </div>
         </div>
+        <fieldset class="openings">
+          <legend>Abertura</legend>
+          {#each RECEPTION_DOOR_OPENINGS as opening (opening)}
+            <button
+              type="button"
+              class="segment"
+              class:active={doorOpening === opening}
+              aria-pressed={doorOpening === opening}
+              disabled={doorsFull}
+              onclick={() => (doorOpening = opening)}>{openingLabels[opening]}</button
+            >
+          {/each}
+        </fieldset>
+        <p class="hint">Depois de adicionar, arraste a porta na planta ao longo das paredes.</p>
         {#if doorError}<p class="error" role="alert">{doorError}</p>{/if}
         {#if doorsFull}<p class="hint">
             Limite de {RECEPTION_LIMITS.maxDoors} portas atingido.
@@ -534,6 +574,57 @@
     border: 1px solid var(--editor-line, #dfe3da);
     border-radius: 8px;
     font-size: 12px;
+  }
+  .door-list li.selected {
+    border-color: #96ae97;
+    background: #edf3eb;
+  }
+  .door-select {
+    min-height: 36px;
+    flex: 1;
+    padding: 4px 2px;
+    border: 0;
+    background: transparent;
+    color: var(--editor-ink, #27342c);
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .door-list li.selected .door-select {
+    font-weight: 700;
+  }
+  fieldset.openings {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 5px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  fieldset.openings legend {
+    grid-column: 1 / -1;
+  }
+  .segment {
+    min-height: 40px;
+    padding: 4px 6px;
+    border: 1px solid var(--editor-line, #dfe3da);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--editor-muted, #626e63);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .segment.active {
+    border-color: #96ae97;
+    background: #edf3eb;
+    color: var(--editor-forest, #295842);
+    font-weight: 700;
+  }
+  .segment:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
   }
   .door-form {
     display: grid;

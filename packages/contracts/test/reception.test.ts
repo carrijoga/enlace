@@ -174,6 +174,18 @@ describe('contrato da festa', () => {
     expect(() => parse(wide)).toThrow();
   });
 
+  it('porta sem abertura (arquivo anterior) abre para dentro; aceita fora e de correr', () => {
+    expect(documentV2().project.reception!.room.doors[0]!.opening).toBe('inward');
+    for (const opening of ['outward', 'sliding'] as const) {
+      const door = documentV2();
+      door.project.reception!.room.doors[0]!.opening = opening;
+      expect(parse(door).project.reception!.room.doors[0]!.opening).toBe(opening);
+    }
+    const invalid = documentV2();
+    (invalid.project.reception!.room.doors[0] as { opening: string }).opening = 'pivotante';
+    expect(() => parse(invalid)).toThrow();
+  });
+
   it('aceita elemento fora do salão: isso é aviso, não erro de arquivo', () => {
     const outside = documentV2();
     outside.project.reception!.items[0]!.x = 9000;

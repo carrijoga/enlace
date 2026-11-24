@@ -59,7 +59,15 @@ const withParty: Project = {
         { x: 2000, y: 1000 },
         { x: 0, y: 1000 },
       ],
-      doors: [{ id: '1a2b3c4d-8d8d-4d8d-8d8d-8d8d8d8d8d8d', wall: 0, offset: 100, width: 120 }],
+      doors: [
+        {
+          id: '1a2b3c4d-8d8d-4d8d-8d8d-8d8d8d8d8d8d',
+          wall: 0,
+          offset: 100,
+          width: 120,
+          opening: 'outward',
+        },
+      ],
       columns: [],
     },
     tables: [table(tableA, 'Mesa 1', 400), table(tableB, 'Mesa 2', 800)],

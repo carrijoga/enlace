@@ -220,15 +220,19 @@ export function getRoomChangeImpact(project: Project, outline: RoomPoint[]): Rec
   return project.reception?.room.doors.filter((door) => !doorFits(door, outline)) ?? [];
 }
 
-export function addDoor(project: Project, door: Omit<ReceptionDoor, 'id'>): Project {
+export type DoorInput = Omit<ReceptionDoor, 'id' | 'opening'> &
+  Partial<Pick<ReceptionDoor, 'opening'>>;
+
+/** Sem `opening`, a porta abre para dentro. */
+export function addDoor(project: Project, input: DoorInput): Project {
   const reception = requireReception(project);
   if (reception.room.doors.length >= RECEPTION_LIMITS.maxDoors)
     throw new Error(`Limite de ${RECEPTION_LIMITS.maxDoors} portas atingido.`);
-  if (!doorFits({ ...door, id: '' }, reception.room.outline))
-    throw new Error('A porta não cabe nessa parede.');
+  const door: ReceptionDoor = { opening: 'inward', ...input, id: createUuid() };
+  if (!doorFits(door, reception.room.outline)) throw new Error('A porta não cabe nessa parede.');
   return withReception(project, {
     ...reception,
-    room: { ...reception.room, doors: [...reception.room.doors, { ...door, id: createUuid() }] },
+    room: { ...reception.room, doors: [...reception.room.doors, door] },
   });
 }
 
@@ -241,6 +245,99 @@ export function removeDoor(project: Project, doorId: string): Project {
       doors: removeById(reception.room.doors, doorId, 'Porta inexistente.'),
     },
   });
+}
+
+export type DoorPatch = Partial<Omit<ReceptionDoor, 'id'>>;
+
+/** Muda parede, posição, largura ou abertura; a porta precisa continuar cabendo na parede. */
+export function updateDoor(project: Project, doorId: string, patch: DoorPatch): Project {
+  const reception = requireReception(project);
+  const doors = replaceById(reception.room.doors, doorId, patch, 'Porta inexistente.');
+  if (
+    !doorFits(
+      doors.find((door) => door.id === doorId)!,
+      reception.room.outline,
+    )
+  )
+    throw new Error('A porta não cabe nessa parede.');
+  return withReception(project, { ...reception, room: { ...reception.room, doors } });
+}
+
+const wallLength = (start: RoomPoint, end: RoomPoint) =>
+  Math.abs(end.x - start.x) + Math.abs(end.y - start.y);
+
+/** Orientação do contorno: 1 quando a área com sinal (eixo y para baixo) é positiva. */
+function outlineOrientation(outline: readonly RoomPoint[]): 1 | -1 {
+  let area = 0;
+  for (let index = 0; index < outline.length; index++) {
+    const a = outline[index]!;
+    const b = outline[(index + 1) % outline.length]!;
+    area += a.x * b.y - b.x * a.y;
+  }
+  return area >= 0 ? 1 : -1;
+}
+
+/**
+ * Geometria da porta na planta: vão de `start` a `end`, direção unitária da parede e normal
+ * unitária apontando para dentro do salão. `null` se a parede não existir.
+ */
+export type DoorGeometry = {
+  start: { x: number; y: number };
+  end: { x: number; y: number };
+  along: { x: number; y: number };
+  inward: { x: number; y: number };
+};
+
+export function getDoorGeometry(
+  outline: readonly RoomPoint[],
+  door: Pick<ReceptionDoor, 'wall' | 'offset' | 'width'>,
+): DoorGeometry | null {
+  const wallStart = outline[door.wall];
+  const wallEnd = outline[(door.wall + 1) % outline.length];
+  if (!wallStart || !wallEnd || wallLength(wallStart, wallEnd) === 0) return null;
+  const along = { x: Math.sign(wallEnd.x - wallStart.x), y: Math.sign(wallEnd.y - wallStart.y) };
+  const orientation = outlineOrientation(outline);
+  return {
+    start: { x: wallStart.x + along.x * door.offset, y: wallStart.y + along.y * door.offset },
+    end: {
+      x: wallStart.x + along.x * (door.offset + door.width),
+      y: wallStart.y + along.y * (door.offset + door.width),
+    },
+    along,
+    // Com y para baixo e área positiva, o interior fica à direita de quem percorre a parede.
+    inward: { x: -along.y * orientation || 0, y: along.x * orientation || 0 },
+  };
+}
+
+/**
+ * Parede e distância do início para uma porta de `width` centrada o mais perto possível de
+ * `point`, encaixada na grade e sempre inteira dentro da parede. Paredes mais curtas que a
+ * porta são ignoradas; `null` se nenhuma couber.
+ */
+export function placeDoorNear(
+  outline: readonly RoomPoint[],
+  point: { x: number; y: number },
+  width: number,
+): { wall: number; offset: number } | null {
+  let best: { wall: number; offset: number; distance: number } | null = null;
+  for (let wall = 0; wall < outline.length; wall++) {
+    const start = outline[wall]!;
+    const end = outline[(wall + 1) % outline.length]!;
+    const length = wallLength(start, end);
+    if (length < width) continue;
+    const along = { x: Math.sign(end.x - start.x), y: Math.sign(end.y - start.y) };
+    const projected = (point.x - start.x) * along.x + (point.y - start.y) * along.y;
+    const maxOffset = length - width;
+    const snapped = Math.round((projected - width / 2) / GRID_CM) * GRID_CM;
+    const offset = Math.max(0, Math.min(maxOffset, snapped));
+    const center = offset + width / 2;
+    const distance = Math.hypot(
+      start.x + along.x * center - point.x,
+      start.y + along.y * center - point.y,
+    );
+    if (!best || distance < best.distance) best = { wall, offset, distance };
+  }
+  return best && { wall: best.wall, offset: best.offset };
 }
 
 export function addColumn(project: Project, column: Omit<ReceptionColumn, 'id'>): Project {

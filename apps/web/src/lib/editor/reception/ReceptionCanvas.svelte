@@ -2,12 +2,14 @@
   import type { ReceptionItemKind } from '@enlace/contracts';
   import {
     formatMeters,
+    getDoorGeometry,
     getTableSeatPositions,
     GRID_CM,
+    placeDoorNear,
     snapToGrid,
     type ReceptionElementRef,
   } from '@enlace/domain/reception';
-  import { sameRef, type ReceptionCanvasProps } from './contracts';
+  import { sameRef, type ReceptionCanvasProps, type ReceptionSelection } from './contracts';
 
   let {
     reception,
@@ -17,6 +19,7 @@
     assigning,
     onSelect,
     onMove,
+    onMoveDoor,
   }: ReceptionCanvasProps = $props();
 
   const uid = $props.id();
@@ -24,6 +27,13 @@
   const MARGIN_CM = 100;
   const CHAIR_RADIUS_CM = 18;
   const DRAG_THRESHOLD_PX = 4;
+  const SLIDE_OFFSET_CM = 8;
+  const DOOR_TOUCH_PAD_CM = 30;
+  const OPENING_LABEL = {
+    inward: 'para dentro',
+    outward: 'para fora',
+    sliding: 'de correr',
+  } as const;
   const ZOOM_STEPS = [0.5, 0.75, 1, 1.5, 2, 3, 4];
 
   const KIND_STYLE: Record<
@@ -76,48 +86,104 @@
       extend(t.x, t.y, (Math.hypot(t.width, t.depth) / 2) * 1.1 + 60);
     for (const i of reception.items) extend(i.x, i.y, Math.hypot(i.width, i.depth) / 2);
     for (const c of room.columns) extend(c.x, c.y, Math.hypot(c.width, c.depth) / 2);
+    // Folha de porta que abre para fora ocupa a largura da porta além da parede.
+    for (const door of room.doors) {
+      if (door.opening !== 'outward') continue;
+      const g = getDoorGeometry(room.outline, door);
+      if (!g) continue;
+      extend(g.start.x - g.inward.x * door.width, g.start.y - g.inward.y * door.width, 0);
+      extend(g.end.x - g.inward.x * door.width, g.end.y - g.inward.y * door.width, 0);
+    }
     return { x: left, y: top, width: right - left, height: bottom - top };
   });
 
   const fontSize = $derived(Math.max(14, frame.width / 70));
   const wallWidth = $derived(Math.max(10, frame.width / 220));
 
-  // Quadro retangular livre de reatividade fina: só o necessário para posicionar cada porta.
-  const polygonOrientation = $derived.by(() => {
-    const n = room.outline.length;
-    let area = 0;
-    for (let i = 0; i < n; i++) {
-      const a = room.outline[i]!;
-      const b = room.outline[(i + 1) % n]!;
-      area += a.x * b.y - b.x * a.y;
-    }
-    return area >= 0 ? 1 : -1;
-  });
+  // Pré-visualização da porta arrastada: sobrescreve a posição só no desenho.
+  let doorPreview = $state<{ id: string; wall: number; offset: number } | null>(null);
+
+  const wallLengthOf = (wall: number) => {
+    const a = room.outline[wall];
+    const b = room.outline[(wall + 1) % room.outline.length];
+    return a && b ? Math.abs(b.x - a.x) + Math.abs(b.y - a.y) : 0;
+  };
 
   const doors = $derived(
-    room.doors.flatMap((door) => {
-      const start = room.outline[door.wall];
-      const end = room.outline[(door.wall + 1) % room.outline.length];
-      if (!start || !end) return [];
-      const length = Math.abs(end.x - start.x) + Math.abs(end.y - start.y);
-      if (!length) return [];
-      const dx = Math.sign(end.x - start.x);
-      const dy = Math.sign(end.y - start.y);
-      const ax = start.x + dx * door.offset;
-      const ay = start.y + dy * door.offset;
-      const bx = start.x + dx * (door.offset + door.width);
-      const by = start.y + dy * (door.offset + door.width);
-      // Normal para dentro do salão (contorno anti-horário: interior à esquerda).
-      const nx = -dy * polygonOrientation;
-      const ny = dx * polygonOrientation;
-      const leafX = ax + nx * door.width;
-      const leafY = ay + ny * door.width;
-      const sweep = nx * dy - ny * dx > 0 ? 1 : 0;
+    room.doors.flatMap((source, index) => {
+      const door =
+        doorPreview?.id === source.id
+          ? { ...source, wall: doorPreview.wall, offset: doorPreview.offset }
+          : source;
+      const g = getDoorGeometry(room.outline, door);
+      if (!g) return [];
+      const { start: a, end: b, along, inward } = g;
+      const w = door.width;
+      const xs = [a.x, b.x];
+      const ys = [a.y, b.y];
+      let swing = '';
+      let panel = '';
+      let arrow = '';
+      if (door.opening === 'sliding') {
+        const o = SLIDE_OFFSET_CM;
+        const pa = { x: a.x + inward.x * o, y: a.y + inward.y * o };
+        const pb = { x: b.x + inward.x * o, y: b.y + inward.y * o };
+        panel = `M ${pa.x} ${pa.y} L ${pb.x} ${pb.y}`;
+        // Seta ao longo da parede, indicando o deslizamento.
+        const lift = o + 20;
+        const at = (t: number, up: number) => ({
+          x: a.x + along.x * t + inward.x * up,
+          y: a.y + along.y * t + inward.y * up,
+        });
+        const tail = at(w * 0.3, lift);
+        const tip = at(w * 0.7, lift);
+        const h1 = at(w * 0.7 - 12, lift + 8);
+        const h2 = at(w * 0.7 - 12, lift - 8);
+        arrow = `M ${tail.x} ${tail.y} L ${tip.x} ${tip.y} M ${h1.x} ${h1.y} L ${tip.x} ${tip.y} L ${h2.x} ${h2.y}`;
+        xs.push(tip.x, tail.x, h1.x, h2.x);
+        ys.push(tip.y, tail.y, h1.y, h2.y);
+      } else {
+        const side = door.opening === 'outward' ? -1 : 1;
+        const nx = inward.x * side;
+        const ny = inward.y * side;
+        const leafX = a.x + nx * w;
+        const leafY = a.y + ny * w;
+        const sweep = nx * along.y - ny * along.x > 0 ? 1 : 0;
+        swing = `M ${a.x} ${a.y} L ${leafX} ${leafY} A ${w} ${w} 0 0 ${sweep} ${b.x} ${b.y}`;
+        xs.push(leafX, b.x + nx * w);
+        ys.push(leafY, b.y + ny * w);
+      }
+      const halo = wallWidth / 2 + 14;
+      const minX = Math.min(...xs);
+      const minY = Math.min(...ys);
+      const pad = DOOR_TOUCH_PAD_CM;
+      const touchX = Math.min(a.x, b.x) - pad;
+      const touchY = Math.min(a.y, b.y) - pad;
       return [
         {
           id: door.id,
-          gap: `M ${ax} ${ay} L ${bx} ${by}`,
-          swing: `M ${ax} ${ay} L ${leafX} ${leafY} A ${door.width} ${door.width} 0 0 ${sweep} ${bx} ${by}`,
+          wall: door.wall,
+          offset: door.offset,
+          width: w,
+          opening: door.opening,
+          along,
+          label: `Porta ${index + 1}, ${OPENING_LABEL[door.opening]}, parede ${door.wall + 1}, a ${formatMeters(door.offset)} m do início`,
+          gap: `M ${a.x} ${a.y} L ${b.x} ${b.y}`,
+          swing,
+          panel,
+          arrow,
+          halo: {
+            x: minX - halo,
+            y: minY - halo,
+            width: Math.max(...xs) - minX + halo * 2,
+            height: Math.max(...ys) - minY + halo * 2,
+          },
+          touch: {
+            x: touchX,
+            y: touchY,
+            width: Math.max(a.x, b.x) + pad - touchX,
+            height: Math.max(a.y, b.y) + pad - touchY,
+          },
         },
       ];
     }),
@@ -132,9 +198,15 @@
   // Uma parada de Tab (o selecionado ou o primeiro elemento); o resto fica por Tab reverso/clique.
   const tabStopId = $derived.by(() => {
     if (selected) return selected.id;
-    return reception.tables[0]?.id ?? reception.items[0]?.id ?? room.columns[0]?.id ?? null;
+    return (
+      reception.tables[0]?.id ??
+      reception.items[0]?.id ??
+      room.columns[0]?.id ??
+      room.doors[0]?.id ??
+      null
+    );
   });
-  const isSelected = (kind: ReceptionElementRef['kind'], id: string) =>
+  const isSelected = (kind: ReceptionSelection['kind'], id: string) =>
     sameRef(selected, { kind, id });
 
   // Tamanho em pixels a partir da área disponível (mesma abordagem da planta da cerimônia).
@@ -142,9 +214,30 @@
   let viewportHeight = $state(0);
   let zoomIndex = $state(2);
   const zoom = $derived(ZOOM_STEPS[zoomIndex]!);
+  // Durante um gesto o tamanho do SVG fica congelado: avisos novos podem mexer no layout e
+  // deslocar o elemento sob o ponteiro.
+  let gesturing = false;
+  let sizeWidth = $state(0);
+  let sizeHeight = $state(0);
+  $effect(() => {
+    const w = viewportWidth;
+    const h = viewportHeight;
+    if (!gesturing) {
+      sizeWidth = w;
+      sizeHeight = h;
+    }
+  });
+  function endGesture() {
+    gesturing = false;
+    sizeWidth = viewportWidth;
+    sizeHeight = viewportHeight;
+  }
+  // O `click` que segue um gesto iniciado num elemento nunca deve desselecionar.
+  let gestureOnElement = false;
+
   const svgSize = $derived.by(() => {
-    if (!viewportWidth || !viewportHeight) return null;
-    const fit = Math.min(viewportWidth / frame.width, viewportHeight / frame.height);
+    if (!sizeWidth || !sizeHeight) return null;
+    const fit = Math.min(sizeWidth / frame.width, sizeHeight / frame.height);
     return {
       width: Math.max(80, Math.floor(frame.width * fit * zoom)),
       height: Math.max(80, Math.floor(frame.height * fit * zoom)),
@@ -169,6 +262,21 @@
     nextY: number;
   };
   let drag: Drag | null = null;
+  type DoorDrag = {
+    id: string;
+    pointerId: number;
+    startX: number;
+    startY: number;
+    clientX: number;
+    clientY: number;
+    wall: number;
+    offset: number;
+    width: number;
+    moved: boolean;
+    raf: number;
+    next: { wall: number; offset: number } | null;
+  };
+  let doorDrag: DoorDrag | null = null;
   let svg: SVGSVGElement;
 
   function target(d: Drag) {
@@ -193,7 +301,7 @@
     x: number,
     y: number,
   ) {
-    if (drag || (event.pointerType === 'mouse' && event.button !== 0)) return;
+    if (drag || doorDrag || (event.pointerType === 'mouse' && event.button !== 0)) return;
     const matrix = svg.getScreenCTM();
     if (!matrix || !matrix.a) return;
     const group = event.currentTarget as SVGGElement;
@@ -218,6 +326,8 @@
       nextX: x,
       nextY: y,
     };
+    gesturing = true;
+    gestureOnElement = true;
     group.focus({ preventScroll: true });
     event.preventDefault();
   }
@@ -238,6 +348,7 @@
     const d = drag;
     if (!d || event.pointerId !== d.pointerId) return;
     drag = null;
+    endGesture();
     if (d.raf) cancelAnimationFrame(d.raf);
     d.group.removeAttribute('transform');
     if (!d.moved || assigning) {
@@ -255,8 +366,142 @@
     const d = drag;
     if (!d || event.pointerId !== d.pointerId) return;
     drag = null;
+    endGesture();
     if (d.raf) cancelAnimationFrame(d.raf);
     d.group.removeAttribute('transform');
+  }
+
+  // Ponteiro (px da tela) para coordenadas do SVG, já encaixado numa parede.
+  function doorTarget(d: DoorDrag) {
+    const matrix = svg.getScreenCTM();
+    if (!matrix) return null;
+    const p = new DOMPoint(d.clientX, d.clientY).matrixTransform(matrix.inverse());
+    return placeDoorNear(room.outline, { x: p.x, y: p.y }, d.width);
+  }
+
+  function doorFrameTick() {
+    const d = doorDrag;
+    if (!d) return;
+    d.raf = 0;
+    const next = doorTarget(d);
+    if (!next) return;
+    d.next = next;
+    doorPreview = { id: d.id, ...next };
+  }
+
+  function doorPointerDown(
+    event: PointerEvent,
+    id: string,
+    wall: number,
+    offset: number,
+    width: number,
+  ) {
+    if (drag || doorDrag || (event.pointerType === 'mouse' && event.button !== 0)) return;
+    if (!svg.getScreenCTM()) return;
+    const group = event.currentTarget as SVGGElement;
+    try {
+      group.setPointerCapture(event.pointerId);
+    } catch {
+      /* ponteiro sintético não pode ser capturado */
+    }
+    doorDrag = {
+      id,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      wall,
+      offset,
+      width,
+      moved: false,
+      raf: 0,
+      next: null,
+    };
+    gesturing = true;
+    gestureOnElement = true;
+    group.focus({ preventScroll: true });
+    event.preventDefault();
+  }
+
+  function doorPointerMove(event: PointerEvent) {
+    const d = doorDrag;
+    if (!d || event.pointerId !== d.pointerId || assigning) return;
+    d.clientX = event.clientX;
+    d.clientY = event.clientY;
+    if (!d.moved) {
+      if (Math.hypot(d.clientX - d.startX, d.clientY - d.startY) < DRAG_THRESHOLD_PX) return;
+      d.moved = true;
+    }
+    if (!d.raf) d.raf = requestAnimationFrame(doorFrameTick);
+  }
+
+  function doorPointerUp(event: PointerEvent) {
+    const d = doorDrag;
+    if (!d || event.pointerId !== d.pointerId) return;
+    doorDrag = null;
+    endGesture();
+    if (d.raf) cancelAnimationFrame(d.raf);
+    doorPreview = null;
+    const ref: ReceptionSelection = { kind: 'door', id: d.id };
+    if (!d.moved || assigning) {
+      onSelect(ref);
+      return;
+    }
+    d.clientX = event.clientX;
+    d.clientY = event.clientY;
+    const next = doorTarget(d) ?? d.next;
+    if (!sameRef(selected, ref)) onSelect(ref);
+    if (next && (next.wall !== d.wall || next.offset !== d.offset))
+      onMoveDoor(d.id, next.wall, next.offset);
+  }
+
+  function doorPointerCancel(event: PointerEvent) {
+    const d = doorDrag;
+    if (!d || event.pointerId !== d.pointerId) return;
+    doorDrag = null;
+    endGesture();
+    if (d.raf) cancelAnimationFrame(d.raf);
+    doorPreview = null;
+  }
+
+  function doorKeyDown(
+    event: KeyboardEvent,
+    door: {
+      id: string;
+      wall: number;
+      offset: number;
+      width: number;
+      along: { x: number; y: number };
+    },
+  ) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      onSelect(null);
+      return;
+    }
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onSelect({ kind: 'door', id: door.id });
+      return;
+    }
+    // Seta no sentido de `along` aumenta o deslocamento; a perpendicular é ignorada.
+    const direction =
+      event.key === 'ArrowRight'
+        ? door.along.x
+        : event.key === 'ArrowLeft'
+          ? -door.along.x
+          : event.key === 'ArrowDown'
+            ? door.along.y
+            : event.key === 'ArrowUp'
+              ? -door.along.y
+              : 0;
+    if (!direction) return;
+    event.preventDefault();
+    const step = event.shiftKey ? 50 : GRID_CM;
+    const max = Math.max(0, wallLengthOf(door.wall) - door.width);
+    const next = Math.max(0, Math.min(max, door.offset + direction * step));
+    if (next !== door.offset) onMoveDoor(door.id, door.wall, next);
   }
 
   function keyDown(
@@ -294,9 +539,20 @@
     if (nextX !== x || nextY !== y) onMove({ kind, id }, nextX, nextY);
   }
 
+  function isFloor(el: Element) {
+    return el === svg || el.hasAttribute('data-floor');
+  }
+
+  function backgroundPointerDown(event: PointerEvent) {
+    if (isFloor(event.target as Element)) gestureOnElement = false;
+  }
+
   function backgroundClick(event: MouseEvent) {
-    const el = event.target as Element;
-    if (el === svg || el.hasAttribute('data-floor')) onSelect(null);
+    if (gestureOnElement) {
+      gestureOnElement = false;
+      return;
+    }
+    if (isFloor(event.target as Element)) onSelect(null);
   }
 
   const zoomOut = () => (zoomIndex = Math.max(0, zoomIndex - 1));
@@ -332,6 +588,7 @@
       style:height={svgSize ? `${svgSize.height}px` : null}
       role="group"
       aria-label="Planta da festa"
+      onpointerdown={backgroundPointerDown}
       onclick={backgroundClick}
     >
       <defs>
@@ -358,18 +615,47 @@
           stroke-width={wallWidth}
           stroke-linejoin="miter"
         />
-        {#each doors as door (door.id)}
-          <path d={door.gap} stroke="#fffefb" stroke-width={wallWidth + 4} fill="none" />
-          <path
-            d={door.swing}
-            stroke="#b89364"
-            stroke-width="3"
-            fill="none"
-            stroke-dasharray="10 6"
-          />
-          <path d={door.gap} stroke="#b89364" stroke-width={wallWidth / 2} fill="none" />
-        {/each}
       </g>
+
+      {#each doors as door (door.id)}
+        <g
+          class="element door"
+          class:selected={isSelected('door', door.id)}
+          role="button"
+          tabindex={tabStopId === door.id ? 0 : -1}
+          aria-label={door.label}
+          aria-pressed={isSelected('door', door.id)}
+          onpointerdown={(e) => doorPointerDown(e, door.id, door.wall, door.offset, door.width)}
+          onpointermove={doorPointerMove}
+          onpointerup={doorPointerUp}
+          onpointercancel={doorPointerCancel}
+          onkeydown={(e) => doorKeyDown(e, door)}
+        >
+          <rect class="halo" {...door.halo} rx="10" />
+          <rect {...door.touch} fill="transparent" pointer-events="all" />
+          <path d={door.gap} stroke="#fffefb" stroke-width={wallWidth + 4} fill="none" />
+          {#if door.opening === 'sliding'}
+            <path d={door.panel} stroke="#b89364" stroke-width="6" fill="none" />
+            <path
+              d={door.arrow}
+              stroke="#626e63"
+              stroke-width="3"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              fill="none"
+            />
+          {:else}
+            <path
+              d={door.swing}
+              stroke="#b89364"
+              stroke-width="3"
+              fill="none"
+              stroke-dasharray="10 6"
+            />
+          {/if}
+          <path d={door.gap} stroke="#b89364" stroke-width={wallWidth / 2} fill="none" />
+        </g>
+      {/each}
 
       {#each room.columns as column (column.id)}
         {@const warned = warnedIds.has(column.id)}

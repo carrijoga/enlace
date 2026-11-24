@@ -65,18 +65,18 @@ O mesmo pacote de schemas deve ser usado pela interface e pela API para evitar d
 
 ## Planta da festa — `project.reception` (fase 6)
 
-Exports da entrada principal: `receptionSchema`, `projectSchema`, `findRoomOutlineError(outline)`, `RECEPTION_LIMITS`, `RECEPTION_ITEM_KINDS` e os tipos `Reception`, `ReceptionTable`, `ReceptionItem`, `ReceptionItemKind`, `ReceptionDoor`, `ReceptionColumn`, `RoomPoint` e `Project`. `projectSchema` exige a chave `reception`: projeto sem ela é recusado, para que um cliente antigo não apague a festa ao salvar. Ver [ADR-0012](decisoes/0012-planta-da-festa.md).
+Exports da entrada principal: `receptionSchema`, `projectSchema`, `findRoomOutlineError(outline)`, `RECEPTION_LIMITS`, `RECEPTION_ITEM_KINDS`, `RECEPTION_DOOR_OPENINGS` e os tipos `Reception`, `ReceptionTable`, `ReceptionItem`, `ReceptionItemKind`, `ReceptionDoor`, `ReceptionDoorOpening`, `ReceptionColumn`, `RoomPoint` e `Project`. `projectSchema` exige a chave `reception`: projeto sem ela é recusado, para que um cliente antigo não apague a festa ao salvar. Ver [ADR-0012](decisoes/0012-planta-da-festa.md).
 
 ```ts
 reception: {
-  room: { outline: {x, y}[], doors: {id, wall, offset, width}[], columns: {id, x, y, width, depth}[] },
+  room: { outline: {x, y}[], doors: {id, wall, offset, width, opening}[], columns: {id, x, y, width, depth}[] },
   tables: {id, name, shape: 'round' | 'rect', x, y, rotation, width, depth, seats}[],
   items: {id, kind, name, x, y, rotation, width, depth}[],
   tableAssignments: {tableId, guestId}[],
 }
 ```
 
-Medidas são centímetros inteiros; `x`/`y` de mesas, elementos e colunas são o centro; `rotation` é inteiro de 0 a 359. O contorno é um polígono ortogonal, fechado e simples, de 4 a 64 pontos pares, paredes de pelo menos 10 cm e coordenadas de 0 a 10.000 (100 × 100 m). Limites: 20 portas, 40 colunas, 100 mesas, 60 elementos, 1 a 24 cadeiras por mesa. Mesa redonda tem largura igual à profundidade. `kind`: `dance_floor`, `dj`, `cake_table`, `sweets_table`, `bar`, `buffet`, `photo_area` ou `custom`.
+Medidas são centímetros inteiros; `x`/`y` de mesas, elementos e colunas são o centro; `rotation` é inteiro de 0 a 359. O contorno é um polígono ortogonal, fechado e simples, de 4 a 64 pontos pares, paredes de pelo menos 10 cm e coordenadas de 0 a 10.000 (100 × 100 m). Limites: 20 portas, 40 colunas, 100 mesas, 60 elementos, 1 a 24 cadeiras por mesa. Mesa redonda tem largura igual à profundidade. `opening` da porta: `inward`, `outward` ou `sliding`; ausente (arquivos anteriores a 10/11/2026) vale `inward`. `kind`: `dance_floor`, `dj`, `cake_table`, `sweets_table`, `bar`, `buffet`, `photo_area` ou `custom`.
 
 São recusados: campo desconhecido, ID repetido entre portas, colunas, mesas e elementos, referência a mesa ou convidado inexistente, convidado em duas mesas, porta em parede inexistente ou maior que a parede. Elemento fora do salão, sobreposição, passagem estreita e mesa acima da capacidade **não** invalidam o arquivo: são avisos de `getReceptionWarnings`, em `@enlace/domain/reception`.
 

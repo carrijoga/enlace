@@ -16,9 +16,15 @@ import type {
   ReceptionTable,
   RoomPoint,
 } from '@enlace/contracts';
-import type { ReceptionElementRef } from '@enlace/domain/reception';
+import type { DoorInput, DoorPatch, ReceptionElementRef } from '@enlace/domain/reception';
 
-export type { ReceptionElementRef };
+export type { DoorInput, DoorPatch, ReceptionElementRef };
+
+/**
+ * O que pode estar selecionado na planta: mesas, elementos e colunas (que entram nos avisos do
+ * domínio) ou uma porta, que fica presa às paredes.
+ */
+export type ReceptionSelection = ReceptionElementRef | { kind: 'door'; id: string };
 
 export type TablePatch = Partial<
   Pick<ReceptionTable, 'name' | 'shape' | 'x' | 'y' | 'rotation' | 'width' | 'depth'>
@@ -26,7 +32,7 @@ export type TablePatch = Partial<
 export type ItemPatch = Partial<Omit<ReceptionItem, 'id' | 'kind'>>;
 export type ColumnPatch = Partial<Omit<ReceptionColumn, 'id'>>;
 
-export const sameRef = (a: ReceptionElementRef | null, b: ReceptionElementRef | null) =>
+export const sameRef = (a: ReceptionSelection | null, b: ReceptionSelection | null) =>
   a === b || (a !== null && b !== null && a.kind === b.kind && a.id === b.id);
 
 /** Planta SVG: desenha e move elementos. Não altera o projeto; só emite eventos. */
@@ -36,12 +42,17 @@ export type ReceptionCanvasProps = {
   occupancy: ReadonlyMap<string, number>;
   /** IDs de mesas, elementos e colunas com algum aviso. */
   warnedIds: ReadonlySet<string>;
-  selected: ReceptionElementRef | null;
+  selected: ReceptionSelection | null;
   /** Há um convidado escolhido esperando mesa: tocar numa mesa a atribui. */
   assigning: boolean;
-  onSelect: (ref: ReceptionElementRef | null) => void;
+  onSelect: (ref: ReceptionSelection | null) => void;
   /** Centro novo, já encaixado na grade de 10 cm e dentro de 0..10000. Chamado ao soltar ou por seta. */
   onMove: (ref: ReceptionElementRef, x: number, y: number) => void;
+  /**
+   * Porta arrastada ao longo das paredes (pode trocar de parede) ou movida por seta. Posição já
+   * encaixada por `placeDoorNear` e sempre cabendo na parede. Chamado ao soltar, não por quadro.
+   */
+  onMoveDoor: (doorId: string, wall: number, offset: number) => void;
 };
 
 /** Formatos prontos e salão manual. Sem `outline`, cria a planta; com ele, troca o contorno. */
@@ -50,15 +61,19 @@ export type RoomSetupProps = {
   doors: readonly ReceptionDoor[];
   /** Recebe um contorno já validado por `findRoomOutlineError`. */
   onApplyOutline: (outline: RoomPoint[]) => void;
-  onAddDoor: (door: Omit<ReceptionDoor, 'id'>) => void;
+  onAddDoor: (door: DoorInput) => void;
   onRemoveDoor: (doorId: string) => void;
+  /** Porta selecionada na planta, destacada na lista. */
+  selectedDoorId: string | null;
+  /** Seleciona a porta para editar no painel de propriedades. */
+  onSelectDoor: (doorId: string) => void;
   onAddColumn: () => void;
 };
 
 /** Painel de propriedades do elemento selecionado e botões de inclusão. */
 export type ElementInspectorProps = {
   reception: Reception;
-  selected: ReceptionElementRef | null;
+  selected: ReceptionSelection | null;
   occupancy: ReadonlyMap<string, number>;
   onAddTable: (shape: ReceptionTable['shape']) => void;
   onAddItem: (kind: ReceptionItemKind, name?: string) => void;
@@ -67,9 +82,12 @@ export type ElementInspectorProps = {
   onSetSeats: (id: string, seats: number) => void;
   onUpdateItem: (id: string, patch: ItemPatch) => void;
   onUpdateColumn: (id: string, patch: ColumnPatch) => void;
+  /** Parede, distância do início, largura e abertura; o domínio recusa porta que não cabe. */
+  onUpdateDoor: (id: string, patch: DoorPatch) => void;
+  /** Só mesas e elementos; colunas e portas não têm "Duplicar". */
   onDuplicate: (ref: ReceptionElementRef) => void;
   /** O editor confirma antes se a mesa tiver convidados. */
-  onRemove: (ref: ReceptionElementRef) => void;
+  onRemove: (ref: ReceptionSelection) => void;
   onClose: () => void;
 };
 

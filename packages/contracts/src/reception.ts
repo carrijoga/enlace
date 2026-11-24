@@ -88,6 +88,9 @@ export function findRoomOutlineError(outline: readonly RoomPoint[]): string | nu
   return null;
 }
 
+/** Abertura da porta: folha para dentro, para fora do salão ou de correr ao longo da parede. */
+export const RECEPTION_DOOR_OPENINGS = ['inward', 'outward', 'sliding'] as const;
+
 const doorSchema = z
   .object({
     id: z.uuid(),
@@ -96,6 +99,8 @@ const doorSchema = z
     /** Distância, em centímetros, do início da parede até a porta. */
     offset: coordinateSchema,
     width: z.number().int().min(40).max(1000),
+    /** Ausente em arquivos anteriores a esta opção: vale como porta que abre para dentro. */
+    opening: z.enum(RECEPTION_DOOR_OPENINGS).default('inward'),
   })
   .strict();
 
@@ -231,6 +236,7 @@ export type ReceptionTable = Reception['tables'][number];
 export type ReceptionItem = Reception['items'][number];
 export type ReceptionItemKind = ReceptionItem['kind'];
 export type ReceptionDoor = Reception['room']['doors'][number];
+export type ReceptionDoorOpening = ReceptionDoor['opening'];
 export type ReceptionColumn = Reception['room']['columns'][number];
 export type Project = CeremonyProject & { reception: Reception | null };
 

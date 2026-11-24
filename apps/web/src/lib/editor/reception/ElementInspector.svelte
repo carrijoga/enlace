@@ -1,7 +1,9 @@
 <script lang="ts">
   import {
+    RECEPTION_DOOR_OPENINGS,
     RECEPTION_ITEM_KINDS,
     RECEPTION_LIMITS,
+    type ReceptionDoor,
     type ReceptionItemKind,
   } from '@enlace/contracts';
   import {
@@ -22,6 +24,7 @@
     onSetSeats,
     onUpdateItem,
     onUpdateColumn,
+    onUpdateDoor,
     onDuplicate,
     onRemove,
     onClose,
@@ -49,6 +52,26 @@
       : undefined,
   );
   const element = $derived(table ?? item ?? column);
+  const door = $derived(
+    selected?.kind === 'door'
+      ? reception.room.doors.find((entry) => entry.id === selected.id)
+      : undefined,
+  );
+  const doorNumber = $derived(door ? reception.room.doors.indexOf(door) + 1 : 0);
+
+  const openingLabels: Record<ReceptionDoor['opening'], string> = {
+    inward: 'Para dentro',
+    outward: 'Para fora',
+    sliding: 'De correr',
+  };
+
+  // Comprimento de cada parede: a parede i liga outline[i] a outline[i + 1].
+  const wallLengths = $derived(
+    reception.room.outline.map((start, index) => {
+      const end = reception.room.outline[(index + 1) % reception.room.outline.length]!;
+      return Math.abs(end.x - start.x) + Math.abs(end.y - start.y);
+    }),
+  );
 
   let fields = $state<Record<string, string>>({});
   let errors = $state<Record<string, string>>({});
@@ -57,6 +80,11 @@
 
   // Ressincroniza os campos quando o elemento muda, é movido ou o projeto é desfeito.
   $effect(() => {
+    if (door) {
+      fields = { doorOffset: formatMeters(door.offset), doorWidth: formatMeters(door.width) };
+      errors = {};
+      return;
+    }
     if (!element) return;
     fields = {
       name: table?.name ?? item?.name ?? '',
@@ -123,6 +151,64 @@
     const current = element?.[key];
     if (value !== current) apply({ [key]: value });
     fields[key] = formatMeters(value);
+  }
+
+  /** Aplica o patch da porta se ela couber na parede; senão registra o erro no campo. */
+  function applyDoor(key: string, patch: Partial<Omit<ReceptionDoor, 'id'>>) {
+    if (!door) return false;
+    const next = { ...door, ...patch };
+    const length = wallLengths[next.wall];
+    if (length === undefined) return fail(key, 'Escolha uma parede.');
+    if (next.width < 40 || next.width > 1000) {
+      return fail(key, 'Largura da porta: use entre 0,4 e 10 m.');
+    }
+    if (next.width > length) {
+      return fail(key, `A porta não cabe: a parede tem ${formatMeters(length)} m.`);
+    }
+    if (next.offset < 0 || next.offset + next.width > length) {
+      return fail(
+        key,
+        `A porta não cabe: use uma distância entre 0 e ${formatMeters(length - next.width)} m.`,
+      );
+    }
+    delete errors[key];
+    onUpdateDoor(door.id, patch);
+    return true;
+  }
+
+  function commitDoorMeters(key: 'doorOffset' | 'doorWidth', label: string) {
+    if (!door) return;
+    const value = parseMeters(fields[key] ?? '');
+    if (value === null) {
+      fail(key, `${label}: informe um número em metros, como 1,5.`);
+      return;
+    }
+    const field = key === 'doorOffset' ? 'offset' : 'width';
+    if (value !== door[field] && !applyDoor(key, { [field]: value })) return;
+    delete errors[key];
+    fields[key] = formatMeters(value);
+  }
+
+  function changeDoorWall(value: string) {
+    if (!door) return;
+    const wall = Number(value);
+    const length = wallLengths[wall];
+    if (length === undefined || wall === door.wall) return;
+    if (door.width > length) {
+      fail('doorWall', `A porta não cabe: a parede tem ${formatMeters(length)} m.`);
+      return;
+    }
+    // Mantém a distância se couber; senão encosta a porta no fim da parede.
+    const offset = Math.min(door.offset, length - door.width);
+    if (applyDoor('doorWall', { wall, offset })) fields.doorOffset = formatMeters(offset);
+  }
+
+  function setOpening(opening: ReceptionDoor['opening']) {
+    if (door && door.opening !== opening) onUpdateDoor(door.id, { opening });
+  }
+
+  function duplicate() {
+    if (selected && selected.kind !== 'door') onDuplicate(selected);
   }
 
   function commitName() {
@@ -209,6 +295,23 @@
   </div>
 {/snippet}
 
+{#snippet doorMeters(key: 'doorOffset' | 'doorWidth', label: string, inputId: string)}
+  <div class="field">
+    <label for={inputId}>{label}</label>
+    <input
+      id={inputId}
+      inputmode="decimal"
+      autocomplete="off"
+      aria-invalid={errors[key] ? 'true' : undefined}
+      aria-describedby={errors[key] ? `${inputId}-error` : undefined}
+      bind:value={fields[key]}
+      onchange={() => commitDoorMeters(key, label.replace(/ \(m\)$/, ''))}
+      onkeydown={enter}
+    />
+    {#if errors[key]}<p class="error" id={`${inputId}-error`} role="alert">{errors[key]}</p>{/if}
+  </div>
+{/snippet}
+
 {#snippet rotationField()}
   <div class="field">
     <label for="insp-rotation">Rotação (graus)</label>
@@ -266,7 +369,7 @@
 {/snippet}
 
 <div class="inspector">
-  {#if !element || !selected}
+  {#if !selected || !(element || door)}
     <header class="panel-header"><h2>Adicionar</h2></header>
 
     <section class="section" aria-labelledby="add-tables-title">
@@ -324,7 +427,61 @@
           Limite de {RECEPTION_LIMITS.maxItems} elementos atingido.
         </p>{/if}
     </section>
-  {:else}
+  {:else if door}
+    <header class="panel-header">
+      <h2>Porta {doorNumber}</h2>
+      <p class="hint">Selecionada na planta. Arraste ao longo das paredes para mover.</p>
+    </header>
+
+    <section class="section" aria-label="Propriedades da porta">
+      <fieldset class="openings">
+        <legend>Abertura</legend>
+        {#each RECEPTION_DOOR_OPENINGS as opening (opening)}
+          <button
+            type="button"
+            class="segment"
+            class:active={door.opening === opening}
+            aria-pressed={door.opening === opening}
+            onclick={() => setOpening(opening)}>{openingLabels[opening]}</button
+          >
+        {/each}
+      </fieldset>
+
+      <div class="field">
+        <label for="insp-door-wall">Parede</label>
+        <select
+          id="insp-door-wall"
+          aria-invalid={errors.doorWall ? 'true' : undefined}
+          aria-describedby={errors.doorWall ? 'insp-door-wall-error' : undefined}
+          value={String(door.wall)}
+          onchange={(event) => {
+            changeDoorWall(event.currentTarget.value);
+            // Se a troca foi recusada, volta a seleção para a parede atual.
+            event.currentTarget.value = String(door.wall);
+          }}
+        >
+          {#each wallLengths as length, index (index)}
+            <option value={String(index)}>Parede {index + 1} ({formatMeters(length)} m)</option>
+          {/each}
+        </select>
+        {#if errors.doorWall}<p class="error" id="insp-door-wall-error" role="alert">
+            {errors.doorWall}
+          </p>{/if}
+      </div>
+
+      <div class="pair">
+        {@render doorMeters('doorOffset', 'Distância do início (m)', 'insp-door-offset')}
+        {@render doorMeters('doorWidth', 'Largura (m)', 'insp-door-width')}
+      </div>
+    </section>
+
+    <div class="actions">
+      <button type="button" class="ghost danger" onclick={() => selected && onRemove(selected)}
+        >Remover porta</button
+      >
+      <button type="button" class="ghost" onclick={onClose}>Fechar</button>
+    </div>
+  {:else if element}
     <header class="panel-header">
       <h2>{kindLabel}</h2>
       <p class="hint">Elemento selecionado na planta.</p>
@@ -419,9 +576,9 @@
 
     <div class="actions">
       {#if !column}
-        <button type="button" class="ghost" onclick={() => onDuplicate(selected)}>Duplicar</button>
+        <button type="button" class="ghost" onclick={duplicate}>Duplicar</button>
       {/if}
-      <button type="button" class="ghost danger" onclick={() => onRemove(selected)}
+      <button type="button" class="ghost danger" onclick={() => selected && onRemove(selected)}
         >{table ? 'Remover mesa' : column ? 'Remover coluna' : 'Remover elemento'}</button
       >
       <button type="button" class="ghost" onclick={onClose}>Fechar</button>
@@ -475,7 +632,8 @@
     font-size: 12px;
     font-weight: 600;
   }
-  input:not([type='radio']) {
+  input:not([type='radio']),
+  select {
     box-sizing: border-box;
     width: 100%;
     min-height: 40px;
@@ -591,6 +749,34 @@
     cursor: pointer;
   }
   .radio.active {
+    border-color: #96ae97;
+    background: #edf3eb;
+    color: var(--editor-forest, #295842);
+    font-weight: 700;
+  }
+  fieldset.openings {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 5px;
+    margin: 0 0 8px;
+    padding: 0;
+    border: 0;
+  }
+  fieldset.openings legend {
+    grid-column: 1 / -1;
+  }
+  .segment {
+    min-height: 40px;
+    padding: 4px 6px;
+    border: 1px solid var(--editor-line, #dfe3da);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--editor-muted, #626e63);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .segment.active {
     border-color: #96ae97;
     background: #edf3eb;
     color: var(--editor-forest, #295842);

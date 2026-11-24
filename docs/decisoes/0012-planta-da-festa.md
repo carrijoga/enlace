@@ -89,6 +89,13 @@ Etapa 4, editor (10/11/2026):
 - **Medidas digitadas não são encaixadas na grade**; só o arraste e as setas encaixam. O contrato aceita qualquer centímetro inteiro.
 - **Confirmações**, pela mesma janela da cerimônia, citando até quatro nomes: reduzir cadeiras abaixo da ocupação, remover mesa com convidados e trocar o contorno quando portas deixam de caber.
 
+Ajustes do editor pedidos pelo usuário (10/11/2026):
+
+- **Seleção estável quando surgem avisos.** A lista de avisos ficava abaixo da planta e crescia a cada aviso novo; a planta encolhia, mudava de escala e o elemento saía de baixo do ponteiro, parecendo perder a seleção. Os avisos passaram a um menu suspenso ("N avisos") no cabeçalho da planta, sobreposto a ela, e a faixa de instruções tem altura fixa: nenhum aviso muda o tamanho da planta. Durante um arraste o tamanho do SVG fica congelado, e o clique que o navegador dispara depois de soltar um elemento não desmarca a seleção, mesmo que caia no piso.
+- **Portas com abertura.** Campo `opening` na porta: `inward` (para dentro), `outward` (para fora) ou `sliding` (de correr). Arquivos, rascunhos e projetos salvos antes da opção não têm o campo e valem como `inward` (padrão do schema), sem migração de banco nem nova versão de formato. Uma web anterior a esta mudança recusa portas com `opening` (schema estrito); publicar API e web juntas, como nas etapas anteriores.
+- **Portas arrastáveis.** Porta é selecionável na planta e no painel "Portas"; o arraste a leva ao longo do contorno e pode passar para outra parede. `placeDoorNear` (domínio) escolhe a parede mais próxima em que a porta cabe, encaixa a posição na grade de 10 cm e mantém a porta inteira dentro da parede. Setas movem 10 cm (Shift: 50 cm) ao longo da parede. Cada soltura é um passo de desfazer, como nos demais elementos. A geometria do desenho (`getDoorGeometry`, com a normal para dentro do salão) também fica no domínio.
+- **Fora de escopo por ora:** lado da dobradiça (a folha sempre gira a partir do início da parede) e portas de duas folhas.
+
 Valores provisórios das questões abertas, a revisar quando a interface existir: passagem mínima indicativa de 90 cm e medidas padrão em `RECEPTION_ITEM_DEFAULTS`.
 
 ## Questões abertas
