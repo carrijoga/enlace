@@ -11,6 +11,16 @@ describe('privacidade das page views', () => {
     ).toEqual({ type: 'pageview', url: 'https://enlace.example/editor' });
   });
 
+  it.each(['/ver', '/participar'])('remove o fragmento de compartilhamento de %s', (path) => {
+    const token = 'A'.repeat(64);
+    const event = sanitizeAnalyticsEvent(
+      { type: 'pageview', url: `${path}#${token}` },
+      'https://enlace.example',
+    );
+    expect(event).toEqual({ type: 'pageview', url: `https://enlace.example${path}` });
+    expect(JSON.stringify(event)).not.toContain(token);
+  });
+
   it.each(['/conta?token=segredo', '/conta/redefinir/senha-token', '/projetos?id=privado'])(
     'descarta rota privada %s',
     (url) => {

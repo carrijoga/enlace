@@ -27,7 +27,7 @@ Build de produção, Edge headless, 1280×900 e 390×844, API simulada e dados f
 
 Resultado final: nenhuma violação na landing, em `/conta`, em `/projetos` e no diálogo CSV. No editor restam:
 
-- `label-content-name-mismatch` (cadeiras ocupadas: 55 no desktop e 10 no celular): aceito, ver ADR-0009. O nome completo da pessoa está no início do nome acessível; primeiros nomes com mais de 10 caracteres aparecem truncados na planta.
+- `label-content-name-mismatch` (55 cadeiras no desktop e 10 no celular): aceito, ver ADR-0009. *Correção em 21/11/2026:* a regra não pega só as ocupadas. As 55 eram todas as cadeiras da planta inicial: nas vazias, o número visível ("01") também fica fora do nome acessível ("Fileira 1 · esquerda · cadeira 1: disponível"). O nome completo da pessoa está no início do nome acessível; primeiros nomes com mais de 10 caracteres aparecem truncados na planta.
 - `target-size` (3, celular): o stepper de uma fileira estava parcialmente coberto pela faixa fixa de aviso no momento da captura. Some ao rolar; não é tamanho real do controle.
 - `color-contrast` incompleto: o axe não calcula sobre SVG e fundos sobrepostos. Pares de cor conferidos à parte, por cálculo.
 

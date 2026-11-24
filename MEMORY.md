@@ -1,12 +1,171 @@
 # Memória do projeto — Enlace
 
-Atualizado em 10/11/2026, America/Sao_Paulo.
+Atualizado em 23/11/2026, America/Sao_Paulo.
+
+## Fase 6 sincronizada com a `main` e preparada para produção — 23/11/2026
+
+Pedido do usuário ("preciso que essas alterações entrem em produção"). Os ajustes locais de 10/11 (aberturas de porta, arraste entre paredes e menu de avisos) foram commitados na `codex/ceremony-editor` (`d76e0e8`) e integrados com a `origin/main` (PostgreSQL 18, `/ver`, login com Google, edição colaborativa e clonagem).
+- **Migração renumerada**: `0002_reception.sql` foi renumerada para `0004_reception.sql` sobre `0002_share_links.sql` e `0003_project_link_redemptions.sql` já aplicadas em produção.
+- **Clonagem e colaboração com festa**: `store.ts` (`insertProjectRow`, `insertGuestsAndAssignments`, `replaceAggregate`, `assembleSnapshot`, `insertProjectCopy`) preserva `reception`, `reception_schema_version` e `table_assignments` tanto para donos quanto para editores convidados e cópias clonadas; `/ver` segue projetando somente a cerimônia (`PlanCanvas`/`SeatList` aceitam `CeremonyProject`).
+- **Contratos, domínio e editor**: `projectSnapshotSchema` une `role` e `projectSchema` (v2); `routes/editor/+page.svelte` mantém a alternância "Cerimônia | Festa" junto com `ShareDialog` e controle de permissão `owner`/`editor`.
+
+Validação (local):
+- `pnpm run check` (`tsc` + `svelte-check`): 0 erros, 0 avisos; `pnpm run lint` (`eslint --max-warnings=0`): 0 erros, 0 avisos.
+- `vitest run` com PostgreSQL local (`TEST_DATABASE_URL`, `TEST_CREATE_DATABASE=1`): 29 arquivos / 274 testes passando (0 pulados), cobrindo `0000`–`0004`, festa, compartilhamento, edição colaborativa e clonagem preservando `reception` e `table_assignments`.
+- Build de produção e `pnpm run measure:web` (meta < 150 KiB gzip): `/` 45,26 KiB, `/editor` 94,69 KiB, `/ver` 82,09 KiB, `/participar` 75,18 KiB.
+
+## Colaboração e cópia entre contas — 21/11/2026
+
+Entrega concluída localmente na branch `carrijoga/compartilhamento-edicao-clonagem`, estendendo o compartilhamento (ADR-0014) com os dois modos autenticados de participação registrados no ADR-0016 (`docs/decisoes/0016-compartilhamento-colaborativo-e-copia.md`):
+- **Contratos e domínio**: `role: 'owner' | 'editor'` em `ProjectSummary` e `ProjectSnapshot`; `shareLinkModeSchema` com `'names' | 'plan' | 'edit' | 'clone'`; `redeemShareLinkRequestSchema` (`{ token, mode: 'edit' | 'clone' }`) e `redeemShareLinkResponseSchema` (`{ projectId }`).
+- **Banco e migração**: `0003_project_link_redemptions.sql` (`project_link_editors` e `project_link_clone_receipts` + constraint `project_share_links_mode_check` ampliada). Script `db:generate` em `apps/api/package.json` apontado para `../../node_modules/drizzle-kit/bin.cjs` (compatível com `nodeLinker: hoisted`).
+- **API e concorrência**: `POST /api/shared/redeem` (autenticado, liberado no proxy `/api/[...path]`); `store.list` e `store.get` retornam projetos próprios (`owner`) e compartilhados com link `'edit'` ativo (`editor`); `store.save` revalida a permissão após `FOR UPDATE` na linha do projeto e escopa `operationId` por `(project_id, actor_id, operation_id)`; `insertProjectCopy` clona o último snapshot salvo com título `Cópia de ...` e recibo deduplicado por `(link_id, user_id)` enquanto a cópia existir.
+- **Interface web**: `ShareDialog.svelte` oferece os 4 modos com avisos específicos de permissão e revogação; `/participar` (pré-renderizada, `noindex`, `no-referrer`) lê `#edit.<token>` ou `#clone.<token>`, preserva o fragmento no login/cadastro em `/conta` (`participationReturnPath`) e exige confirmação explícita antes de chamar `POST /api/shared/redeem`; `/projetos` exibe o selo `Compartilhado com você` e oculta `Compartilhar`/`Excluir` para `editor`; `/editor` oculta `Compartilhar` para `editor`, exibe `Salvo no projeto compartilhado` e trata perda de acesso (`404` ao salvar) preservando o rascunho local com opção `Salvar como novo projeto`.
+
+Validação:
+- `pnpm run check` (`tsc` + `svelte-check`) e `pnpm run lint` (`eslint --max-warnings=0`): 0 erros e 0 avisos.
+- `vitest run` com PostgreSQL 18 (`humpback-postgres-1`): 26 arquivos / 199 testes passando (incluindo concorrência `save` vs `revoke`, deduplicação e recriação de cópia após exclusão, isolamento entre modos e contas).
+- Build de produção e `pnpm run measure:web` (meta < 150 KiB gzip): `/` 43,53 KiB, `/editor` 90,87 KiB, `/ver` 79,18 KiB, `/participar` 71,87 KiB.
+
+Próximo passo: abrir e revisar o PR para a `main`, e validar o fluxo hospedado após o deploy com `0003_project_link_redemptions.sql`.
+
+## Conta, projetos e retorno à página inicial — 21/11/2026
+
+Revisão concluída na branch `carrijoga/feat-login-cadastro-google`, integrada diretamente à `main` em 21/11/2026 após o merge do PR #5. A raiz pública agora consulta a sessão e leva quem entrou aos projetos. Conta e projetos compartilham a navegação. A conta reúne perfil, métodos de acesso e gerenciamento. A lista de projetos permite buscar por nome e renomear no próprio item.
+
+Verificados no navegador com PostgreSQL 18 descartável: cadastro por e-mail, retorno à raiz, recarga, busca sem acentos, criação e renomeação, abertura do painel de compartilhamento, saída em outra aba e página inicial com a API indisponível. Conferidas as telas de conta e projetos em 1280 e 390 px. Check, lint, 196 testes e build para preview no Windows passaram. A raiz usa 43,52 KiB de JavaScript inicial gzip.
+
+Próximo passo: validar o retorno do Google em HTTPS no ambiente hospedado. [Evidências e limites](docs/validacao-fase3.md#retorno-à-página-inicial-e-navegação-da-conta).
+
+## Redesign da distribuição de `/ver` — 21/11/2026
+
+Concluído localmente na branch `carrijoga/redesign-pagina-ver-layout`, a partir do merge do PR #3 (`ae7cfee`). A planta ocupa a coluna flexível em telas largas, com dados da cerimônia, busca e lista na lateral. Em telas estreitas, o conteúdo segue em uma coluna. O mapa abre enquadrado e, após escolher um resultado de busca, a cadeira aparece destacada e o teclado segue no mapa. Dois subagents revisaram a composição e os limites de layout. [Guia da página](docs/surfaces/ver.md).
+
+Validação: check sem avisos, lint, build web para preview local no Windows e 180 testes com PostgreSQL 18 temporário. JavaScript inicial de `/ver` em cerca de 79,2 KiB gzip, dentro dos 150 KiB. No navegador Orca com dados fictícios, mapa e legenda couberam na primeira tela no cenário de 55 cadeiras em 1440 × 900 e 390 × 844. Conferidos o limite da grade em 991/992 px, 288 cadeiras e nomes longos a 320 px, busca sem acento por teclado, zoom a 200%, reenquadramento, link anônimo e estados de erro.
+
+Integração à `main` solicitada pelo usuário. Após o merge, o próximo passo da fase 7 é conferir `/ver` na hospedagem e validar a página no Moto G84 físico e com leitor de tela.
+
+## Vincular Google com e-mail diferente — 21/11/2026
+
+PR #5 mergeado. Num teste do usuário em produção, o "Conectar Google" voltava sem mudar nada. A conta de senha e a conta Google tinham e-mails diferentes, então o Better Auth recusou com `email_does_not_match`, e a tela só mostrou a mensagem genérica. Correção na branch `carrijoga/fix-vincular-google-email-diferente`: `allowDifferentEmails: true`, que vale só para a vinculação explícita com sessão, e mensagens para `account_already_linked_to_different_user` e `unable_to_link_account`. A entrada deslogada continua sem vinculação implícita. ADR-0015 revisado. Commit `287a183` levado direto à `main` por fast-forward, sem PR, a pedido do usuário. O usuário também tinha criado uma conta de teste só Google (gabriel30carrijo@gmail.com), que precisa ser excluída antes de conectar esse Google à conta de senha; senão o resultado é `account_already_linked_to_different_user`. Não verificado: a vinculação real em produção, até o deploy.
+
+## Login com Google e exclusão de conta concluídos localmente — 21/11/2026
+
+Pedido do usuário, na branch `carrijoga/anthias` (ADR-0015). Claude Opus coordenou. Dois subagents Sonnet trabalharam com arquivos exclusivos: um na API e outro na tela `/conta` com `lib/account`. O coordenador fez ADR, docs, revisão e a correção do proxy.
+- `/conta` abre com "Continuar com o Google". Depois vêm o divisor "ou use seu e-mail" e as abas Entrar e Criar conta. Logado, a tela mostra "Conectar Google" ou "Google conectado".
+- A API usa `socialProviders.google` só quando `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` existem juntas. `auth-capabilities` informa `google`. Os erros de OAuth voltam para `/conta?error=`. Não há vinculação implícita com contas de senha (`account_not_linked`).
+- Exclusão: quem tem senha continua digitando a senha. Uma conta só Google precisa de sessão com até 10 min (`REAUTH_WINDOW_SECONDS`); fora disso recebe `REAUTH_REQUIRED` e reconfirma com o Google (`?excluir=confirmar`).
+- `.railway/railway.ts` declara as duas variáveis com `preserve()`.
+- Defeito encontrado no teste local e corrigido: o `sign-in/social` responde 200 com `location` para o Google, e o proxy da web tratava isso como redirecionamento externo, devolvendo 503. Agora o proxy só trata `location` em respostas 3xx.
+
+Validação:
+- check, lint e 195 testes passaram com PostgreSQL 18 temporário. O único pulado precisa de `TEST_CREATE_DATABASE`.
+- No navegador local, com credenciais Google falsas:
+  - tela deslogada e logada;
+  - `sign-in/social` pelo proxy devolve a URL do Google com `redirect_uri` `/api/auth/callback/google`;
+  - callback forjado volta para `/conta?error=state_mismatch`;
+  - conta só Google simulada no banco: com sessão antiga, a tela pede reconfirmação; com sessão nova e `?excluir=confirmar`, a exclusão apagou usuário, conta e sessão.
+
+Não verificados:
+- OAuth real (falta o cliente no Google Cloud);
+- `account_not_linked` e `link-social` reais;
+- 390 px (o Chrome não redimensionou);
+- leitor de tela.
+
+Commits `fef2e03` (API), `76a9a41` (web) e `9d04088` (docs) na branch `carrijoga/feat-login-cadastro-google`. PR #5 aberto para a `main` em 21/11/2026, a pedido do usuário.
+
+Próximo passo: o usuário revisa e faz o merge do PR #5. Para ativar o Google em produção, criar o cliente OAuth e gravar as variáveis na Railway (runbook em `docs/desenvolvimento.md`, passo 6). Depois, aceite hospedado do roadmap.
+
+## Fase 7, auditoria axe e sincronização com a main — 21/11/2026
+
+PR #2 mergeado pelo usuário. A `main` foi integrada a esta branch (`94cb8f9`): Railway, CI, Compose e operação ficaram idênticos à `main`, `config plan` está em dia, e a seção duplicada do PostgreSQL 18 na memória foi removida.
+
+Auditoria, a pedido do usuário. Playwright 1.65.1, axe-core 4.14.1 e Chromium, instalados no scratchpad da sessão e fora do repositório. Resultado:
+- diálogo "Compartilhar" (editor, confirmação e `/projetos`, desktop e celular): sem violações. Contraste só falha se medido durante a animação de entrada;
+- `/ver`: só `label-content-name-mismatch` nas cadeiras do SVG, a mesma regra aceita no ADR-0009 para o editor. Ela pega também cadeiras vazias, e `docs/revisao-ui-fase5.md` foi corrigido.
+- Capturas revisadas sem problema visual.
+
+PR #3 da fase 7 aberto para a `main` em 21/11/2026, com o aval do usuário; CI verde depois do commit de formatação `cab432b`. Próximo: o usuário revisa e faz o merge. Pendentes registráveis no PR: leitor de tela, Moto G84 e teste hospedado. Depois do merge, a festa renumera a migração dela para `0003`.
+
+## Fase 7, etapa 3 (página /ver e painel Compartilhar) concluída localmente — 21/11/2026
+
+Pedido do usuário, na branch `carrijoga/link-compartilhamento-somente`.
+- `apps/web/src/routes/ver/` é pré-renderizada, com noindex e `no-referrer`, e lê o token do fragmento. Tem a busca "Encontre seu lugar", sem diferença de acento, zoom e `SeatList` somente leitura.
+- `lib/share/client.ts` faz as chamadas, o `toViewProject` e a validação da resposta. `lib/share/ShareDialog.svelte` carrega sob demanda no editor (só projeto da conta) e em `/projetos`.
+- `PlanCanvas` ganhou `readonly`, `anonymous` e `reveal(seatId)`. `SeatList` ganhou `readonly` e `anonymous`. `scripts/measure-web.mjs` mede `/ver` também.
+
+Validação:
+- check, lint e 180 testes, com PostgreSQL 18.7 no Compose novo.
+- Bundle: `/ver` 78,8 KiB, `/editor` 90,5 (base 88,4), `/` 41,9 (base 41,5).
+- Navegador local (Chrome do usuário pela extensão; o Playwright do plugin não acha o Chrome):
+  - diálogo no editor cria o link;
+  - `/ver` mostra título, data e 5 de 40 ocupados, sem vazar nota, convidado sem lugar nem título;
+  - busca "joao" acha "João" e destaca a cadeira;
+  - modo planta sem nomes; desativado e incompleto mostram a mensagem certa;
+  - a lista não tem seletor;
+  - logs da API sem token.
+- Correção do teste: o `title` no botão "Compartilhar" do editor trocava o nome acessível, então foi removido.
+
+Não verificados:
+- capturas de tela: o Chrome limitava a janela a 2 quadros por segundo;
+- clique no diálogo de `/projetos`: outra extensão do Chrome bloqueou a automação, mas a árvore mostrou "Links ativos 1 de 10" carregados;
+- celular, leitor de tela e axe.
+
+Próximo passo: etapa 4 (axe em `/ver` e no diálogo, NVDA/TalkBack, Moto G84, olhar visual pelo usuário) e PR da fase 7 para a `main`, depois do merge do PR #2. A festa renumera a migração dela para `0003` ao entrar depois.
+
+## PostgreSQL da Railway travado e correção para 18 — 20/11/2026
+
+Após `railway config apply` do usuário (rodado em `Documents/dev/enlace`, branch `codex/ceremony-editor`, com `postgres-ssl:17`), o serviço `postgres` ficou CRASHED: "This image runs PostgreSQL 17 but the data directory holds major version 18". O volume nasceu em 18.6 (padrão do SDK) e já tinha contas e projetos; a API seguia no ar com `/health` 200 e `/ready` 503. Decisão do usuário: manter os dados e ir para 18.
+
+Feito neste worktree: cherry-pick de `e800544` (`PORT=3000`, só existia em `codex/ceremony-editor`; sem ele o plano apagava `api.PORT`). Imagem `postgres-ssl:18` em `.railway/railway.ts`, `postgres:18-alpine` na CI e no Compose (volume novo `enlace_postgres18_data` em `/var/lib/postgresql`; o antigo, da 17, fica intocado), `pg_dump` 18 em `docs/operacao.md` e revisão no ADR-0013. Suíte completa (173) passou em PostgreSQL 18.7 num contêiner temporário. O worktree foi vinculado ao projeto Railway (`railway link`). `railway config plan` daqui: 0 a adicionar, 1 a mudar (imagem para `ghcr.io/railwayapp-templates/postgres-ssl:18` no grafo desejado; a CLI exibe "postgres:18"), 0 a destruir.
+
+`.railway/railway.ts` declara `PORT=3000` e `SHARE_LINK_SECRET` (`preserve()`): variáveis não declaradas são apagadas pelo `apply`. Correção levada à `main` pelo PR #2 (mergeado em 21/11/2026). Resolvido em 21/11/2026 01:08 UTC: o usuário rodou `apply` deste worktree. O postgres voltou a SUCCESS em 18.6, com "Skipping initialization" e desligamento limpo anterior (dados preservados). `/ready` responde 200, a API atende `/api/projects/:id` com 200, e `config plan` está em dia. Não rodar `apply` de `Documents/dev/enlace` enquanto ele declarar 17. Levar esta correção à `main`. `SHARE_LINK_SECRET` gravado no serviço `api` em 21/11/2026, a pedido do usuário: 64 caracteres aleatórios, enviados por stdin e nunca exibidos, diferente de `BETTER_AUTH_SECRET`. Foi usado `--skip-deploys`, então vale a partir do próximo deploy.
+
+## Fase 7, etapa 2 (API dos links) concluída localmente — 20/11/2026
+
+Pedido do usuário.
+- Migração `0002_share_links.sql`: tabela `project_share_links`, sem o token.
+- `apps/api/src/projects/share-token.ts`: HMAC-SHA256 com contexto `enlace-share-link:v1:` e `timingSafeEqual`, recusando codificação não canônica.
+- `share-links.ts`: list, create com a linha do projeto bloqueada e limite de 10, revoke idempotente com corpo `{}`, e view com `REPEATABLE READ`, `readSnapshot` e `toSharedView`.
+- Rotas no `app.ts`, com `sameOriginJson` separado de `writable` para não exigir o store de projetos.
+- `store.ts` passou a exportar `transaction` e `readSnapshot`.
+- Proxy liberou `projects/:id/share-links[/:linkId]` e `shared/view`.
+- A API depende de `@enlace/domain`, e `build:api` compila o domínio.
+- `SHARE_LINK_SECRET` é obrigatória em produção, com 32+ caracteres e diferente de `BETTER_AUTH_SECRET`. Foi incluída em `.railway/railway.ts` (`preserve()`), `.env.example` e no runbook. O primeiro deploy precisa dela, ou a API não sobe.
+- Desvio registrado no ADR: o limite é por link e por instância (600/min), não por IP, porque a API só vê o proxy.
+
+Validação: 173 testes passaram com PostgreSQL 17 local (`TEST_DATABASE_URL` no contêiner `humpback-postgres-1`, criado por este worktree com volume próprio; `--maxWorkers=2 --testTimeout=30000`). check, lint, prettier (arquivos alterados) e `build:api` ok. O integrado cobre:
+- os dois modos sem dados privados no JSON;
+- última revisão salva, e links não mudam a revisão;
+- isolamento entre contas;
+- token recusado como Bearer ou cookie de sessão;
+- desativado, vencido e de outro segredo respondem 404;
+- limite de 10 com 13 criações simultâneas;
+- cascata ao excluir o projeto.
+
+Não verificados: role de runtime real com a tabela nova (coberta por `ALTER DEFAULT PRIVILEGES`, sem teste próprio), proxy Vercel→Railway hospedado.
+
+Próximo passo do tema: etapa 3. Página `/ver` pré-renderizada, com token no fragmento e `POST /api/shared/view`; `PlanCanvas`/`SeatList` com modo somente leitura explícito; busca "Encontre seu lugar"; noindex e `Referrer-Policy: no-referrer`; painel "Compartilhar" no editor e em `/projetos`.
+
+## Fase 7, etapa 1 (contratos e projeção) concluída localmente — 20/11/2026
+
+Pedido do usuário. Em `@enlace/contracts`: `createShareLinkRequestSchema`, `shareLinkSchema`, `shareLinkListResponseSchema`, `sharedViewRequestSchema`, `sharedViewSchema` (união `names`/`plan`, estrita, layout sem `linkedCounts`), `MAX_ACTIVE_SHARE_LINKS` (10) e `SHARE_TOKEN_LENGTH` (64). Em `@enlace/domain`: `toSharedView(project, mode)`, com cópia campo a campo, só pessoas sentadas, na ordem da planta. O título ficou fora da projeção (questão aberta no ADR). Documentado em `docs/contratos.md`.
+
+Validação: 133 testes passaram (15 integrados pulados, sem PostgreSQL), check/lint/prettier ok. Os testes verificam no JSON serializado a ausência de notas, título, IDs e convidados sem lugar, e de nomes e categorias no modo `plan`. Neste worktree foi preciso `pnpm install --frozen-lockfile` e `svelte-kit sync` antes dos testes web. Cuidado: `prettier --write` troca CRLF por LF em arquivos não alterados; restaurar antes de commitar.
+
+Correção de estado: o PR #1 já integrou `codex/ceremony-editor` à `main` (`3e32527`), então o bloqueio "main atrasada" da seção de deploy está resolvido. Continua pendente a aprovação do usuário para `railway config apply`.
+
+Próximo passo do tema: etapa 2. Tabela `project_share_links` e migração; token HMAC com `SHARE_LINK_SECRET` (`node:crypto`, `timingSafeEqual`); rotas de gerenciamento por dono e `POST /api/shared/view`; limite de requisições; allowlist do proxy; testes integrados de acesso cruzado, revogação, validade e limite de 10 sob concorrência. A API passa a depender de `@enlace/domain`.
+
+## Link de visualização proposto como fase 7 — 20/11/2026
+
+Pedido do usuário, só documentado, sem código. Registrado em ADR-0014 (proposta), na fase 7 do roadmap e numa seção do `PRODUCT.md`. A tabela de evoluções em `modelo-de-dados.md` foi atualizada. Decisões do usuário: link para quem não tem conta, somente leitura; vários links com nome por projeto; o dono escolhe em cada link o modo "Com nomes" ou "Só a planta" e a validade (7, 30, 90 dias ou sem prazo); a execução vem antes da festa (fase 6), depois do aceite hospedado da fase 5. A numeração 7 foi mantida para não renumerar a festa. Proposta técnica: tabela `project_share_links` sem o token; token = `linkId` + HMAC (`SHARE_LINK_SECRET`) no fragmento `/ver#…`, enviado no corpo de `POST /api/shared/view`; projeção pura `toSharedView` sem notas, IDs, dono nem convidados sem lugar; limite de 10 links ativos; sem rastrear quem vê. Próximo passo do tema: o mesmo da fase 5 (aceite hospedado) e, em seguida, a etapa 1 da fase 7 (contratos e projeção).
 
 ## Fase 6, etapa 4: ajustes do editor da festa — 10/11/2026
 
 Pedido do usuário: (1) bug — ao surgir aviso a "seleção caía" e era preciso clicar de novo; (2) avisos num menu suspenso; (3) portas arrastáveis entre paredes, com abertura para dentro, para fora ou de correr. Causa do bug: a lista de avisos abaixo da planta crescia, a planta encolhia e mudava de escala e o elemento saía de baixo do ponteiro; o clique pós-soltura podia cair no piso e desmarcar. Coordenador (Claude Opus): contrato (`opening` com padrão `inward`, `RECEPTION_DOOR_OPENINGS`), domínio (`updateDoor`, `placeDoorNear`, `getDoorGeometry`, `addDoor` com `opening` opcional) e testes, `contracts.ts` da web (`ReceptionSelection` inclui porta), `ReceptionEditor.svelte` (avisos em `<details>` no cabeçalho, faixa de contexto com altura fixa, ligação das portas). Subagents Sonnet, arquivos exclusivos: `ReceptionCanvas.svelte` (desenho das 3 aberturas, arraste/teclado de porta, tamanho do SVG congelado durante o gesto, clique pós-gesto não desmarca) e `ElementInspector.svelte` + `RoomSetup.svelte` (painel "Porta N", abertura em botões segmentados, lista de portas selecionável). Decisões no ADR-0012 ("Ajustes do editor").
 
-Validação: check 0 erros/0 avisos, lint/format ok, `pnpm test` 181 aprovados (24 integrados pulados, sem PostgreSQL; teste integrado da API ajustado com `opening`). Navegador (dev, rascunho local): avisos aparecendo/sumindo sem mudar o tamanho da planta e com a mesa selecionada; porta criada e selecionada, arrastada da parede 1 para a 2, troca de abertura (geometria conferida: folha para dentro/fora e painel de correr), setas 10/50 cm, menu de avisos abre, lista, fecha com Escape; 375 px sem overflow. Não verificados: toque real, conferência visual ampliada das aberturas (painel do navegador oculto no fim), integrados da API com PostgreSQL, build de produção/tamanho do chunk. Sem commit.
+Validação: check 0 erros/0 avisos, lint/format ok, `pnpm test` 181 aprovados (24 integrados pulados, sem PostgreSQL; teste integrado da API ajustado com `opening`). Navegador (dev, rascunho local): avisos aparecendo/sumindo sem mudar o tamanho da planta e com a mesa selecionada; porta criada e selecionada, arrastada da parede 1 para a 2, troca de abertura (geometria conferida: folha para dentro/fora e painel de correr), setas 10/50 cm, menu de avisos abre, lista, fecha com Escape; 375 px sem overflow. Não verificados: toque real, conferência visual ampliada das aberturas (painel do navegador oculto no fim), integrados da API com PostgreSQL, build de produção/tamanho do chunk. Commitado em `codex/ceremony-editor` em 23/11/2026 (`d76e0e8`).
 
 Publicação: web anterior recusa portas com `opening`; API e web juntas.
 
@@ -20,15 +179,15 @@ Próximo passo: etapa 5 (PNG e impressão do salão, lista por mesa, acessibilid
 
 ## Fase 6, etapa 3 (persistência e corte para v2) — 09/11/2026
 
-Pedido do usuário ("start stage 3"). Commitada junto da etapa 4. Coordenador: contrato (`ceremony.ts` + `reception.ts` + `index.ts`; v2 é o formato atual, `projectSchema`/`Project`; subpath `@enlace/contracts/reception` removido), domínio (comandos da cerimônia validam o projeto completo; `removeGuest` também tira a mesa; `toProjectV2`/`removeGuestFromProject` removidos), migração `apps/api/drizzle/0002_reception.sql` (`projects.reception` + `reception_schema_version` com CHECK; tabela `table_assignments` com `sort_order`), `store.ts` e testes da API. Subagent Sonnet: `apps/web/**` (tipos `Project`, rascunhos v2, rascunho de conta sem `reception` vira `null`, exportação v2, `sameProject` passou a comparar `reception`); revisado pelo coordenador. Decisões no ADR-0012 ("Etapa 3").
+Pedido do usuário ("start stage 3"). Commitada junto da etapa 4. Coordenador: contrato (`ceremony.ts` + `reception.ts` + `index.ts`; v2 é o formato atual, `projectSchema`/`Project`; subpath `@enlace/contracts/reception` removido), domínio (comandos da cerimônia validam o projeto completo; `removeGuest` também tira a mesa; `toProjectV2`/`removeGuestFromProject` removidos), migração `apps/api/drizzle/0002_reception.sql` (renumerada para `0004_reception.sql` na integração com a `main` em 23/11/2026; `projects.reception` + `reception_schema_version` com CHECK; tabela `table_assignments` com `sort_order`), `store.ts` e testes da API. Subagent Sonnet: `apps/web/**` (tipos `Project`, rascunhos v2, rascunho de conta sem `reception` vira `null`, exportação v2, `sameProject` passou a comparar `reception`); revisado pelo coordenador. Decisões no ADR-0012 ("Etapa 3").
 
 Validação: check/lint/format ok; `pnpm test` com PostgreSQL local (`TEST_DATABASE_URL` do `docker-compose.yml`, `TEST_CREATE_DATABASE=1`): 200 testes, nenhum pulado. Corrigido no caminho: o CHECK deixava passar versão sem festa (expressão NULL aprova CHECK). Build de produção: contrato da festa ~1,8 KiB gzip no inicial, `/editor` 89.962 bytes gzip (método novo, ver `docs/desempenho.md`); domínio da festa fora dos chunks. Navegador (build de produção, sem API): rascunho v1 abre e é regravado como v2; rascunho v2 com festa preserva mesas e elementos; remover convidado sentado à mesa remove a atribuição dele e mantém a do outro. Não verificados: fluxo com conta pela web (só testes integrados da API), migração na Railway.
 
-Atenção à publicação: a API da Railway sai da `main` e já está no ar. API e web precisam ir juntas; antes disso a web antiga não abre projetos vindos da API nova e a API antiga recusa salvamentos da web nova (erro visível, sem perda). A migração `0002` roda no pré-deploy.
+Atenção à publicação: a API da Railway sai da `main` e já está no ar. API e web precisam ir juntas; antes disso a web antiga não abre projetos vindos da API nova e a API antiga recusa salvamentos da web nova (erro visível, sem perda). A migração `0004` roda no pré-deploy.
 
 Próximo passo (na época): medir `bench-drag.html` no Moto G84 antes da etapa 4; o usuário adiou a medição em 10/11 (seção acima).
 
-Correção em dev (10/11/2026): cadastro dava 403 `invalid_origin` porque `vite dev` escutava e mostrava `127.0.0.1:5173`, enquanto a API só confia em `WEB_ORIGIN=http://localhost:5173`. `apps/web` `dev` passou a `--host localhost` (continua só local). Reproduzido com curl: 403 com origem `127.0.0.1`, 200 com `localhost`, também pelo proxy da web. Abrir sempre `http://localhost:5173`. Em seguida, criar projeto dava 500: o banco de dev não tinha a migração `0002_reception` (os testes usam banco próprio). `pnpm run db:migrate` aplicou-a; cadastro, criação (201) e leitura do projeto pelo proxy conferidos. Todo banco existente precisa de `db:migrate` depois desta etapa.
+Correção em dev (10/11/2026): cadastro dava 403 `invalid_origin` porque `vite dev` escutava e mostrava `127.0.0.1:5173`, enquanto a API só confia em `WEB_ORIGIN=http://localhost:5173`. `apps/web` `dev` passou a `--host localhost` (continua só local). Reproduzido com curl: 403 com origem `127.0.0.1`, 200 com `localhost`, também pelo proxy da web. Abrir sempre `http://localhost:5173`. Em seguida, criar projeto dava 500: o banco de dev não tinha a migração da festa (os testes usam banco próprio). `pnpm run db:migrate` aplicou-a; cadastro, criação (201) e leitura do projeto pelo proxy conferidos. Todo banco existente precisa de `db:migrate` depois desta etapa.
 
 ## Fase 6 iniciada — 09/11/2026
 

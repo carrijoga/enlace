@@ -67,6 +67,59 @@ describe('proxy autenticado same-origin', () => {
       (await proxyApi(new Request(web + '/api/auth/reset-password/token'), origin, fetcher)).status,
     ).toBe(503);
   });
+  it('descarta location externo em resposta 200 (sign-in social) sem falhar', async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        Response.json(
+          { url: 'https://accounts.google.com/o/oauth2/v2/auth', redirect: true },
+          { headers: { location: 'https://accounts.google.com/o/oauth2/v2/auth' } },
+        ),
+      );
+    const response = await proxyApi(
+      new Request(web + '/api/auth/sign-in/social', {
+        method: 'POST',
+        headers: { origin: web, 'content-type': 'application/json' },
+        body: '{"provider":"google"}',
+      }),
+      origin,
+      fetcher,
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.has('location')).toBe(false);
+    expect(await response.json()).toMatchObject({ redirect: true });
+  });
+  it('libera só as rotas de compartilhamento previstas', async () => {
+    const id = '1a2b3c4d-1111-4111-8111-111111111111';
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({}));
+    for (const path of [
+      `/api/projects/${id}/share-links`,
+      `/api/projects/${id}/share-links/${id}`,
+      '/api/shared/view',
+      '/api/shared/redeem',
+    ]) {
+      const result = await proxyApi(
+        new Request(web + path, {
+          method: 'POST',
+          headers: { origin: web, 'content-type': 'application/json' },
+          body: '{}',
+        }),
+        origin,
+        fetcher,
+      );
+      expect(result.status).toBe(200);
+    }
+    expect(fetcher).toHaveBeenCalledTimes(4);
+    for (const path of [
+      `/api/projects/${id}/share-links/${id}/extra`,
+      `/api/projects/${id}/share-link`,
+      '/api/shared/view/token',
+      '/api/shared/redeem/token',
+      '/api/shared',
+    ])
+      expect((await proxyApi(new Request(web + path), origin, fetcher)).status).toBe(404);
+    expect(fetcher).toHaveBeenCalledTimes(4);
+  });
   it('preserva conflitos e falhas sem cache', async () => {
     const fetcher = vi
       .fn<typeof fetch>()

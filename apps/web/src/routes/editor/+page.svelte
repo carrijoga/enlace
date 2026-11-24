@@ -71,6 +71,10 @@
   let receptionEditor = $state<
     typeof import('../../lib/editor/reception/ReceptionEditor.svelte').default | null
   >(null);
+  let shareDialog = $state<typeof import('../../lib/share/ShareDialog.svelte').default | null>(
+    null,
+  );
+  let shareTrigger: HTMLButtonElement | null = null;
   let feedback = $state('');
   let feedbackError = $state(false);
   let rawDraft = $state<string | null>(null);
@@ -91,6 +95,7 @@
   let exporting = $state<string | null>(null);
   let accountSession = $state<AccountSession | null>(null);
   let projectId = $state<string | null>(null);
+  let projectRole = $state<ProjectSnapshot['role']>('owner');
   let revision = $state<number | null>(null);
   let conflictSnapshot = $state<ProjectSnapshot | null>(null);
   let retryRequest: SaveProjectRequest | null = null;
@@ -214,6 +219,15 @@
         );
         return;
       }
+      if (response.status === 404) {
+        status = 'error';
+        persistAccountDraft();
+        announce(
+          'O acesso a este projeto compartilhado terminou. Você pode salvar como novo projeto na sua conta ou baixar o JSON.',
+          true,
+        );
+        return;
+      }
       if (!response.ok) throw new Error('Não foi possível sincronizar agora.');
       const saved = projectWriteResponseSchema.parse(await response.json());
       revision = saved.revision;
@@ -268,6 +282,7 @@
     }
     const snapshot = projectSnapshotSchema.parse(await response.json());
     project = snapshot.project;
+    projectRole = snapshot.role;
     revision = snapshot.revision;
     conflictSnapshot = null;
     retryRequest = null;
@@ -317,7 +332,7 @@
         accountSession = await readSession();
         if (!accountSession) {
           status = 'expired';
-          announce('Entre na conta proprietária para abrir este projeto.', true);
+          announce('Entre na sua conta para abrir este projeto.', true);
           return;
         }
         const response = await fetch(`/api/projects/${encodeURIComponent(requestedId)}`, {
@@ -335,6 +350,7 @@
         const snapshot = projectSnapshotSchema.parse(await response.json());
         if (snapshot.id !== requestedId)
           throw new Error('A resposta não corresponde ao projeto solicitado.');
+        projectRole = snapshot.role;
         revision = snapshot.revision;
         accountKey = accountDraftKey(accountSession.user.id, requestedId);
         let local: AccountDraft | null;
@@ -628,6 +644,18 @@
       announce('Não foi possível abrir a importação. Verifique a conexão e tente novamente.', true);
     }
   }
+  async function openShare(trigger: HTMLButtonElement) {
+    shareTrigger = trigger;
+    try {
+      shareDialog = (await import('../../lib/share/ShareDialog.svelte')).default;
+    } catch {
+      announce('Não foi possível abrir o compartilhamento. Verifique a conexão.', true);
+    }
+  }
+  function closeShare() {
+    shareDialog = null;
+    void tick().then(() => shareTrigger?.focus());
+  }
   function closeCsvImport() {
     csvDialog = null;
     void tick().then(() => csvTrigger?.focus());
@@ -705,6 +733,7 @@
       clearTimeout(saveTimer);
       project = null;
       accountSession = null;
+      projectRole = 'owner';
       revision = null;
       accountKey = null;
       retryRequest = null;
@@ -768,7 +797,9 @@
         role="status"
         >{status === 'saved'
           ? projectId
-            ? 'Salvo na sua conta'
+            ? projectRole === 'editor'
+              ? 'Salvo no projeto compartilhado'
+              : 'Salvo na sua conta'
             : 'Rascunho salvo neste navegador'
           : status === 'pending'
             ? projectId
@@ -795,9 +826,7 @@
         >
       </div>{/if}
     <nav class="account-tools" aria-label="Conta e projetos">
-      {#if projectId}<a href={resolve('/projetos')}>Meus projetos</a>{:else}<a
-          href={resolve('/conta')}>Entrar e salvar na conta</a
-        >{/if}
+      <a href={resolve('/projetos')}>Meus projetos</a>
     </nav>
     <div class="header-tools">
       <div class="history-tools">
@@ -819,6 +848,10 @@
           ></button
         >
       </div>
+      {#if projectId && project && projectRole === 'owner'}<button
+          class="editor-button"
+          onclick={(event) => openShare(event.currentTarget)}>Compartilhar</button
+        >{/if}
       <button class="editor-button" onclick={() => fileInput.click()} disabled={!project}
         >Abrir JSON</button
       >
@@ -914,7 +947,9 @@
         ><button onclick={saveAsNewProject}>Salvar como novo projeto</button>
       {:else}<button onclick={retryRemote}
           >{status === 'expired' ? 'Entrar novamente' : 'Tentar sincronizar'}</button
-        >{/if}
+        >{#if status === 'error' && accountSession}<button onclick={saveAsNewProject}
+            >Salvar como novo projeto</button
+          >{/if}{/if}
       <button onclick={() => exportFile('json')}>Baixar JSON</button>
     </div>
   {/if}
@@ -1093,8 +1128,8 @@
       <h1>{status === 'expired' ? 'Entre para abrir este projeto' : 'Projeto indisponível'}</h1>
       <p>
         {status === 'expired'
-          ? 'Este projeto pertence a uma conta. Entre com a conta proprietária para continuar.'
-          : 'Ele pode ter sido excluído, pertencer a outra conta ou o servidor pode estar indisponível.'}
+          ? 'Este projeto está vinculado a uma conta. Entre na sua conta para continuar.'
+          : 'Ele pode ter sido excluído, o acesso pode ter terminado ou o servidor pode estar indisponível.'}
       </p>
       <p>
         {#if status === 'expired'}<a href={resolve('/conta')}>Entrar</a>{:else}<a
@@ -1116,6 +1151,10 @@
       <p>Carregando o planejamento deste navegador.</p>
     </main>{/if}
 
+  {#if shareDialog && project && projectId}
+    {@const ShareDialog = shareDialog}
+    <ShareDialog {projectId} projectTitle={project.title} onClose={closeShare} />
+  {/if}
   {#if csvDialog && project}
     {@const CsvDialog = csvDialog}
     <CsvDialog

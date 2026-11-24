@@ -1,5 +1,5 @@
 {
-  "id": "fb0ba3a0-8e32-4e68-95fc-81b27c051b8e",
+  "id": "fa407c78-527c-4806-9259-9efa3458e7e9",
   "prevId": "52b58c62-e0e0-4417-8521-462def081cc2",
   "version": "7",
   "dialect": "postgresql",
@@ -484,6 +484,101 @@
       },
       "isRLSEnabled": false
     },
+    "public.project_share_links": {
+      "name": "project_share_links",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mode": {
+          "name": "mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "project_share_links_project_idx": {
+          "name": "project_share_links_project_idx",
+          "columns": [
+            {
+              "expression": "project_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "project_share_links_project_id_projects_id_fk": {
+          "name": "project_share_links_project_id_projects_id_fk",
+          "tableFrom": "project_share_links",
+          "tableTo": "projects",
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "project_share_links_mode_check": {
+          "name": "project_share_links_mode_check",
+          "value": "\"project_share_links\".\"mode\" IN ('names','plan')"
+        },
+        "project_share_links_label_check": {
+          "name": "project_share_links_label_check",
+          "value": "char_length(\"project_share_links\".\"label\") BETWEEN 1 AND 60 AND btrim(\"project_share_links\".\"label\") <> ''"
+        },
+        "project_share_links_expiry_check": {
+          "name": "project_share_links_expiry_check",
+          "value": "\"project_share_links\".\"expires_at\" IS NULL OR \"project_share_links\".\"expires_at\" > \"project_share_links\".\"created_at\""
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.project_write_receipts": {
       "name": "project_write_receipts",
       "schema": "",
@@ -616,18 +711,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "reception_schema_version": {
-          "name": "reception_schema_version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "reception": {
-          "name": "reception",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
         "revision": {
           "name": "revision",
           "type": "integer",
@@ -695,10 +778,6 @@
         "projects_revision_positive_check": {
           "name": "projects_revision_positive_check",
           "value": "\"projects\".\"revision\" > 0"
-        },
-        "projects_reception_check": {
-          "name": "projects_reception_check",
-          "value": "(\"projects\".\"reception\" IS NULL) = (\"projects\".\"reception_schema_version\" IS NULL) AND (\"projects\".\"reception\" IS NULL OR (jsonb_typeof(\"projects\".\"reception\") = 'object' AND \"projects\".\"reception_schema_version\" = 1))"
         }
       },
       "isRLSEnabled": false
@@ -760,89 +839,6 @@
           "columns": ["project_id", "guest_id"]
         }
       },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.table_assignments": {
-      "name": "table_assignments",
-      "schema": "",
-      "columns": {
-        "project_id": {
-          "name": "project_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "guest_id": {
-          "name": "guest_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "table_id": {
-          "name": "table_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "sort_order": {
-          "name": "sort_order",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "table_assignments_project_table_idx": {
-          "name": "table_assignments_project_table_idx",
-          "columns": [
-            {
-              "expression": "project_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "table_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "table_assignments_project_id_projects_id_fk": {
-          "name": "table_assignments_project_id_projects_id_fk",
-          "tableFrom": "table_assignments",
-          "tableTo": "projects",
-          "columnsFrom": ["project_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "table_assignments_project_id_guest_id_guests_project_id_id_fk": {
-          "name": "table_assignments_project_id_guest_id_guests_project_id_id_fk",
-          "tableFrom": "table_assignments",
-          "tableTo": "guests",
-          "columnsFrom": ["project_id", "guest_id"],
-          "columnsTo": ["project_id", "id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "table_assignments_project_id_guest_id_pk": {
-          "name": "table_assignments_project_id_guest_id_pk",
-          "columns": ["project_id", "guest_id"]
-        }
-      },
-      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

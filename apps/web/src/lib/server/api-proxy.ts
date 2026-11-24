@@ -1,7 +1,7 @@
 import { MAX_PROJECT_FILE_BYTES } from '@enlace/contracts';
 
 const allowedPath =
-  /^\/api\/(?:auth\/[a-z0-9/-]+|auth-capabilities|projects(?:\/[0-9a-f-]{36})?)$/i;
+  /^\/api\/(?:auth\/[a-z0-9/-]+|auth-capabilities|projects(?:\/[0-9a-f-]{36}(?:\/share-links(?:\/[0-9a-f-]{36})?)?)?|shared\/(?:view|redeem))$/i;
 const safeMethods = new Set(['GET', 'HEAD']);
 
 /** Fixed upstream, bounded bodies and explicit header allowlists. Never an open proxy. */
@@ -74,8 +74,11 @@ export async function proxyApi(request: Request, origin: URL, fetcher: typeof fe
       if (value) outgoing.set(name, value);
     }
     for (const cookie of upstream.headers.getSetCookie()) outgoing.append('set-cookie', cookie);
-    // Better Auth recovery redirects may only return to this frontend origin.
-    const location = upstream.headers.get('location');
+    // Better Auth recovery redirects may only return to this frontend origin. A 200 response
+    // (e.g. sign-in/social, whose JSON carries the Google URL) also sends `location`; the
+    // browser ignores it outside 3xx, so it is dropped instead of forwarded.
+    const location =
+      upstream.status >= 300 && upstream.status < 400 ? upstream.headers.get('location') : null;
     if (location) {
       const redirect = new URL(location, incoming.origin);
       if (redirect.origin !== incoming.origin) throw new Error('invalid_redirect');

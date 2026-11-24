@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Project } from '@enlace/contracts';
+  import type { CeremonyProject } from '@enlace/contracts';
   import { GUEST_CATEGORIES } from './guest-categories';
 
   // Alternativa em texto à planta SVG (WCAG 1.1.1/2.5.8): mesma seleção e atribuição, sem depender
@@ -11,13 +11,19 @@
     onSeatSelect,
     onAssignGuest,
     onUnassignSeat,
+    readonly = false,
+    anonymous = false,
   }: {
-    project: Project;
+    project: CeremonyProject;
     selectedGuestId: string | null;
     selectedSeatId: string | null;
     onSeatSelect: (id: string) => void;
-    onAssignGuest: (guestId: string, seatId: string) => void;
-    onUnassignSeat: (seatId: string) => void;
+    onAssignGuest?: (guestId: string, seatId: string) => void;
+    onUnassignSeat?: (seatId: string) => void;
+    /** Visualização por link (ADR-0014): sem trocar quem senta. */
+    readonly?: boolean;
+    /** Modo "Só a planta": ocupada ou disponível, sem nome nem categoria. */
+    anonymous?: boolean;
   } = $props();
 
   let open = $state(false);
@@ -33,8 +39,8 @@
 
   function changeOccupant(event: Event, seatId: string) {
     const guestId = (event.currentTarget as HTMLSelectElement).value;
-    if (guestId) onAssignGuest(guestId, seatId);
-    else onUnassignSeat(seatId);
+    if (guestId) onAssignGuest?.(guestId, seatId);
+    else onUnassignSeat?.(seatId);
   }
 </script>
 
@@ -49,10 +55,14 @@
     >
       <span class="seat-label">{label}</span>
       <span class="occupant" class:free={!guest}
-        >{guest ? `${guest.name} · ${GUEST_CATEGORIES[guest.category].label}` : 'Disponível'}</span
+        >{guest
+          ? anonymous
+            ? 'Ocupada'
+            : `${guest.name} · ${GUEST_CATEGORIES[guest.category].label}`
+          : 'Disponível'}</span
       >
     </button>
-    {#if selectedSeatId === seatId}
+    {#if selectedSeatId === seatId && !readonly}
       <div class="occupant-editor">
         <label for="seat-list-guest">Pessoa em {label.toLocaleLowerCase('pt-BR')}</label>
         <select
@@ -71,16 +81,24 @@
   </li>
 {/snippet}
 
-<details class="seat-list" bind:open>
+<details class="seat-list" class:readonly bind:open>
   <summary>
     <span>Ver lugares em lista</span>
-    <small>{project.assignments.length} de {total} ocupados</small>
+    {#if readonly}
+      <svg class="disclosure" viewBox="0 0 20 20" aria-hidden="true">
+        <path d="m7 4 6 6-6 6" />
+      </svg>
+    {:else}
+      <small>{project.assignments.length} de {total} ocupados</small>
+    {/if}
   </summary>
   {#if open}
     <p class="help">
       {selectedGuestName
         ? `Escolha a cadeira de ${selectedGuestName}.`
-        : 'A mesma planta em texto, do altar para a entrada. Selecione uma cadeira para definir quem senta nela.'}
+        : readonly
+          ? 'A mesma planta em texto, do altar para a entrada.'
+          : 'A mesma planta em texto, do altar para a entrada. Selecione uma cadeira para definir quem senta nela.'}
     </p>
     <div class="rows">
       {#each rows as row, rowIndex (row.id)}
@@ -118,6 +136,29 @@
     color: var(--green);
     font-weight: 600;
     cursor: pointer;
+  }
+  .seat-list.readonly {
+    margin: 0;
+  }
+  .readonly summary {
+    min-height: 44px;
+    border-radius: 7px;
+  }
+  .readonly summary:hover {
+    background: #eaf1e9;
+  }
+  .disclosure {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  [open] .disclosure {
+    transform: rotate(90deg);
   }
   small {
     color: var(--muted);

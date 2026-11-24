@@ -3,11 +3,14 @@ export interface ApiConfig {
   webOrigin: string;
   databaseUrl?: string;
   authSecret?: string;
+  shareLinkSecret?: string;
   smtpHost?: string;
   smtpPort?: number;
   smtpUser?: string;
   smtpPassword?: string;
   smtpFrom?: string;
+  googleClientId?: string;
+  googleClientSecret?: string;
   version: string;
   production: boolean;
 }
@@ -36,9 +39,24 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
   }
   if (authSecret && authSecret.length < 32)
     throw new Error('BETTER_AUTH_SECRET deve ter ao menos 32 caracteres');
+  // ADR-0014: assina os links de visualização. Separado do segredo de sessão, para que trocar um
+  // não invalide o outro; trocá-lo desativa todos os links de uma vez.
+  const shareLinkSecret = env.SHARE_LINK_SECRET;
+  if (production && !shareLinkSecret)
+    throw new Error('SHARE_LINK_SECRET é obrigatória em produção');
+  if (shareLinkSecret && shareLinkSecret.length < 32)
+    throw new Error('SHARE_LINK_SECRET deve ter ao menos 32 caracteres');
+  if (shareLinkSecret && shareLinkSecret === authSecret)
+    throw new Error('SHARE_LINK_SECRET deve ser diferente de BETTER_AUTH_SECRET');
   const smtpPort = env.SMTP_PORT === undefined ? undefined : Number(env.SMTP_PORT);
   if (smtpPort !== undefined && (!Number.isInteger(smtpPort) || smtpPort < 1 || smtpPort > 65535)) {
     throw new Error('SMTP_PORT inválida');
+  }
+  // Login com Google é opcional, mas as duas credenciais andam juntas: uma só é erro de configuração.
+  const googleClientId = env.GOOGLE_CLIENT_ID || undefined;
+  const googleClientSecret = env.GOOGLE_CLIENT_SECRET || undefined;
+  if (Boolean(googleClientId) !== Boolean(googleClientSecret)) {
+    throw new Error('GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET devem ser definidos juntos');
   }
   const port = Number(env.PORT ?? 3001);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
@@ -49,11 +67,13 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     webOrigin: parsedOrigin.origin,
     ...(env.DATABASE_URL ? { databaseUrl: env.DATABASE_URL } : {}),
     ...(authSecret ? { authSecret } : {}),
+    ...(shareLinkSecret ? { shareLinkSecret } : {}),
     ...(env.SMTP_HOST ? { smtpHost: env.SMTP_HOST } : {}),
     ...(smtpPort ? { smtpPort } : {}),
     ...(env.SMTP_USER ? { smtpUser: env.SMTP_USER } : {}),
     ...(env.SMTP_PASSWORD ? { smtpPassword: env.SMTP_PASSWORD } : {}),
     ...(env.SMTP_FROM ? { smtpFrom: env.SMTP_FROM } : {}),
+    ...(googleClientId && googleClientSecret ? { googleClientId, googleClientSecret } : {}),
     version: env.npm_package_version ?? '0.1.0',
     production,
   };

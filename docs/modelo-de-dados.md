@@ -1,6 +1,6 @@
 # Modelo de dados
 
-Atualizado em 09/11/2026. Fase 3 em integração local: schema Drizzle, migrações SQL, Better Auth e serviço transacional PostgreSQL implementados. Fase 6, etapa 3: planta da festa persistida (migração `0002_reception`) e formato portátil v2 ([ADR-0012](decisoes/0012-planta-da-festa.md)). Ver [ADR-0007](decisoes/0007-contas-e-salvamento-transacional.md), [arquitetura](arquitetura.md) e [validação fase 3](validacao-fase3.md).
+Atualizado em 23/11/2026. Fase 3 em integração local: schema Drizzle, migrações SQL, Better Auth e serviço transacional PostgreSQL implementados. Fase 6, etapa 3: planta da festa persistida (migração `0004_reception`) e formato portátil v2 ([ADR-0012](decisoes/0012-planta-da-festa.md)). Ver [ADR-0007](decisoes/0007-contas-e-salvamento-transacional.md), [arquitetura](arquitetura.md) e [validação fase 3](validacao-fase3.md).
 
 PostgreSQL fica exclusivo ao backend. A interface usa o proxy same-origin; proprietário e sessão são determinados na API. Tabelas de autenticação seguem Better Auth: `user`, `session`, `account`, `verification` e `rateLimit`, com IDs textuais. Schema em `apps/api/src/auth-schema.ts` e `apps/api/src/db/schema.ts`; serviço em `apps/api/src/projects/store.ts`.
 
@@ -33,6 +33,12 @@ As listas de cadeiras são a fonte da quantidade por lado. Não persistir també
 - `linkedCounts` descreve como o próximo comando de edição é aplicado; não é uma exigência de simetria permanente. O modelo legado admite lados assimétricos com a opção vinculada ligada.
 
 Manter limites iniciais compatíveis com a capacidade observada do protótipo: 1–12 fileiras, 0–12 cadeiras por lado/fileira e até 300 convidados. Esses limites precisam ser aplicados também aos caminhos de cadastro e lote, não só à importação. Rever os números após testar desempenho e UX. Comprimentos de campos, corredor, curvatura, tamanho máximo e notas estão formalizados nos contratos executáveis; cliente e servidor validam o mesmo agregado.
+
+### Links de compartilhamento, editores e recibos de cópia
+
+- `project_share_links` (`id`, `project_id`, `label`, `mode`, `created_at`, `expires_at`, `revoked_at`) foi implementada em 20/11/2026 ([ADR-0014](decisoes/0014-link-de-visualizacao.md)) e ampliada em 21/11/2026 ([ADR-0016](decisoes/0016-compartilhamento-colaborativo-e-copia.md)). Tem FK para `projects` com cascata, índice por projeto e checks de modo (`names`, `plan`, `edit` ou `clone`), de nome (1–60 caracteres, não só espaços) e de validade posterior à criação. O token não é guardado: o servidor o recalcula do `id` com `SHARE_LINK_SECRET`. Ativo quer dizer `revoked_at` nulo e `expires_at` nulo ou futuro. Desativar preenche `revoked_at`, sem apagar a linha. Links não alteram `projects.revision` nem entram no JSON exportado. O limite de 10 ativos é aplicado com a linha do projeto bloqueada.
+- `project_link_editors` (`link_id`, `user_id`), migração `0003_project_link_redemptions.sql`, registra contas que resgataram um link `edit`. O acesso de leitura e escrita (`role = 'editor'`) só vale enquanto o link associado estiver ativo; desativar ou expirar o link encerra o acesso sem precisar apagar a linha.
+- `project_link_clone_receipts` (`link_id`, `user_id`, `project_id`), com `UNIQUE (project_id)` e FKs em cascata, garante que resgatar o mesmo link `clone` várias vezes pela mesma conta devolva a mesma cópia enquanto ela existir. Desativar o link ou excluir o projeto original apaga o recibo em cascata, mas preserva o projeto copiado na conta de destino.
 
 ## Identidade, acesso e conexão
 
@@ -110,4 +116,4 @@ Criar uma projeção própria para exportação individual: geometria necessári
 - Histórico de versões e recuperação, com retenção e restauração transacional.
 - Grupos familiares e restrições de posição configuráveis, se validados como necessidade do produto.
 - Normalização das cadeiras caso sejam editadas/consultadas independentemente da planta.
-- Links de visualização individual com tokens limitados e revogáveis, caso o produto venha a oferecer compartilhamento por URL.
+- Links de visualização: a tabela `project_share_links` foi implementada (migração `0002_share_links.sql`, ver acima). A página pública ainda não existe.

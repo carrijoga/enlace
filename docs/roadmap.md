@@ -1,6 +1,6 @@
 # Roadmap de implementação
 
-Atualizado em 09/11/2026, com frontend Vercel e backend/PostgreSQL Railway. Fases 0 e 1 concluídas no escopo local. Fase 2 concluída em 08/11/2026: meta de desempenho atingida no desktop de referência; o celular de entrada testado ficou registrado como limite conhecido ([ADR-0006](decisoes/0006-aparelhos-de-referencia-e-aceite-da-fase-2.md)). Etapas posteriores são propostas, não funcionalidades entregues.
+Atualizado em 20/11/2026, com frontend Vercel e backend/PostgreSQL Railway. Fases 0 e 1 concluídas no escopo local. Fase 2 concluída em 08/11/2026: meta de desempenho atingida no desktop de referência; o celular de entrada testado ficou registrado como limite conhecido ([ADR-0006](decisoes/0006-aparelhos-de-referencia-e-aceite-da-fase-2.md)). Etapas posteriores são propostas, não funcionalidades entregues.
 
 ## Fase 0 — Diagnóstico e estrutura documental — concluída
 
@@ -91,7 +91,7 @@ Etapas, nesta ordem por dependência:
 
 1. Ensaio de arraste no Moto G84 com protótipo descartável, para confirmar a abordagem antes de construir o restante. **Página pronta (`scripts/bench-drag.html`). Em 10/11/2026 o usuário decidiu adiar a medição no aparelho e seguir para a etapa 4; ela continua exigida no aceite da fase (último item abaixo).**
 2. Contrato JSON v2 com migração de v1/v3 e domínio puro: salão, mesas, elementos, atribuição por mesa e avisos. **Concluída.**
-3. Persistência: migração do banco, atribuições por mesa e transação única com a cerimônia. Inclui o corte de `parseProjectFile`, rascunhos e API para v2. **Concluída localmente em 09/11/2026: migração `0002_reception`, v2 em contrato, API, editor, rascunhos e exportação; testes integrados com PostgreSQL. API e web precisam ser publicadas juntas (ver ADR-0012).**
+3. Persistência: migração do banco, atribuições por mesa e transação única com a cerimônia. Inclui o corte de `parseProjectFile`, rascunhos e API para v2. **Concluída localmente em 09/11/2026: migração `0004_reception` (renumerada de `0002` na integração com a `main` em 23/11/2026), v2 em contrato, API, editor, rascunhos e exportação; testes integrados com PostgreSQL. API e web precisam ser publicadas juntas (ver ADR-0012).**
 4. Editor: alternância Cerimônia/Festa, salão, mesas, elementos, atribuição e alternativa sem arraste. **Implementada localmente em 10/11/2026, carregada sob demanda; conferida no navegador (desktop e emulação de celular) com rascunho local. Faltam: medir o cenário máximo, toque em aparelho real e o fluxo com conta pela web. Ajustes do usuário em 10/11: avisos em menu suspenso sem mudar a planta, seleção preservada ao surgir aviso, portas arrastáveis entre paredes e abertura para dentro, para fora ou de correr.**
 5. Saídas e fechamento: PNG, impressão, lista por mesa, acessibilidade e medições.
 
@@ -109,11 +109,53 @@ Aceite:
 - Arrastar e atribuir ficam com p95 ≤ 50 ms em build de produção no cenário máximo (100 mesas, 60 elementos, 300 convidados), medido também no Moto G84. O JavaScript inicial da cerimônia continua dentro do orçamento, com a festa carregada sob demanda.
 - PNG e impressão não cortam o salão; a lista por mesa traz todos os convidados atribuídos.
 
+## Fase 7 — Compartilhamento por link (visualização, edição e cópia) — etapas 1 a 3 integradas à main, etapa 4 implementada localmente; fechamento pendente; executa antes da fase 6
+
+Pedido do usuário em 20–21/11/2026 ([ADR-0014](decisoes/0014-link-de-visualizacao.md) e [ADR-0016](decisoes/0016-compartilhamento-colaborativo-e-copia.md)). O dono cria links com nome e validade (7, 30, 90 dias ou sem prazo), e pode desativá-los a qualquer momento. Além dos modos públicos sem conta ("Com nomes" e "Só a planta"), o dono pode escolher modos autenticados para outras contas ("Permitir edição" do projeto original enquanto o link estiver ativo ou "Permitir cópia" independente na conta de destino). O número é 7 para não renumerar a festa, mas por decisão do usuário a execução vem antes dela, depois do aceite hospedado da fase 5.
+
+Etapas, nesta ordem por dependência:
+
+1. Contratos (entrada e projeção) e `toSharedView` puro, com testes de ausência de dados **Feito em 20/11/2026** ([contratos](contratos.md#links-de-compartilhamento-visualização-edição-e-cópia--fase-7)).
+2. Tabela `project_share_links`, migração, token HMAC, rotas de gerenciamento e leitura pública, limite de requisições e allowlist do proxy. **Feito em 20/11/2026**, com testes integrados em PostgreSQL.
+3. Página `/ver` com `PlanCanvas`/`SeatList` em modo somente leitura e busca "Encontre seu lugar"; painel "Compartilhar" no editor e em `/projetos`. **Feito em 21/11/2026**, verificado no navegador local (ver ADR-0014).
+4. Colaboração autenticada e clonagem ([ADR-0016](decisoes/0016-compartilhamento-colaborativo-e-copia.md)): migração `0003_project_link_redemptions.sql` (`project_link_editors` e `project_link_clone_receipts`), `POST /api/shared/redeem`, papel `role: 'owner' | 'editor'` em listagem/leitura, página `/participar` com confirmação explícita e redirecionamento pós-login em `/conta`. **Feito em 21/11/2026**.
+5. Fechamento: acessibilidade, celular (Moto G84), medição do bundle e runbook com `SHARE_LINK_SECRET`. Bundle medido, runbook feito e auditoria axe feita em 21/11/2026 (diálogo sem violações; `/ver` só com a regra das cadeiras aceita no ADR-0009). Faltam leitor de tela, Moto G84 e um teste pela hospedagem.
+
+A distribuição de `/ver` foi revisada em 21/11/2026. O [guia da página](surfaces/ver.md) registra a composição responsiva.
+
+Depois dos contratos, a API e as páginas de compartilhamento podem andar em paralelo com arquivos exclusivos.
+
+Aceite:
+
+- O link de visualização abre sem conta, em outra sessão e em outro aparelho, e mostra a última revisão salva.
+- Nenhuma rota de escrita aceita o token diretamente como sessão; o token de visualização nunca altera nada, e os tokens `edit`/`clone` exigem sessão autenticada e modo correspondente em `POST /api/shared/redeem`.
+- Link desativado, vencido, de modo trocado, de projeto excluído ou de conta excluída responde igual a um link inexistente (`404 not_found`).
+- No modo `edit`, a conta convidada edita o projeto original com controle de revisão (`expectedRevision` + `operationId` por ator), não pode excluir o projeto nem gerenciar links, e perde o acesso assim que o link vence ou é desativado (inclusive se um salvamento concorrente aguardar o bloqueio da revogação).
+- No modo `clone`, a conta destinatária recebe uma cópia independente da última versão salva (uma por link enquanto a cópia existir), que permanece na conta mesmo após o link vencer, ser desativado ou o original ser excluído.
+- A resposta "Só a planta" não contém nenhum nome, nota ou ID de convidado. "Com nomes" não contém notas, convidados sem lugar, dono, revisão ou dados dos outros links. Os testes verificam o JSON serializado.
+- O dono só lista, cria e desativa links dos próprios projetos. O limite de 10 links ativos se mantém com criações simultâneas.
+- O token não aparece em logs da API nem da Vercel, nem em eventos de analytics.
+- `/ver` e `/participar` não carregam código do editor, funcionam por toque e teclado e cumprem WCAG 2.2 AA na auditoria automatizada.
+
+## Login com Google e exclusão de conta — implementado localmente; aceite hospedado pendente
+
+Pedido do usuário em 21/11/2026 ([ADR-0015](decisoes/0015-login-com-google.md)). `/conta` passa a abrir com "Continuar com o Google" e deixa e-mail e senha como segunda opção. Contas só Google também podem ser excluídas, com login recente.
+
+Aceite:
+
+- Entrar e criar conta pelo Google na hospedagem real, com o cookie de sessão na origem da Vercel.
+- Entrar pelo Google com o e-mail de uma conta por senha não abre essa conta. A tela orienta a entrar com a senha e conectar o Google.
+- Uma conta só Google exclui a própria conta depois de confirmar com o Google, e projetos, links e o vínculo somem do banco.
+- Quem tem senha continua precisando dela para excluir a conta.
+- Sem as credenciais do Google, a tela funciona só com e-mail, sem erro.
+
+Em 21/11/2026 foi concluída localmente a revisão de Minha conta e Meus projetos. A página inicial reconhece a sessão ativa e permite retomar os projetos depois de voltar ou recarregar. O aceite em HTTPS com Google continua pendente. [Validação da navegação](validacao-fase3.md#retorno-à-página-inicial-e-navegação-da-conta).
+
 ## Questões de produto para resolver no momento certo
 
 | Questão | Padrão provisório | Quando resolver |
 | --- | --- | --- |
-| Uma ou duas contas do casal no mesmo projeto? | Um proprietário; colaboração futura sem compartilhar senha | Antes de implementar convites/acesso compartilhado |
+| Uma ou duas contas do casal no mesmo projeto? | Resolvido na fase 7: visualização sem conta ([ADR-0014](decisoes/0014-link-de-visualizacao.md)) e edição compartilhada ou cópia independente entre contas por link ([ADR-0016](decisoes/0016-compartilhamento-colaborativo-e-copia.md)), sem compartilhar senha | Implementado localmente |
 | Mais de uma planta/cenário por projeto? | Uma planta de cerimônia e, na fase 6, uma de festa por projeto; cenários alternativos seguem fora | Antes de oferecer cenários alternativos |
 | Altas quantidades, dimensões reais e objetos livres? | Cerimônia preserva limites e geometria atuais; medidas reais e objetos livres entram na festa ([ADR-0012](decisoes/0012-planta-da-festa.md)) | Fase 6 |
 | CSV: colunas, duplicatas e tamanho? | Nome obrigatório e categoria opcional; prévia sem merge automático por nome | Antes da fase 4 |

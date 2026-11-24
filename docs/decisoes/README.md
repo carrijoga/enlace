@@ -1,6 +1,6 @@
 # Registro de decisões
 
-Atualizado em 09/11/2026. Use ADRs numerados com contexto, decisão, status e consequências. Status possíveis: proposta, aceita, substituída ou rejeitada. Um documento de arquitetura proposto não é uma implementação.
+Atualizado em 21/11/2026. Use ADRs numerados com contexto, decisão, status e consequências. Status possíveis: proposta, aceita, substituída ou rejeitada. Um documento de arquitetura proposto não é uma implementação.
 
 | Registro | Status | Referência |
 | --- | --- | --- |
@@ -18,7 +18,7 @@ Atualizado em 09/11/2026. Use ADRs numerados com contexto, decisão, status e co
 
 O ADR-0003 registra a direção atual. Antes de adicionar integrações, validar e fixar versões compatíveis; mudanças relevantes de direção exigem atualizar o registro. Não é necessário interromper o trabalho para escolhas rotineiras já autorizadas pelo escopo; documente a decisão e avance.
 
-Não decididos: recursos na Railway, orçamento, transporte de e-mail, versões das integrações, identidade visual final, domínio público, modelo comercial, colaboração entre contas e suporte a múltiplos cenários dentro do mesmo projeto.
+Não decididos: recursos na Railway, orçamento, transporte de e-mail, versões das integrações, identidade visual final, domínio público, modelo comercial e suporte a múltiplos cenários dentro do mesmo projeto.
 
 ## 0007 — Contas e salvamento transacional
 
@@ -42,8 +42,20 @@ Não decididos: recursos na Railway, orçamento, transporte de e-mail, versões 
 
 ## 0012 — Planta da festa
 
-[ADR-0012](0012-planta-da-festa.md): em implementação na fase 6; contrato v2, domínio, persistência (migração `0002_reception`) e editor da festa prontos localmente; faltam as saídas da festa e as medições, inclusive o arraste no Moto G84, adiado por decisão do usuário. API e web precisam ser publicadas juntas. Salão com medidas reais (formato pronto ou manual), mesas com N cadeiras, convidados por mesa e atrações posicionadas livremente, na mesma lista de convidados da cerimônia.
+[ADR-0012](0012-planta-da-festa.md): em implementação na fase 6; contrato v2, domínio, persistência (migração `0004_reception`) e editor da festa prontos localmente; faltam as saídas da festa e as medições, inclusive o arraste no Moto G84, adiado por decisão do usuário. API e web precisam ser publicadas juntas. Salão com medidas reais (formato pronto ou manual), mesas com N cadeiras, convidados por mesa e atrações posicionadas livremente, na mesma lista de convidados da cerimônia.
 
 ## 0013 — Infraestrutura Railway como código
 
-[ADR-0013](0013-infraestrutura-railway-como-codigo.md): aceita; validada em contêineres, provisionamento pendente. `.railway/railway.ts` substitui `railway.toml`, região US East, PostgreSQL 17, migração no pré-deploy com credencial própria e sem proxy Cloudflare na API.
+[ADR-0013](0013-infraestrutura-railway-como-codigo.md): aceita; validada em contêineres, provisionamento pendente. `.railway/railway.ts` substitui `railway.toml`, região US East, PostgreSQL 18 (era 17; revisado em 20/11/2026 para preservar o volume de produção), migração no pré-deploy com credencial própria e sem proxy Cloudflare na API.
+
+## 0014 — Link de visualização somente leitura
+
+[ADR-0014](0014-link-de-visualizacao.md): proposta para a fase 7; contratos, projeção, API, página `/ver` e painel implementados localmente; fechamento pendente; executa antes da fase 6. Links com nome, para quem não tem conta, com o modo "Com nomes" ou "Só a planta" e validade escolhidos pelo dono, revogáveis. Token HMAC no fragmento da URL e projeção mínima no servidor.
+
+## 0015 — Login com Google e exclusão de contas sem senha
+
+[ADR-0015](0015-login-com-google.md): aceita e implementada localmente; aceite hospedado pendente das credenciais OAuth. Google em destaque em `/conta`, e-mail como segunda opção, sem vinculação implícita com contas de senha e exclusão de contas só Google com login recente (10 min).
+
+## 0016 — Compartilhamento colaborativo com edição e cópia entre contas
+
+[ADR-0016](0016-compartilhamento-colaborativo-e-copia.md): aceita e implementada localmente em 21/11/2026. Estende os links de compartilhamento com os modos `edit` (edição do projeto original por conta autenticada enquanto o link estiver ativo, com `role: 'owner' | 'editor'` e controle de revisão concorrente) e `clone` (cópia independente na conta de destino, idempotente por link e usuário), resgatados com confirmação explícita em `/participar`.

@@ -1,4 +1,11 @@
-import { createUuid, projectSchema, type Project } from '@enlace/contracts';
+import {
+  createUuid,
+  projectSchema,
+  sharedViewSchema,
+  type CeremonyProject,
+  type Project,
+  type SharedView,
+} from '@enlace/contracts';
 
 export type SeatGeometry = {
   id: string;
@@ -308,4 +315,40 @@ export function getGuestSeatId(project: Project, guestId: string): string | unde
   if (!project.guests.some((guest) => guest.id === guestId))
     throw new Error('Convidado inexistente.');
   return project.assignments.find((assignment) => assignment.guestId === guestId)?.seatId;
+}
+
+/**
+ * Projeção pública de um link de visualização (ADR-0014). Monta cada campo explicitamente, sem
+ * espalhar o projeto: notas, IDs de convidados, título, `linkedCounts` e convidados sem lugar
+ * nunca saem. No modo `plan` nenhum dado de convidado sai. A ordem segue a planta, não a lista.
+ */
+export function toSharedView(project: CeremonyProject, mode: SharedView['mode']): SharedView {
+  const { layout } = project;
+  const seatOrder = layout.rows.flatMap((row) => [...row.leftSeatIds, ...row.rightSeatIds]);
+  const guestBySeat = new Map(
+    project.assignments.map((assignment) => [assignment.seatId, assignment.guestId]),
+  );
+  const guests = new Map(project.guests.map((guest) => [guest.id, guest]));
+  const base = {
+    couple: { first: project.couple.first, second: project.couple.second },
+    weddingDate: project.weddingDate,
+    layout: {
+      mode: layout.mode,
+      curveStrength: layout.curveStrength,
+      aisleWidth: layout.aisleWidth,
+      rows: layout.rows.map((row) => ({
+        id: row.id,
+        leftSeatIds: [...row.leftSeatIds],
+        rightSeatIds: [...row.rightSeatIds],
+      })),
+    },
+  };
+  const occupied = seatOrder.filter((seatId) => guestBySeat.has(seatId));
+  if (mode === 'plan') return sharedViewSchema.parse({ mode, ...base, occupiedSeatIds: occupied });
+  const seats = occupied.map((seatId) => {
+    const guest = guests.get(guestBySeat.get(seatId)!);
+    if (!guest) throw new Error('Convidado inexistente.');
+    return { seatId, name: guest.name, category: guest.category };
+  });
+  return sharedViewSchema.parse({ mode, ...base, seats });
 }

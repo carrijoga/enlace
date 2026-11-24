@@ -86,12 +86,39 @@ O transporte remoto tem schemas estritos separados no mesmo pacote; desde a fase
 
 | Operação | Entrada | Resposta |
 | --- | --- | --- |
-| `GET /api/projects` | Sessão por cookie | `{ projects: [{ id, title, revision, updatedAt }] }` |
-| `POST /api/projects` | `{ id, operationId, project }` | `{ id, revision, updatedAt, project }` |
-| `GET /api/projects/:id` | Sessão por cookie | `{ id, revision, updatedAt, project }` |
+| `GET /api/projects` | Sessão por cookie | `{ projects: [{ id, title, role, revision, updatedAt }] }` |
+| `POST /api/projects` | `{ id, operationId, project }` | `{ id, role, revision, updatedAt, project }` |
+| `GET /api/projects/:id` | Sessão por cookie | `{ id, role, revision, updatedAt, project }` |
 | `PUT /api/projects/:id` | `{ expectedRevision, operationId, project }` | `{ id, revision, updatedAt }` |
 | `DELETE /api/projects/:id` | `{ expectedRevision }` | `204` |
 
-IDs de projeto/operação são UUIDs. Revisões são inteiros positivos seguros; timestamps são ISO UTC. Campos de proprietário são recusados: a API determina a identidade pela sessão. Erros usam `{ error: código }`: `unauthenticated` (401), `not_found` (404), `revision_conflict`/`operation_reused` (409) e `invalid_request` (400). Indisponibilidade não deve ser tratada como confirmação de salvamento.
+IDs de projeto/operação são UUIDs. `role` é `'owner'` ou `'editor'`. Revisões são inteiros positivos seguros; timestamps são ISO UTC. Campos de proprietário são recusados: a API determina a identidade pela sessão. Erros usam `{ error: código }`: `unauthenticated` (401), `not_found` (404), `revision_conflict`/`operation_reused` (409) e `invalid_request` (400). Indisponibilidade não deve ser tratada como confirmação de salvamento.
 
-Exports: `createProjectRequestSchema`, `saveProjectRequestSchema`, `deleteProjectRequestSchema`, `projectSummarySchema`, `projectSnapshotSchema`, `projectListResponseSchema`, `projectWriteResponseSchema` e os tipos correspondentes. A revisão remota não entra no arquivo exportado. O recibo de repetição de PUT confirma sua revisão original; o conteúdo atual exige GET separado. Ver [ADR-0007](decisoes/0007-contas-e-salvamento-transacional.md).
+Exports: `createProjectRequestSchema`, `saveProjectRequestSchema`, `deleteProjectRequestSchema`, `projectSummarySchema`, `projectSnapshotSchema`, `projectListResponseSchema`, `projectWriteResponseSchema` e os tipos correspondentes. A revisão remota e o papel (`role`) não entram no arquivo exportado. O recibo de repetição de PUT confirma sua revisão original; o conteúdo atual exige GET separado. Ver [ADR-0007](decisoes/0007-contas-e-salvamento-transacional.md).
+
+## Links de compartilhamento (visualização, edição e cópia) — fase 7
+
+Implementados em 20–21/11/2026 os schemas, a projeção do [ADR-0014](decisoes/0014-link-de-visualizacao.md) e os modos autenticados de participação do [ADR-0016](decisoes/0016-compartilhamento-colaborativo-e-copia.md).
+
+| Schema | Forma | Regras |
+| --- | --- | --- |
+| `createShareLinkRequestSchema` | `{ label, mode, expiresInDays }` | Nome com 1–60 caracteres, não só espaços; `mode` é `names`, `plan`, `edit` ou `clone`; validade `7`, `30`, `90` ou `null` (sem prazo), sempre explícita. Campos desconhecidos, como `projectId` ou `ownerId`, são recusados. |
+| `shareLinkSchema` / `shareLinkListResponseSchema` | `{ id, label, mode, createdAt, expiresAt, token }` / `{ links }` | Visão do dono. No máximo `MAX_ACTIVE_SHARE_LINKS` (10). |
+| `sharedViewRequestSchema` | `{ token }` | Token base64url sem preenchimento, com exatamente `SHARE_TOKEN_LENGTH` (64) caracteres: 16 bytes do `linkId` mais 32 do HMAC. O formato não prova validade; a verificação é do servidor. |
+| `redeemShareLinkRequestSchema` / `redeemShareLinkResponseSchema` | `{ token, mode: 'edit' \| 'clone' }` / `{ projectId }` | Resgate autenticado de um link de edição ou cópia. |
+| `sharedViewSchema` | União por `mode` (`names` \| `plan`) | Base: `couple`, `weddingDate` e `layout` sem `linkedCounts`. `names` acrescenta `seats: [{ seatId, name, category }]`; `plan` acrescenta só `occupiedSeatIds`. Estrito: título, notas, IDs de convidado, revisão e dono são recusados. Cada cadeira citada existe na planta e aparece uma vez. |
+
+`toSharedView(project, mode)`, em `@enlace/domain`, monta a projeção a partir do agregado validado para os modos públicos (`names` e `plan`). Cada campo é copiado explicitamente, sem espalhar o projeto, e o resultado passa por `sharedViewSchema`. Só pessoas com lugar aparecem, na ordem da planta (fileira, esquerda, direita), não na ordem da lista. Os testes em `packages/domain/test/shared-view.test.ts` verificam no JSON serializado a ausência de notas, título, IDs e nomes de convidados (este último no modo `plan`) e de convidados sem lugar.
+
+### Rotas (etapa 2 e ADR-0016)
+
+| Operação | Entrada | Resposta |
+| --- | --- | --- |
+| `GET /api/projects/:id/share-links` | Sessão por cookie (dono) | `{ links: [{ id, label, mode, createdAt, expiresAt, token }] }`, só os ativos |
+| `POST /api/projects/:id/share-links` | `{ label, mode, expiresInDays }` (dono) | `201` com o link |
+| `DELETE /api/projects/:id/share-links/:linkId` | `{}` (dono; o proxy exige JSON em métodos que alteram dados) | `204`, também quando o link já estava desativado |
+| `POST /api/shared/view` | `{ token }`, sem sessão | Projeção `sharedViewSchema` (somente links `names` ou `plan`) |
+| `POST /api/shared/redeem` | `{ token, mode: 'edit' \| 'clone' }`, com sessão | `{ projectId }` (concede acesso de edição ou cria/retorna a cópia independente da conta) |
+
+Erros novos: `share_link_limit` (409) ao passar de 10 links ativos, `sharing_unavailable` (503) sem banco ou sem `SHARE_LINK_SECRET`, e `rate_limited` (429, com `Retry-After`) acima de 600 leituras por minuto num link. Na leitura pública e no resgate, token malformado, forjado, de outro segredo, de modo incompatível, desativado, vencido ou de projeto excluído dá sempre `404 { error: 'not_found' }`. Projeto de outra conta (ou em que a conta é apenas `editor`) dá 404 nas rotas de gerenciamento de links do dono. Exports: `revokeShareLinkRequestSchema`, `redeemShareLinkRequestSchema`, `redeemShareLinkResponseSchema`.
+

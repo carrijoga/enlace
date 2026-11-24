@@ -130,3 +130,67 @@ export const projectWriteReceipts = pgTable(
     foreignKey({ columns: [table.actorId], foreignColumns: [authUsers.id] }).onDelete('cascade'),
   ],
 );
+
+// ADR-0014. O token não é guardado: é derivado do id com o segredo do servidor.
+export const projectShareLinks = pgTable(
+  'project_share_links',
+  {
+    id: uuid('id').primaryKey(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    label: text('label').notNull(),
+    mode: text('mode').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  },
+  (table) => [
+    index('project_share_links_project_idx').on(table.projectId),
+    check('project_share_links_mode_check', sql`${table.mode} IN ('names','plan','edit','clone')`),
+    check(
+      'project_share_links_label_check',
+      sql`char_length(${table.label}) BETWEEN 1 AND 60 AND btrim(${table.label}) <> ''`,
+    ),
+    check(
+      'project_share_links_expiry_check',
+      sql`${table.expiresAt} IS NULL OR ${table.expiresAt} > ${table.createdAt}`,
+    ),
+  ],
+);
+
+export const projectLinkEditors = pgTable(
+  'project_link_editors',
+  {
+    linkId: uuid('link_id')
+      .notNull()
+      .references(() => projectShareLinks.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => authUsers.id, { onDelete: 'cascade' }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.linkId, table.userId] }),
+    index('project_link_editors_user_idx').on(table.userId),
+  ],
+);
+
+export const projectLinkCloneReceipts = pgTable(
+  'project_link_clone_receipts',
+  {
+    linkId: uuid('link_id')
+      .notNull()
+      .references(() => projectShareLinks.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => authUsers.id, { onDelete: 'cascade' }),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.linkId, table.userId] }),
+    index('project_link_clone_receipts_user_idx').on(table.userId),
+    unique('project_link_clone_receipts_project_unique').on(table.projectId),
+  ],
+);

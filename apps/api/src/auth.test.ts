@@ -55,6 +55,30 @@ describe('Better Auth configuration', () => {
     expect(auth.options.session?.cookieCache?.enabled).toBe(false);
   });
 
+  it('registra o Google só com as duas credenciais e não vincula implicitamente', () => {
+    const base = { ...config, authSecret: 's'.repeat(32) };
+    expect(createAuth(pool(), base)?.options.socialProviders?.google).toBeUndefined();
+    const auth = createAuth(pool(), {
+      ...base,
+      googleClientId: 'id.example',
+      googleClientSecret: 'segredo',
+    })!;
+    expect(auth.options.socialProviders?.google).toMatchObject({
+      clientId: 'id.example',
+      prompt: 'select_account',
+    });
+    expect(auth.options.account?.accountLinking).toEqual({
+      enabled: true,
+      requireLocalEmailVerified: true,
+      allowDifferentEmails: true,
+    });
+    expect(auth.options.onAPIError?.errorURL).toBe('http://localhost:5173/conta');
+    expect(auth.options.rateLimit?.customRules?.['/sign-in/social']).toEqual({
+      window: 60,
+      max: 30,
+    });
+  });
+
   it('creates no sender without complete SMTP configuration', () => {
     expect(createMailSender(config)).toBeUndefined();
     expect(createMailSender({ ...config, smtpHost: 'localhost', smtpPort: 1025 })).toBeUndefined();

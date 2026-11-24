@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
 export const MAX_PROJECT_FILE_BYTES = 2 * 1024 * 1024;
-const uuidSchema = z.uuid();
-const dateSchema = z.iso.date().refine((date) => {
+export const uuidSchema = z.uuid();
+export const dateSchema = z.iso.date().refine((date) => {
   const [year, month, day] = date.split('-').map(Number);
   const candidate = new Date(Date.UTC(year, month - 1, day));
   return (
@@ -16,7 +16,7 @@ const seatListSchema = z.array(uuidSchema).max(12);
 const rowSchema = z
   .object({ id: uuidSchema, leftSeatIds: seatListSchema, rightSeatIds: seatListSchema })
   .strict();
-const guestSchema = z
+export const guestSchema = z
   .object({
     id: uuidSchema,
     name: z
@@ -30,7 +30,7 @@ const guestSchema = z
   .strict();
 const assignmentSchema = z.object({ seatId: uuidSchema, guestId: uuidSchema }).strict();
 
-const layoutSchema = z
+export const layoutSchema = z
   .object({
     mode: z.enum(['curve', 'straight']),
     curveStrength: z.number().int().min(0).max(100),

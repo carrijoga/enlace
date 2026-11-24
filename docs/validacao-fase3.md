@@ -32,3 +32,14 @@ O passo 7 foi corrigido nesta revisão: antes a tela ficava em "Preparando seu e
 - Rascunhos da conta continuam no `localStorage` após sair (chave por usuário/projeto, inacessíveis a outra conta pela interface). Em computador compartilhado, a lista de convidados fica legível localmente. Decidir na fase 5 se sair deve limpar rascunhos sem pendências.
 - `drizzle/0001_remove_receipt_date_index.sql` estava vazio, embora a baseline 0000 crie `project_write_receipts_created_idx` e o schema Drizzle não o tenha mais. Bancos novos ficariam com um índice fora do schema. Corrigido com `DROP INDEX IF EXISTS`; `drizzle-kit generate` não aponta divergência. Bancos locais que já registraram a 0001 vazia podem executar o mesmo comando manualmente.
 - Teclado, leitores de tela e celular nas telas `/conta` e `/projetos` não foram auditados (painel do navegador oculto nesta sessão; verificação por DOM).
+
+## Retorno à página inicial e navegação da conta
+
+Em 21/11/2026, o navegador do Orca acessou a web pelo proxy local com a API real e PostgreSQL 18 descartável, usando contas fictícias.
+
+- O cadastro por e-mail abriu a lista vazia. O logotipo levou à página inicial com “Minha conta” e “Abrir meus projetos”. A recarga manteve os dois links. A saída em outra aba atualizou a raiz aberta para “Entrar”. Com a API interrompida, a raiz exibiu “Conta” e manteve o editor local acessível.
+- A criação abriu o editor com o identificador do projeto. Voltar trouxe o projeto para a lista. A renomeação atualizou o título, o painel de compartilhamento abriu, e a busca por “cerimonia” encontrou “Cerimônia no jardim” entre dois projetos.
+- Em Minha conta, uma conta com senha mostrou o perfil, a opção de conectar o Google e o gerenciamento da conta. As capturas de conta e projetos em 1280 × 900 e 390 × 844 foram revisadas. A largura de conteúdo nas duas telas móveis foi de 390 px.
+- Node 24.22.1 e pnpm 12.18.0. Check e lint passaram. A suíte passou com 196 testes, incluindo os de PostgreSQL. O build de preview no Windows passou. JavaScript inicial da raiz em produção local: 43,52 KiB gzip para o orçamento de 150 KiB. Prettier passou nos arquivos alterados e, com finais de linha automáticos, no repositório. O comando padrão no checkout Windows acusa diferenças de LF/CRLF.
+
+O retorno OAuth real, o pacote Vercel em Linux, o leitor de tela e o celular físico não foram exercitados nesta revisão.
