@@ -1,13 +1,14 @@
 import { createHash } from 'node:crypto';
 import type {
-  CeremonyProject,
   CreateProjectRequest,
+  Project,
   ProjectSnapshot,
   ProjectSummary,
   ProjectWriteResponse,
+  Reception,
   SaveProjectRequest,
 } from '@enlace/contracts';
-import { ceremonyProjectSchema } from '@enlace/contracts';
+import { projectSchema } from '@enlace/contracts';
 import type { Pool, PoolClient } from 'pg';
 
 export class ProjectStoreError extends Error {
@@ -32,7 +33,9 @@ const EDITABLE_PROJECT_IDS = `
   AND (l.expires_at IS NULL OR l.expires_at > statement_timestamp())`;
 
 const SNAPSHOT_FIELDS =
-  'id,title,couple_first,couple_second,wedding_date::text,layout,revision,updated_at';
+  'id,title,couple_first,couple_second,wedding_date::text,layout,reception,revision,updated_at';
+
+type StoredReception = Omit<Reception, 'tableAssignments'>;
 
 type SnapshotRow = {
   id: string;
@@ -40,7 +43,8 @@ type SnapshotRow = {
   couple_first: string;
   couple_second: string;
   wedding_date: string | null;
-  layout: CeremonyProject['layout'];
+  layout: Project['layout'];
+  reception: StoredReception | null;
   revision: number;
   updated_at: Date;
 };
@@ -71,8 +75,8 @@ function uuid(value: unknown): value is string {
 function checkUserId(value: unknown): asserts value is string {
   if (typeof value !== 'string' || !value.trim() || value.length > 255) failInvalid();
 }
-function projectValue(value: unknown): CeremonyProject {
-  const result = ceremonyProjectSchema.safeParse(value);
+function projectValue(value: unknown): Project {
+  const result = projectSchema.safeParse(value);
   if (!result.success) failInvalid();
   return result.data;
 }
@@ -83,11 +87,17 @@ function checkRevision(value: unknown): asserts value is number {
   if (!Number.isSafeInteger(value) || (value as number) < 1) failInvalid();
 }
 
-async function insertGuestsAndAssignments(
-  client: PoolClient,
-  projectId: string,
-  project: CeremonyProject,
-) {
+function storedReception(project: Project): StoredReception | null {
+  return (
+    project.reception && {
+      room: project.reception.room,
+      tables: project.reception.tables,
+      items: project.reception.items,
+    }
+  );
+}
+
+async function insertGuestsAndAssignments(client: PoolClient, projectId: string, project: Project) {
   await client.query(
     `INSERT INTO guests (id,project_id,name,category,note,sort_order)
      SELECT guest.id,$1,guest.name,guest.category,guest.note,guest.sort_order
@@ -110,15 +120,36 @@ async function insertGuestsAndAssignments(
       ),
     ],
   );
+  // Salão, mesas e elementos ficam no JSONB; as mesas dos convidados, em tabela relacional com
+  // chave por convidado. A ordem é preservada porque reduzir cadeiras retira os últimos.
+  const tableAssignments = project.reception?.tableAssignments ?? [];
+  await client.query(
+    `INSERT INTO table_assignments (project_id,guest_id,table_id,sort_order)
+     SELECT $1,assignment.guest_id,assignment.table_id,assignment.sort_order
+     FROM jsonb_to_recordset($2::jsonb) AS assignment(guest_id uuid,table_id uuid,sort_order integer)`,
+    [
+      projectId,
+      JSON.stringify(
+        tableAssignments.map(({ guestId, tableId }, sortOrder) => ({
+          guest_id: guestId,
+          table_id: tableId,
+          sort_order: sortOrder,
+        })),
+      ),
+    ],
+  );
 }
 
-async function replaceAggregate(client: PoolClient, projectId: string, project: CeremonyProject) {
+async function replaceAggregate(client: PoolClient, projectId: string, project: Project) {
+  await client.query('DELETE FROM table_assignments WHERE project_id = $1', [projectId]);
   await client.query('DELETE FROM seat_assignments WHERE project_id = $1', [projectId]);
   await client.query('DELETE FROM guests WHERE project_id = $1', [projectId]);
   await insertGuestsAndAssignments(client, projectId, project);
+  const reception = storedReception(project);
   await client.query(
     `UPDATE projects SET title=$2, couple_first=$3, couple_second=$4, wedding_date=$5,
-     layout_schema_version=1, layout=$6::jsonb WHERE id=$1`,
+     layout_schema_version=1, layout=$6::jsonb, reception_schema_version=$7, reception=$8::jsonb
+     WHERE id=$1`,
     [
       projectId,
       project.title,
@@ -126,6 +157,8 @@ async function replaceAggregate(client: PoolClient, projectId: string, project: 
       project.couple.second,
       project.weddingDate,
       JSON.stringify(project.layout),
+      reception ? 1 : null,
+      reception && JSON.stringify(reception),
     ],
   );
 }
@@ -148,26 +181,32 @@ async function assembleSnapshot(
   row: SnapshotRow,
   role: ProjectSnapshot['role'],
 ): Promise<ProjectSnapshot> {
-  const [guestRows, assignmentRows] = await Promise.all([
-    client.query<{
-      id: string;
-      name: string;
-      category: CeremonyProject['guests'][number]['category'];
-      note: string;
-    }>('SELECT id,name,category,note FROM guests WHERE project_id=$1 ORDER BY sort_order,id', [
-      row.id,
-    ]),
-    client.query<{ seat_id: string; guest_id: string }>(
-      'SELECT seat_id,guest_id FROM seat_assignments WHERE project_id=$1 ORDER BY seat_id',
-      [row.id],
-    ),
+  // Em sequência: uma conexão executa uma consulta por vez, e o pg 9 deixará de enfileirá-las.
+  const guestRows = await client.query<{
+    id: string;
+    name: string;
+    category: Project['guests'][number]['category'];
+    note: string;
+  }>('SELECT id,name,category,note FROM guests WHERE project_id=$1 ORDER BY sort_order,id', [
+    row.id,
   ]);
+  const assignmentRows = await client.query<{ seat_id: string; guest_id: string }>(
+    'SELECT seat_id,guest_id FROM seat_assignments WHERE project_id=$1 ORDER BY seat_id',
+    [row.id],
+  );
+  const tableRows = await client.query<{ table_id: string; guest_id: string }>(
+    'SELECT table_id,guest_id FROM table_assignments WHERE project_id=$1 ORDER BY sort_order,guest_id',
+    [row.id],
+  );
+  // Mesa atribuída sem planta da festa só surgiria de gravação fora deste módulo: falha alto.
+  if (!row.reception && tableRows.rowCount)
+    throw new Error('Atribuições de mesa sem planta da festa');
   return {
     id: row.id,
     role,
     revision: row.revision,
     updatedAt: row.updated_at.toISOString(),
-    project: ceremonyProjectSchema.parse({
+    project: projectSchema.parse({
       title: row.title,
       couple: { first: row.couple_first, second: row.couple_second },
       weddingDate: row.wedding_date,
@@ -177,6 +216,13 @@ async function assembleSnapshot(
         seatId: seat_id,
         guestId: guest_id,
       })),
+      reception: row.reception && {
+        ...row.reception,
+        tableAssignments: tableRows.rows.map(({ table_id, guest_id }) => ({
+          tableId: table_id,
+          guestId: guest_id,
+        })),
+      },
     }),
   };
 }
@@ -185,11 +231,12 @@ async function insertProjectRow(
   client: PoolClient,
   ownerId: string,
   id: string,
-  project: CeremonyProject,
+  project: Project,
 ): Promise<SnapshotRow | undefined> {
+  const reception = storedReception(project);
   const inserted = await client.query<SnapshotRow>(
-    `INSERT INTO projects (id,owner_id,title,couple_first,couple_second,wedding_date,layout,revision)
-     VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,1) ON CONFLICT (id) DO NOTHING
+    `INSERT INTO projects (id,owner_id,title,couple_first,couple_second,wedding_date,layout,reception_schema_version,reception,revision)
+     VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9::jsonb,1) ON CONFLICT (id) DO NOTHING
      RETURNING ${SNAPSHOT_FIELDS}`,
     [
       id,
@@ -199,6 +246,8 @@ async function insertProjectRow(
       project.couple.second,
       project.weddingDate,
       JSON.stringify(project.layout),
+      reception ? 1 : null,
+      reception && JSON.stringify(reception),
     ],
   );
   return inserted.rows[0];
@@ -208,7 +257,7 @@ export async function insertProjectCopy(
   client: PoolClient,
   ownerId: string,
   id: string,
-  project: CeremonyProject,
+  project: Project,
 ): Promise<ProjectSnapshot> {
   checkUserId(ownerId);
   checkUuid(id);

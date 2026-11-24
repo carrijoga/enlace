@@ -42,7 +42,7 @@ Não decididos: recursos na Railway, orçamento, transporte de e-mail, versões 
 
 ## 0012 — Planta da festa
 
-[ADR-0012](0012-planta-da-festa.md): proposta para a fase 6, não implementada. Salão com medidas reais (formato pronto ou manual), mesas com N cadeiras, convidados por mesa e atrações posicionadas livremente, na mesma lista de convidados da cerimônia.
+[ADR-0012](0012-planta-da-festa.md): em implementação na fase 6; contrato v2, domínio, persistência (migração `0004_reception`) e editor da festa prontos localmente; faltam as saídas da festa e as medições, inclusive o arraste no Moto G84, adiado por decisão do usuário. API e web precisam ser publicadas juntas. Salão com medidas reais (formato pronto ou manual), mesas com N cadeiras, convidados por mesa e atrações posicionadas livremente, na mesma lista de convidados da cerimônia.
 
 ## 0013 — Infraestrutura Railway como código
 

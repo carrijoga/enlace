@@ -1,6 +1,6 @@
 # Modelo de dados
 
-Atualizado em 08/11/2026. Fase 3 em integração local: schema Drizzle, migrações SQL, Better Auth e serviço transacional PostgreSQL implementados. O formato portátil JSON v1 permanece o mesmo. Ver [ADR-0007](decisoes/0007-contas-e-salvamento-transacional.md), [arquitetura](arquitetura.md) e [validação fase 3](validacao-fase3.md).
+Atualizado em 23/11/2026. Fase 3 em integração local: schema Drizzle, migrações SQL, Better Auth e serviço transacional PostgreSQL implementados. Fase 6, etapa 3: planta da festa persistida (migração `0004_reception`) e formato portátil v2 ([ADR-0012](decisoes/0012-planta-da-festa.md)). Ver [ADR-0007](decisoes/0007-contas-e-salvamento-transacional.md), [arquitetura](arquitetura.md) e [validação fase 3](validacao-fase3.md).
 
 PostgreSQL fica exclusivo ao backend. A interface usa o proxy same-origin; proprietário e sessão são determinados na API. Tabelas de autenticação seguem Better Auth: `user`, `session`, `account`, `verification` e `rateLimit`, com IDs textuais. Schema em `apps/api/src/auth-schema.ts` e `apps/api/src/db/schema.ts`; serviço em `apps/api/src/projects/store.ts`.
 
@@ -11,9 +11,10 @@ Um projeto reúne metadados do casamento, planta, convidados e atribuições. É
 | Entidade | Campos principais | Observações |
 | --- | --- | --- |
 | Identidade e sessão | Entidades da biblioteca Better Auth | Esquema revisado com a biblioteca; sem hashes/tokens próprios. O ID pode ser string e não é presumido UUID. |
-| `projects` | `id`, `owner_id`, `title`, `couple_first`, `couple_second`, `wedding_date`, `layout_schema_version`, `layout`, `revision`, `created_at`, `updated_at` | ID do projeto UUID; `owner_id` referencia o usuário da biblioteca com tipo compatível. Data do casamento sem fuso, timestamps em UTC. `revision` inteira positiva, incrementada pela transação de escrita. |
+| `projects` | `id`, `owner_id`, `title`, `couple_first`, `couple_second`, `wedding_date`, `layout_schema_version`, `layout`, `reception_schema_version`, `reception`, `revision`, `created_at`, `updated_at` | ID do projeto UUID; `owner_id` referencia o usuário da biblioteca com tipo compatível. Data do casamento sem fuso, timestamps em UTC. `revision` inteira positiva, incrementada pela transação de escrita. `reception` (JSONB) e sua versão são ambos nulos ou ambos preenchidos (`CHECK`). |
 | `guests` | `id`, `project_id`, `name`, `category`, `note`, `sort_order` | Nome não é único. Categorias iniciais preservam família, padrinho, madrinha, pajem e convidado. Notas são privadas. |
 | `seat_assignments` | `project_id`, `seat_id`, `guest_id` | No máximo um convidado por cadeira e uma cadeira por convidado no projeto. |
+| `table_assignments` | `project_id`, `guest_id`, `table_id`, `sort_order` | Mesa da festa de cada convidado: chave `(project_id, guest_id)`, uma mesa por convidado; FK composta para `guests` com cascata. `sort_order` preserva a ordem de atribuição, usada ao reduzir cadeiras. Índice por `(project_id, table_id)`. |
 | `project_write_receipts` | `project_id`, `operation_id`, `actor_id`, `request_hash`, `result_revision`, `created_at` | Recibo técnico de idempotência; não é histórico de conteúdo. `actor_id` tem o mesmo tipo do ID autenticado. |
 
 `projects.layout` é JSONB com a estrutura geométrica: formato, curvatura, largura do corredor, preferência de edição vinculada, fileiras e suas cadeiras. Fileiras e cadeiras possuem UUIDs estáveis; índices de exibição não são identidade. Cada cadeira tem lado e ordem dentro da fileira. Corredor e altar têm posições calculadas a partir dos parâmetros no primeiro editor; objetos livres não entram implicitamente no contrato.
@@ -22,7 +23,7 @@ As listas de cadeiras são a fonte da quantidade por lado. Não persistir també
 
 ### Fonte de verdade e integridade
 
-- A planta persistida existe em `projects.layout`; não duplicar convidados ou atribuições dentro desse JSONB.
+- A planta persistida existe em `projects.layout`; não duplicar convidados ou atribuições dentro desse JSONB. A festa segue o mesmo padrão: salão, mesas e elementos em `projects.reception`, mesas dos convidados só em `table_assignments`. Como a mesa vive no JSONB, sua existência é validada pelo contrato antes do commit, igual às cadeiras. Excluir convidado remove a cadeira e a mesa dele.
 - A lista de pessoas autoritativa existe em `guests`; ocupação autoritativa existe em `seat_assignments`.
 - Um snapshot de leitura ou arquivo JSON combina essas partes por conveniência. O snapshot não é uma segunda cópia gravada separadamente no banco.
 - Criar restrições únicas para `(project_id, seat_id)` e `(project_id, guest_id)` em atribuições. A referência composta `(project_id, guest_id)` deve apontar a uma chave única de `guests` no mesmo projeto, impedindo referências entre projetos. Convidados e recibos também referenciam um projeto existente; a exclusão autorizada do projeto remove seus dependentes.
@@ -70,11 +71,11 @@ Os recibos precisam de retenção definida antes de liberar sincronização; sug
 
 ## Documento JSON portátil
 
-O formato implementado em `packages/contracts` começa em `schemaVersion: 1`, separado da `revision` do banco e do `version: 3` legado. `projectDocumentSchema` e `ceremonyProjectSchema` definem o envelope/nomes, limites, UUIDs, enums, datas reais e referências de cadeira/convidado. `parseProjectFile` valida JSON v1 e encaminha v3 ao adaptador explícito. Compile contracts antes dos consumidores (`dist` é o export de runtime). A API persiste o agregado validado; o envelope portátil não entra no banco.
+O formato atual em `packages/contracts` é `schemaVersion: 2` (v1 mais `project.reception`, obrigatório e anulável), separado da `revision` do banco e do `version: 3` legado. `projectDocumentSchema` e `projectSchema` definem o envelope/nomes, limites, UUIDs, enums, datas reais e referências de cadeira, mesa e convidado. `parseProjectFile` valida v2 e migra v1 e v3 com `reception: null`. Compile contracts antes dos consumidores (`dist` é o export de runtime). A API persiste o agregado validado; o envelope portátil não entra no banco.
 
 | Incluído no arquivo | Excluído do arquivo |
 | --- | --- |
-| Título, casal e data; parâmetros, fileiras e cadeiras; convidados e atribuições; IDs necessários às referências internas | Sessão, tokens, senha, proprietário da conta, permissões, recibos, URLs privadas e estado de sincronização |
+| Título, casal e data; parâmetros, fileiras e cadeiras; convidados e atribuições; planta da festa e mesas dos convidados; IDs necessários às referências internas | Sessão, tokens, senha, proprietário da conta, permissões, recibos, URLs privadas e estado de sincronização |
 
 O arquivo inclui dados pessoais dos convidados por ser um backup do projeto; a interface deve deixar isso claro no momento de exportar. Estados temporários de UI e histórico de desfazer ficam de fora.
 

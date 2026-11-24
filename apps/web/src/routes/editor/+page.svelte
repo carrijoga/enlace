@@ -9,7 +9,7 @@
     projectWriteResponseSchema,
     type ProjectSnapshot,
     type SaveProjectRequest,
-    type CeremonyProject,
+    type Project,
   } from '@enlace/contracts';
   import {
     createInitialProject,
@@ -49,11 +49,11 @@
     writesBlocked,
   } from '../../lib/editor/remote-sync';
 
-  type ProjectAction = (current: CeremonyProject) => CeremonyProject;
+  type ProjectAction = (current: Project) => Project;
   // Comandos de domínio substituem snapshots imutáveis: não observar cada campo.
-  let project = $state.raw<CeremonyProject | null>(null);
-  let past = $state.raw<CeremonyProject[]>([]);
-  let future = $state.raw<CeremonyProject[]>([]);
+  let project = $state.raw<Project | null>(null);
+  let past = $state.raw<Project[]>([]);
+  let future = $state.raw<Project[]>([]);
   let selectedGuestId = $state<string | null>(null);
   let selectedSeatId = $state<string | null>(null);
   let mobilePanel = $state<'structure' | 'guests'>('structure');
@@ -65,6 +65,12 @@
     null,
   );
   let csvTrigger: HTMLButtonElement | null = null;
+  // A festa carrega sob demanda (ADR-0012): nada dela entra no JavaScript inicial da cerimônia.
+  const VIEW_KEY = 'enlace:editor-view:v1';
+  let view = $state<'ceremony' | 'reception'>('ceremony');
+  let receptionEditor = $state<
+    typeof import('../../lib/editor/reception/ReceptionEditor.svelte').default | null
+  >(null);
   let shareDialog = $state<typeof import('../../lib/share/ShareDialog.svelte').default | null>(
     null,
   );
@@ -80,7 +86,7 @@
   let exportMenu: HTMLDetailsElement;
   let planCanvas = $state<PlanCanvas | null>(null);
   let confirmation = $state.raw<{
-    next: CeremonyProject;
+    next: Project;
     title: string;
     detail: string;
     replaceCorrupt?: boolean;
@@ -178,7 +184,7 @@
       writesBlocked(status)
     )
       return;
-    const request = selectWriteRequest<CeremonyProject>(retryRequest, () => ({
+    const request = selectWriteRequest<Project>(retryRequest, () => ({
       expectedRevision: revision!,
       operationId: createUuid(),
       project: project!,
@@ -458,7 +464,7 @@
         }))
     );
   }
-  function sameProject(a: CeremonyProject, b: CeremonyProject) {
+  function sameProject(a: Project, b: Project) {
     return (
       a === b ||
       (a.title === b.title &&
@@ -466,6 +472,8 @@
         a.couple.first === b.couple.first &&
         a.couple.second === b.couple.second &&
         (a.layout === b.layout || JSON.stringify(a.layout) === JSON.stringify(b.layout)) &&
+        (a.reception === b.reception ||
+          JSON.stringify(a.reception) === JSON.stringify(b.reception)) &&
         sameItems(a.guests, b.guests) &&
         sameItems(a.assignments, b.assignments))
     );
@@ -477,7 +485,7 @@
       }),
     );
   }
-  function apply(next: CeremonyProject, text = '', start = performance.now()) {
+  function apply(next: Project, text = '', start = performance.now()) {
     if (project) past = [...past.slice(-34), project];
     project = next;
     future = [];
@@ -486,7 +494,7 @@
     if (text) announce(text);
     recordFrame(start);
   }
-  function ask(next: CeremonyProject, title: string, detail: string) {
+  function ask(next: Project, title: string, detail: string) {
     confirmation = { next, title, detail };
     void tick().then(() => confirmDialog.showModal());
   }
@@ -521,6 +529,42 @@
         true,
       );
       return false;
+    }
+  }
+  /** Confirmação para comandos da festa: calcula o resultado antes de perguntar. */
+  function confirmAction(action: ProjectAction, title: string, detail: string) {
+    if (!project) return;
+    if (accountDraftCorrupt) {
+      mutate(action);
+      return;
+    }
+    try {
+      ask(action(project), title, detail);
+    } catch (error) {
+      announce(
+        error instanceof Error && !('issues' in error)
+          ? error.message
+          : 'Confira os dados: nomes, limites e medidas precisam ser válidos.',
+        true,
+      );
+    }
+  }
+  async function showView(next: 'ceremony' | 'reception') {
+    if (next === 'reception' && !receptionEditor) {
+      try {
+        receptionEditor = (await import('../../lib/editor/reception/ReceptionEditor.svelte'))
+          .default;
+      } catch {
+        announce('Não foi possível abrir a festa. Verifique a conexão e tente novamente.', true);
+        return;
+      }
+    }
+    view = next;
+    try {
+      // Só a escolha da aba, nesta aba do navegador: recarregar volta para a mesma planta.
+      sessionStorage.setItem(VIEW_KEY, next);
+    } catch {
+      /* Sem armazenamento, a escolha vale até recarregar. */
     }
   }
   function undo() {
@@ -573,7 +617,7 @@
     if (ok) selectGuest(guest.id);
     return ok;
   }
-  function replaceProject(next: CeremonyProject, title: string) {
+  function replaceProject(next: Project, title: string) {
     if (accountDraftCorrupt) {
       announce(
         'Recupere o rascunho ou escolha a versão da conta antes de substituir o planejamento.',
@@ -616,7 +660,7 @@
     csvDialog = null;
     void tick().then(() => csvTrigger?.focus());
   }
-  function importGuests(guests: CeremonyProject['guests']): boolean {
+  function importGuests(guests: Project['guests']): boolean {
     return mutate(
       (p) => addGuests(p, guests),
       `${guests.length} ${guests.length === 1 ? 'convidado adicionado' : 'convidados adicionados'} pelo CSV. Você pode desfazer.`,
@@ -704,6 +748,11 @@
   }
   onMount(() => {
     void initializeEditor();
+    try {
+      if (sessionStorage.getItem(VIEW_KEY) === 'reception') void showView('reception');
+    } catch {
+      /* Abre na cerimônia. */
+    }
     if (matchMedia('(max-width: 900px)').matches) zoom = 1;
     window.addEventListener('keydown', keyboard);
     window.addEventListener('pagehide', saveNow);
@@ -726,7 +775,10 @@
 >
 
 <div class="editor-page" class:dense-plan={total > SEAT_MOTION_LIMIT}>
-  {#if project && geometry}<a class="skip-link" href="#planta">Pular para a planta</a>{/if}
+  {#if project && geometry}<a
+      class="skip-link"
+      href={view === 'reception' ? '#planta-festa' : '#planta'}>Pular para a planta</a
+    >{/if}
   <header class="editor-header">
     <a href={resolve('/')} class="editor-brand" aria-label="Enlace, voltar à página inicial"
       ><svg viewBox="0 0 36 36" aria-hidden="true"
@@ -766,6 +818,13 @@
                     : 'Não foi possível salvar neste navegador'}</span
       >
     </div>
+    {#if project}<div class="view-switch" role="group" aria-label="Planta">
+        <button aria-pressed={view === 'ceremony'} onclick={() => showView('ceremony')}
+          >Cerimônia</button
+        ><button aria-pressed={view === 'reception'} onclick={() => showView('reception')}
+          >Festa</button
+        >
+      </div>{/if}
     <nav class="account-tools" aria-label="Conta e projetos">
       <a href={resolve('/projetos')}>Meus projetos</a>
     </nav>
@@ -895,7 +954,10 @@
     </div>
   {/if}
 
-  {#if project && geometry}
+  {#if project && view === 'reception' && receptionEditor}
+    {@const Reception = receptionEditor}
+    <Reception {project} mutate={(action, text) => mutate(action, text)} confirm={confirmAction} />
+  {:else if project && geometry}
     <div class="editor-workspace">
       <aside
         class:mobile-hidden={mobilePanel !== 'structure'}
@@ -1357,6 +1419,30 @@
   .editor-button.primary {
     background: #295842;
     color: white;
+  }
+  .view-switch {
+    display: flex;
+    border: 1px solid #dfe3da;
+    border-radius: 9px;
+    padding: 3px;
+    background: #f7f8f3;
+    flex-shrink: 0;
+  }
+  .view-switch button {
+    border: 0;
+    background: transparent;
+    color: #626e63;
+    padding: 7px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    min-height: 32px;
+    cursor: pointer;
+  }
+  .view-switch button[aria-pressed='true'] {
+    background: #fffefb;
+    color: #295842;
+    font-weight: 650;
+    box-shadow: 0 1px 2px rgb(39 52 44 / 0.12);
   }
   .editor-workspace {
     flex: 1;

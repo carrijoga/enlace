@@ -8,6 +8,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./reception": {
+      "types": "./dist/reception.d.ts",
+      "import": "./dist/reception.js",
+      "default": "./dist/reception.js"
     }
   },
   "scripts": {

@@ -15,7 +15,7 @@
     projectSnapshotSchema,
     projectWriteResponseSchema,
     type CreateProjectRequest,
-    type CeremonyProject,
+    type Project,
     type ProjectSummary,
   } from '@enlace/contracts';
   import { readSession, type AccountSession } from '../../lib/account/client';
@@ -181,7 +181,7 @@
       }
       if (!createRequest) {
         const document = createDemoDocument();
-        const project: CeremonyProject = { ...document.project, title: 'Meu projeto' };
+        const project: Project = { ...document.project, title: 'Meu projeto' };
         createRequest = { id: createUuid(), operationId: createUuid(), project };
         try {
           window.localStorage.setItem(key, JSON.stringify(createRequest));
@@ -226,7 +226,7 @@
       if (!session) throw new Error('Entre na sua conta para importar um projeto.');
       if (file.size > MAX_PROJECT_FILE_BYTES)
         throw new Error('O arquivo excede o limite de 2 MiB e não foi importado.');
-      let imported: CeremonyProject;
+      let imported: Project;
       try {
         imported = parseProjectFile(await file.text()).project;
       } catch {

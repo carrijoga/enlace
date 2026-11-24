@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { createUuid, type CeremonyProject } from '@enlace/contracts';
+  import { createUuid, type Project } from '@enlace/contracts';
   import { getSeatLabels } from '@enlace/domain';
   import { GUEST_CATEGORIES, GUEST_CATEGORY_OPTIONS, type GuestCategory } from './guest-categories';
 
-  type Guest = CeremonyProject['guests'][number];
+  type Guest = Project['guests'][number];
   type GuestInput = { id: string; name: string; category: GuestCategory; note: string };
   type GuestPatch = { name: string; category: GuestCategory; note: string };
 
@@ -19,7 +19,7 @@
     onUnassignSeat,
     onImportCsv,
   }: {
-    project: CeremonyProject;
+    project: Project;
     selectedGuestId: string | null;
     selectedSeatId: string | null;
     onSelectGuest: (id: string | null) => void;

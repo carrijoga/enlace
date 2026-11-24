@@ -146,6 +146,17 @@ describe.skipIf(!databaseUrl)('API integrada com sessões reais e PostgreSQL', (
         )
       ).status,
     ).toBe(403);
+    // Cliente anterior ao v2 não manda `reception`: recusar evita apagar a festa em silêncio.
+    const withoutReception = Object.fromEntries(
+      Object.entries(project).filter(([key]) => key !== 'reception'),
+    );
+    const legacySave = await request(`/api/projects/${id}`, 'PUT', cookieA, {
+      expectedRevision: 1,
+      operationId: randomUUID(),
+      project: withoutReception,
+    });
+    expect(legacySave.status).toBe(400);
+    expect(await legacySave.json()).toEqual({ error: 'invalid_request' });
   });
   it('detecta duas escritas simultâneas e repete uma confirmação perdida sem incrementar de novo', async () => {
     const operationId = randomUUID();
@@ -233,12 +244,40 @@ describe.skipIf(!databaseUrl)('API integrada com sessões reais e PostgreSQL', (
     const activeCookieB = cookies(loginB);
     const guestId = randomUUID();
     const seatId = project.layout.rows[0]!.leftSeatIds[0]!;
+    const tableId = randomUUID();
     const projectWithGuest = {
       ...project,
       guests: [
         { id: guestId, name: 'Convidada fictícia', category: 'convidado' as const, note: '' },
       ],
       assignments: [{ seatId, guestId }],
+      reception: {
+        room: {
+          outline: [
+            { x: 0, y: 0 },
+            { x: 1500, y: 0 },
+            { x: 1500, y: 1000 },
+            { x: 0, y: 1000 },
+          ],
+          doors: [],
+          columns: [],
+        },
+        tables: [
+          {
+            id: tableId,
+            name: 'Mesa 1',
+            shape: 'round' as const,
+            x: 500,
+            y: 500,
+            rotation: 0,
+            width: 150,
+            depth: 150,
+            seats: 8,
+          },
+        ],
+        items: [],
+        tableAssignments: [{ tableId, guestId }],
+      },
     };
     const beforeDelete = projectSnapshotSchema.parse(
       await (await request(`/api/projects/${id}`, 'GET', activeCookieA)).json(),
@@ -282,6 +321,10 @@ describe.skipIf(!databaseUrl)('API integrada com sessões reais e PostgreSQL', (
     expect((await pool.query('SELECT id FROM guests WHERE project_id=$1', [id])).rowCount).toBe(0);
     expect(
       (await pool.query('SELECT project_id FROM seat_assignments WHERE project_id=$1', [id]))
+        .rowCount,
+    ).toBe(0);
+    expect(
+      (await pool.query('SELECT project_id FROM table_assignments WHERE project_id=$1', [id]))
         .rowCount,
     ).toBe(0);
     expect(

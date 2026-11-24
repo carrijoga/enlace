@@ -1,8 +1,9 @@
 import {
-  ceremonyProjectSchema,
   createUuid,
+  projectSchema,
   sharedViewSchema,
   type CeremonyProject,
+  type Project,
   type SharedView,
 } from '@enlace/contracts';
 
@@ -31,8 +32,8 @@ const uuid = createUuid;
 // cópia profunda, e a cópia faria a interface tratar todos os convidados/fileiras como novos a
 // cada comando. Os comandos montam objetos novos só nos trechos alterados (compartilhamento
 // estrutural). Entradas externas continuam passando por parse completo nos contratos.
-const validate = (project: CeremonyProject): CeremonyProject => {
-  ceremonyProjectSchema.parse(project);
+const validate = (project: Project): Project => {
+  projectSchema.parse(project);
   return project;
 };
 const emptyRows = () =>
@@ -42,7 +43,7 @@ const emptyRows = () =>
     rightSeatIds: Array.from({ length: 11 - left }, uuid),
   }));
 
-export function createInitialProject(): CeremonyProject {
+export function createInitialProject(): Project {
   return validate({
     title: 'Minha cerimônia',
     couple: { first: '', second: '' },
@@ -56,12 +57,13 @@ export function createInitialProject(): CeremonyProject {
     },
     guests: [],
     assignments: [],
+    reception: null,
   });
 }
 
-export function createSampleProject(): CeremonyProject {
+export function createSampleProject(): Project {
   const project = createInitialProject();
-  const guests: CeremonyProject['guests'] = [
+  const guests: Project['guests'] = [
     ['Camila Duarte', 'familia'],
     ['Rafael Duarte', 'familia'],
     ['Joana Reis', 'familia'],
@@ -75,7 +77,7 @@ export function createSampleProject(): CeremonyProject {
   ].map(([name, category]) => ({
     id: uuid(),
     name: name!,
-    category: category as CeremonyProject['guests'][number]['category'],
+    category: category as Project['guests'][number]['category'],
     note: '',
   }));
   return validate({
@@ -90,9 +92,9 @@ export function createSampleProject(): CeremonyProject {
 }
 
 export function setProjectDetails(
-  project: CeremonyProject,
-  patch: Partial<Pick<CeremonyProject, 'title' | 'couple' | 'weddingDate'>>,
-): CeremonyProject {
+  project: Project,
+  patch: Partial<Pick<Project, 'title' | 'couple' | 'weddingDate'>>,
+): Project {
   return validate({
     ...project,
     ...patch,
@@ -101,15 +103,13 @@ export function setProjectDetails(
 }
 
 export function setLayout(
-  project: CeremonyProject,
-  patch: Partial<
-    Pick<CeremonyProject['layout'], 'mode' | 'curveStrength' | 'aisleWidth' | 'linkedCounts'>
-  >,
-): CeremonyProject {
+  project: Project,
+  patch: Partial<Pick<Project['layout'], 'mode' | 'curveStrength' | 'aisleWidth' | 'linkedCounts'>>,
+): Project {
   return validate({ ...project, layout: { ...project.layout, ...patch } });
 }
 
-export function addRow(project: CeremonyProject): CeremonyProject {
+export function addRow(project: Project): Project {
   if (project.layout.rows.length >= 12) throw new Error('Limite de 12 fileiras atingido.');
   const previous = project.layout.rows.at(-1)!;
   const left = Math.min(12, previous.leftSeatIds.length + 1);
@@ -125,7 +125,7 @@ export function addRow(project: CeremonyProject): CeremonyProject {
   });
 }
 
-export function removeRow(project: CeremonyProject, rowId: string): CeremonyProject {
+export function removeRow(project: Project, rowId: string): Project {
   const row = project.layout.rows.find((candidate) => candidate.id === rowId);
   if (!row) throw new Error('Fileira inexistente.');
   if (project.layout.rows.length === 1)
@@ -142,11 +142,11 @@ export function removeRow(project: CeremonyProject, rowId: string): CeremonyProj
 }
 
 export function setRowCount(
-  project: CeremonyProject,
+  project: Project,
   rowId: string,
   side: 'left' | 'right',
   count: number,
-): CeremonyProject {
+): Project {
   if (side !== 'left' && side !== 'right') throw new Error('Lado inválido.');
   if (!Number.isInteger(count) || count < 0 || count > 12)
     throw new Error('Contagem deve ser um inteiro entre 0 e 12.');
@@ -174,17 +174,11 @@ export function setRowCount(
   });
 }
 
-export function addGuest(
-  project: CeremonyProject,
-  guest: CeremonyProject['guests'][number],
-): CeremonyProject {
+export function addGuest(project: Project, guest: Project['guests'][number]): Project {
   return validate({ ...project, guests: [...project.guests, guest] });
 }
 /** Acrescenta um lote de convidados numa única alteração, sem mexer na planta nem atribuir lugares. */
-export function addGuests(
-  project: CeremonyProject,
-  guests: CeremonyProject['guests'],
-): CeremonyProject {
+export function addGuests(project: Project, guests: Project['guests']): Project {
   if (!guests.length) return project;
   if (project.guests.length + guests.length > 300)
     throw new Error(
@@ -193,10 +187,10 @@ export function addGuests(
   return validate({ ...project, guests: [...project.guests, ...guests] });
 }
 export function updateGuest(
-  project: CeremonyProject,
+  project: Project,
   guestId: string,
-  patch: Partial<Omit<CeremonyProject['guests'][number], 'id'>>,
-): CeremonyProject {
+  patch: Partial<Omit<Project['guests'][number], 'id'>>,
+): Project {
   if (!project.guests.some((guest) => guest.id === guestId))
     throw new Error('Convidado inexistente.');
   return validate({
@@ -204,20 +198,25 @@ export function updateGuest(
     guests: project.guests.map((guest) => (guest.id === guestId ? { ...guest, ...patch } : guest)),
   });
 }
-export function removeGuest(project: CeremonyProject, guestId: string): CeremonyProject {
+/** Remove o convidado do projeto: da lista, da cadeira da cerimônia e da mesa da festa. */
+export function removeGuest(project: Project, guestId: string): Project {
   if (!project.guests.some((guest) => guest.id === guestId))
     throw new Error('Convidado inexistente.');
+  const { reception } = project;
   return validate({
     ...project,
     guests: project.guests.filter((guest) => guest.id !== guestId),
     assignments: project.assignments.filter((a) => a.guestId !== guestId),
+    reception:
+      reception && reception.tableAssignments.some((a) => a.guestId === guestId)
+        ? {
+            ...reception,
+            tableAssignments: reception.tableAssignments.filter((a) => a.guestId !== guestId),
+          }
+        : reception,
   });
 }
-export function assignGuest(
-  project: CeremonyProject,
-  guestId: string,
-  seatId: string,
-): CeremonyProject {
+export function assignGuest(project: Project, guestId: string, seatId: string): Project {
   if (!project.guests.some((guest) => guest.id === guestId))
     throw new Error('Convidado inexistente.');
   const seatIds = new Set(
@@ -232,7 +231,7 @@ export function assignGuest(
     assignments = [...assignments, { seatId: guestSeat, guestId: seatGuest }];
   return validate({ ...project, assignments: [...assignments, { seatId, guestId }] });
 }
-export function unassignSeat(project: CeremonyProject, seatId: string): CeremonyProject {
+export function unassignSeat(project: Project, seatId: string): Project {
   const seats = project.layout.rows.flatMap((row) => [...row.leftSeatIds, ...row.rightSeatIds]);
   if (!seats.includes(seatId)) throw new Error('Cadeira inexistente.');
   return validate({
@@ -241,7 +240,7 @@ export function unassignSeat(project: CeremonyProject, seatId: string): Ceremony
   });
 }
 
-export function getLayoutGeometry(layout: CeremonyProject['layout']): LayoutGeometry {
+export function getLayoutGeometry(layout: Project['layout']): LayoutGeometry {
   const corridorHalf = 35 * layout.aisleWidth;
   const firstX = corridorHalf + 42;
   const maxSide = Math.max(
@@ -289,7 +288,7 @@ export function getLayoutGeometry(layout: CeremonyProject['layout']): LayoutGeom
 }
 
 /** Rótulos de todas as cadeiras, calculados uma vez por planta (evita busca linear por cadeira). */
-export function getSeatLabels(layout: CeremonyProject['layout']): Map<string, string> {
+export function getSeatLabels(layout: Project['layout']): Map<string, string> {
   const labels = new Map<string, string>();
   layout.rows.forEach((row, rowIndex) => {
     row.leftSeatIds.forEach((id, index) =>
@@ -302,7 +301,7 @@ export function getSeatLabels(layout: CeremonyProject['layout']): Map<string, st
   return labels;
 }
 
-export function getSeatLabel(project: CeremonyProject, seatId: string): string {
+export function getSeatLabel(project: Project, seatId: string): string {
   for (let rowIndex = 0; rowIndex < project.layout.rows.length; rowIndex++) {
     const row = project.layout.rows[rowIndex]!;
     const leftIndex = row.leftSeatIds.indexOf(seatId);
@@ -312,7 +311,7 @@ export function getSeatLabel(project: CeremonyProject, seatId: string): string {
   }
   throw new Error('Cadeira inexistente.');
 }
-export function getGuestSeatId(project: CeremonyProject, guestId: string): string | undefined {
+export function getGuestSeatId(project: Project, guestId: string): string | undefined {
   if (!project.guests.some((guest) => guest.id === guestId))
     throw new Error('Convidado inexistente.');
   return project.assignments.find((assignment) => assignment.guestId === guestId)?.seatId;

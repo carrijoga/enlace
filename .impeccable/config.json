@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "cream-palette",
+        "value": "*",
+        "files": [
+          "scripts/bench-drag.html"
+        ],
+        "createdAt": "2026-11-09T21:37:10.036Z",
+        "reason": "agent triage: disposable performance rehearsal page in scripts/, never shipped or part of the product UI"
+      }
+    ]
+  }
+}

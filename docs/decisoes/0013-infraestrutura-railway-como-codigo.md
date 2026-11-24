@@ -35,7 +35,6 @@ Migrações, roles restritas, `/health` e `/ready` funcionam em 18.6 pelo domín
 Decisão do usuário. O volume de produção foi inicializado com PostgreSQL 18, a imagem padrão do SDK, e recebeu contas e projetos. Depois, um `railway config apply` com a imagem fixada em 17 fez o banco travar na inicialização ("the data directory holds major version 18"): a troca de imagem não converte os arquivos, e o PostgreSQL não abre dados de uma versão maior mais nova. Para preservar os dados, a imagem passou a `postgres-ssl:18`, e Compose e CI foram para `postgres:18-alpine`. O Compose usa um volume novo, `enlace_postgres18_data`, montado em `/var/lib/postgresql`, que é o caminho da imagem 18. O volume local antigo (`enlace_postgres_data`, com dados de desenvolvimento da 17) não é apagado nem montado. Backups e o ensaio de restauração passam a exigir `pg_dump`/`pg_restore` 18.
 
 Regra que fica: nunca reduzir a versão maior da imagem de um banco com dados. Subir de versão exige o procedimento de atualização da Railway ou dump e restauração, planejados à parte.
-
 ## Referências
 
 - [Railway: Infrastructure as Code](https://docs.railway.com/infrastructure-as-code).

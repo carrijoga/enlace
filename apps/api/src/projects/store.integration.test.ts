@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { setTimeout } from 'node:timers/promises';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Pool } from 'pg';
+import type { Project } from '@enlace/contracts';
 import { createProjectStore, insertProjectCopy, readSnapshot, transaction } from './store.js';
 import { migrate } from '../db/migrate.js';
 
@@ -16,8 +17,7 @@ const seatId = '1a2b3c4d-4444-4444-8444-444444444444';
 const guestId = '1a2b3c4d-5555-4555-8555-555555555555';
 const ownerId = 'integration-owner';
 const foreignOwnerId = 'integration-other';
-const linkMigrations = ['0002_share_links.sql', '0003_project_link_redemptions.sql'];
-const project = {
+const project: Project = {
   title: 'Cerimônia de teste',
   couple: { first: 'Lia', second: 'Noah' },
   weddingDate: null,
@@ -30,6 +30,66 @@ const project = {
   },
   guests: [{ id: guestId, name: 'Convidada fictícia', category: 'convidado' as const, note: '' }],
   assignments: [{ seatId, guestId }],
+  reception: null,
+};
+const secondGuestId = '1a2b3c4d-5555-4555-8555-555555555556';
+const tableA = '1a2b3c4d-7a7a-4a7a-8a7a-7a7a7a7a7a7a';
+const tableB = '1a2b3c4d-7b7b-4b7b-8b7b-7b7b7b7b7b7b';
+const table = (id: string, name: string, x: number) => ({
+  id,
+  name,
+  shape: 'round' as const,
+  x,
+  y: 400,
+  rotation: 0,
+  width: 150,
+  depth: 150,
+  seats: 8,
+});
+/** Festa fictícia: duas mesas, um elemento, uma porta e atribuições fora da ordem dos IDs. */
+const withParty: Project = {
+  ...project,
+  guests: [
+    ...project.guests,
+    { id: secondGuestId, name: 'Convidado fictício', category: 'familia', note: '' },
+  ],
+  reception: {
+    room: {
+      outline: [
+        { x: 0, y: 0 },
+        { x: 2000, y: 0 },
+        { x: 2000, y: 1000 },
+        { x: 0, y: 1000 },
+      ],
+      doors: [
+        {
+          id: '1a2b3c4d-8d8d-4d8d-8d8d-8d8d8d8d8d8d',
+          wall: 0,
+          offset: 100,
+          width: 120,
+          opening: 'outward',
+        },
+      ],
+      columns: [],
+    },
+    tables: [table(tableA, 'Mesa 1', 400), table(tableB, 'Mesa 2', 800)],
+    items: [
+      {
+        id: '1a2b3c4d-8e8e-4e8e-8e8e-8e8e8e8e8e8e',
+        kind: 'dj',
+        name: 'DJ e som',
+        x: 1500,
+        y: 100,
+        rotation: 0,
+        width: 200,
+        depth: 80,
+      },
+    ],
+    tableAssignments: [
+      { tableId: tableB, guestId: secondGuestId },
+      { tableId: tableA, guestId },
+    ],
+  },
 };
 
 suite('PostgreSQL project store (opt-in isolated schema)', () => {
@@ -45,10 +105,12 @@ suite('PostgreSQL project store (opt-in isolated schema)', () => {
     admin = new Pool({ connectionString: databaseUrl });
     await admin.query(`CREATE SCHEMA "${schema}"`);
     pool = new Pool({ connectionString: databaseUrl, options: `-c search_path=${schema}` });
-    for (const name of ['0000_initial.sql', ...linkMigrations]) {
-      const migration = await readFile(resolve(import.meta.dirname, '../../drizzle', name), 'utf8');
-      await pool.query(migration.replaceAll('"public".', `"${schema}".`));
-    }
+    const folder = resolve(import.meta.dirname, '../../drizzle');
+    const migrations = (await readdir(folder)).filter((file) => /^\d{4}_.*\.sql$/.test(file));
+    for (const name of migrations.sort())
+      await pool.query(
+        (await readFile(resolve(folder, name), 'utf8')).replaceAll('"public".', `"${schema}".`),
+      );
     await pool.query('INSERT INTO "user" (id,name,email) VALUES ($1,$1,$2),($3,$3,$4)', [
       ownerId,
       'owner@example.test',
@@ -61,7 +123,7 @@ suite('PostgreSQL project store (opt-in isolated schema)', () => {
     await admin.query(`GRANT "${runtimeRole}" TO "${loginRole}"`);
     await admin.query(`GRANT USAGE ON SCHEMA "${schema}" TO "${runtimeRole}"`);
     await admin.query(
-      `GRANT SELECT,INSERT,UPDATE,DELETE ON ${schema}.projects,${schema}.guests,${schema}.seat_assignments,${schema}.project_write_receipts TO "${runtimeRole}"`,
+      `GRANT SELECT,INSERT,UPDATE,DELETE ON ${schema}.projects,${schema}.guests,${schema}.seat_assignments,${schema}.table_assignments,${schema}.project_write_receipts TO "${runtimeRole}"`,
     );
     await admin.query(
       `GRANT SELECT ON ${schema}.project_share_links,${schema}.project_link_editors TO "${runtimeRole}"`,
@@ -228,6 +290,157 @@ suite('PostgreSQL project store (opt-in isolated schema)', () => {
     await pool.query('DELETE FROM projects WHERE id=$1', [id]);
   });
 
+  describe('planta da festa', () => {
+    const id = '1a2b3c4d-f0f0-40f0-80f0-f0f0f0f0f0f0';
+    const op = (n: number) => `1a2b3c4d-f1f1-41f1-81f1-${String(n).padStart(12, '0')}`;
+
+    it('grava e relê a festa na mesma revisão, preservando a ordem das mesas', async () => {
+      const created = await store.create(ownerId, { id, operationId: op(1), project: withParty });
+      expect(created.project).toEqual(withParty);
+      const reopened = await store.get(ownerId, id);
+      expect(reopened.revision).toBe(1);
+      expect(reopened.project.reception!.tableAssignments).toEqual(
+        withParty.reception!.tableAssignments,
+      );
+      const stored = await pool.query(
+        'SELECT reception_schema_version, reception ? $2 AS has_assignments FROM projects WHERE id=$1',
+        [id, 'tableAssignments'],
+      );
+      expect(stored.rows[0]).toEqual({ reception_schema_version: 1, has_assignments: false });
+    });
+
+    it('recusa projeto sem o campo reception em vez de apagar a festa', async () => {
+      const legacyShape = Object.fromEntries(
+        Object.entries(withParty).filter(([key]) => key !== 'reception'),
+      );
+      await expect(
+        store.save(ownerId, id, {
+          expectedRevision: 1,
+          operationId: op(2),
+          project: legacyShape as Project,
+        }),
+      ).rejects.toMatchObject({ status: 400, code: 'invalid_request' });
+      expect((await store.get(ownerId, id)).project.reception).toEqual(withParty.reception);
+    });
+
+    it('nega leitura e escrita da festa por outra conta', async () => {
+      await expect(store.get(foreignOwnerId, id)).rejects.toMatchObject({ status: 404 });
+      await expect(
+        store.save(foreignOwnerId, id, {
+          expectedRevision: 1,
+          operationId: op(3),
+          project: { ...withParty, reception: null },
+        }),
+      ).rejects.toMatchObject({ status: 404, code: 'not_found' });
+      expect((await store.get(ownerId, id)).project.reception).toEqual(withParty.reception);
+    });
+
+    it('detecta revisão concorrente sem sobrescrever a festa', async () => {
+      const moved = structuredClone(withParty);
+      moved.reception!.tables[0]!.x = 600;
+      const saved = await store.save(ownerId, id, {
+        expectedRevision: 1,
+        operationId: op(4),
+        project: moved,
+      });
+      expect(saved.revision).toBe(2);
+      await expect(
+        store.save(ownerId, id, {
+          expectedRevision: 1,
+          operationId: op(5),
+          project: { ...withParty, reception: null },
+        }),
+      ).rejects.toMatchObject({ status: 409, code: 'revision_conflict' });
+      expect((await store.get(ownerId, id)).project.reception!.tables[0]!.x).toBe(600);
+    });
+
+    it('remove a mesa do convidado excluído e apaga a festa quando reception é nula', async () => {
+      const withoutSecond: Project = {
+        ...withParty,
+        guests: withParty.guests.filter((guest) => guest.id !== secondGuestId),
+        reception: { ...withParty.reception!, tableAssignments: [{ tableId: tableA, guestId }] },
+      };
+      await store.save(ownerId, id, {
+        expectedRevision: 2,
+        operationId: op(6),
+        project: withoutSecond,
+      });
+      expect((await store.get(ownerId, id)).project.reception!.tableAssignments).toEqual([
+        { tableId: tableA, guestId },
+      ]);
+      await store.save(ownerId, id, {
+        expectedRevision: 3,
+        operationId: op(7),
+        project: { ...withoutSecond, reception: null },
+      });
+      expect((await store.get(ownerId, id)).project.reception).toBeNull();
+      const rows = await pool.query('SELECT 1 FROM table_assignments WHERE project_id=$1', [id]);
+      expect(rows.rowCount).toBe(0);
+    });
+
+    it('desfaz a festa junto com o resto quando a transação falha', async () => {
+      await pool.query(
+        `CREATE FUNCTION fail_reception_update() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic transaction failure'; END $$`,
+      );
+      await pool.query(
+        'CREATE TRIGGER fail_reception_update BEFORE UPDATE ON projects FOR EACH ROW EXECUTE FUNCTION fail_reception_update()',
+      );
+      try {
+        await expect(
+          store.save(ownerId, id, { expectedRevision: 4, operationId: op(8), project: withParty }),
+        ).rejects.toThrow();
+      } finally {
+        await pool.query('DROP TRIGGER fail_reception_update ON projects');
+        await pool.query('DROP FUNCTION fail_reception_update()');
+      }
+      const snapshot = await store.get(ownerId, id);
+      expect(snapshot.revision).toBe(4);
+      expect(snapshot.project.reception).toBeNull();
+      const rows = await pool.query('SELECT 1 FROM table_assignments WHERE project_id=$1', [id]);
+      expect(rows.rowCount).toBe(0);
+    });
+
+    it('lê como reception nula um projeto gravado antes da migração', async () => {
+      const legacyId = '1a2b3c4d-f2f2-42f2-82f2-f2f2f2f2f2f2';
+      await pool.query(
+        `INSERT INTO projects (id,owner_id,title,couple_first,couple_second,layout)
+         VALUES ($1,$2,'Projeto antigo','','',$3::jsonb)`,
+        [legacyId, ownerId, JSON.stringify(project.layout)],
+      );
+      const snapshot = await store.get(ownerId, legacyId);
+      expect(snapshot.project.reception).toBeNull();
+      expect(snapshot.project.title).toBe('Projeto antigo');
+      await pool.query('DELETE FROM projects WHERE id=$1', [legacyId]);
+    });
+
+    it('o banco recusa versão sem festa, festa sem versão e mesa de convidado inexistente', async () => {
+      await expect(
+        pool.query('UPDATE projects SET reception_schema_version=1 WHERE id=$1', [id]),
+      ).rejects.toMatchObject({ code: '23514' });
+      await expect(
+        pool.query(`UPDATE projects SET reception='{}'::jsonb WHERE id=$1`, [id]),
+      ).rejects.toMatchObject({ code: '23514' });
+      await expect(
+        pool.query(
+          'INSERT INTO table_assignments (project_id,guest_id,table_id,sort_order) VALUES ($1,$2,$3,0)',
+          [id, '1a2b3c4d-0000-4000-8000-000000000000', tableA],
+        ),
+      ).rejects.toMatchObject({ code: '23503' });
+      await store.delete(ownerId, id, 4);
+    });
+
+    it('a role de runtime grava e lê a festa', async () => {
+      const runtimeId = '1a2b3c4d-f3f3-43f3-83f3-f3f3f3f3f3f3';
+      const created = await runtimeStore.create(ownerId, {
+        id: runtimeId,
+        operationId: op(9),
+        project: withParty,
+      });
+      expect(created.project).toEqual(withParty);
+      await runtimeStore.delete(ownerId, runtimeId, 1);
+    });
+  });
+
   async function grantEditor(id: string) {
     const linkId = randomUUID();
     await pool.query(
@@ -338,20 +551,20 @@ suite('PostgreSQL project store (opt-in isolated schema)', () => {
   it('inserts an independent copy in the caller transaction without overwriting project IDs', async () => {
     const sourceId = randomUUID();
     const copyId = randomUUID();
-    await store.create(ownerId, { id: sourceId, operationId: randomUUID(), project });
+    await store.create(ownerId, { id: sourceId, operationId: randomUUID(), project: withParty });
     await expect(
-      transaction(pool, (client) => insertProjectCopy(client, foreignOwnerId, sourceId, project)),
+      transaction(pool, (client) => insertProjectCopy(client, foreignOwnerId, sourceId, withParty)),
     ).rejects.toMatchObject({ status: 409, code: 'operation_reused' });
     const copy = await transaction(pool, (client) =>
-      insertProjectCopy(client, foreignOwnerId, copyId, project),
+      insertProjectCopy(client, foreignOwnerId, copyId, withParty),
     );
-    expect(copy).toMatchObject({ id: copyId, role: 'owner', revision: 1, project });
+    expect(copy).toMatchObject({ id: copyId, role: 'owner', revision: 1, project: withParty });
     await store.save(foreignOwnerId, copyId, {
       expectedRevision: 1,
       operationId: randomUUID(),
-      project: { ...project, title: 'Cópia alterada' },
+      project: { ...withParty, title: 'Cópia alterada', reception: null },
     });
-    expect(await store.get(ownerId, sourceId)).toMatchObject({ revision: 1, project });
+    expect(await store.get(ownerId, sourceId)).toMatchObject({ revision: 1, project: withParty });
     await store.delete(ownerId, sourceId, 1);
     await store.delete(foreignOwnerId, copyId, 2);
   });
@@ -373,17 +586,20 @@ migrationSuite('PostgreSQL migration runner (temporary database)', () => {
       expect(first).toEqual([
         '0000_initial.sql',
         '0001_remove_receipt_date_index.sql',
-        ...linkMigrations,
+        '0002_share_links.sql',
+        '0003_project_link_redemptions.sql',
+        '0004_reception.sql',
       ]);
       expect(second).toEqual([]);
       tempPool = new Pool({ connectionString: tempUrl.toString() });
       const tables = await tempPool.query(
-        "SELECT to_regclass('public.projects') AS projects, to_regclass('public.user') AS auth_user, to_regclass('public.project_share_links') AS share_links",
+        "SELECT to_regclass('public.projects') AS projects, to_regclass('public.user') AS auth_user, to_regclass('public.project_share_links') AS share_links, to_regclass('public.table_assignments') AS table_assignments",
       );
       expect(tables.rows[0]).toEqual({
         projects: 'projects',
         auth_user: '"user"',
         share_links: 'project_share_links',
+        table_assignments: 'table_assignments',
       });
     } finally {
       await tempPool?.end();

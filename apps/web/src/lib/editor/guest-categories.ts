@@ -1,6 +1,6 @@
-import type { CeremonyProject } from '@enlace/contracts';
+import type { Project } from '@enlace/contracts';
 
-export type GuestCategory = CeremonyProject['guests'][number]['category'];
+export type GuestCategory = Project['guests'][number]['category'];
 
 export const GUEST_CATEGORIES: Record<
   GuestCategory,
