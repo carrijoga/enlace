@@ -45,6 +45,8 @@ export type ReceptionCanvasProps = {
   selected: ReceptionSelection | null;
   /** Há um convidado escolhido esperando mesa: tocar numa mesa a atribui. */
   assigning: boolean;
+  /** Página de visualização: selecionar vale, arrastar e mover por seta não. */
+  readonly?: boolean;
   onSelect: (ref: ReceptionSelection | null) => void;
   /** Centro novo, já encaixado na grade de 10 cm e dentro de 0..10000. Chamado ao soltar ou por seta. */
   onMove: (ref: ReceptionElementRef, x: number, y: number) => void;

@@ -17,6 +17,7 @@
     warnedIds,
     selected,
     assigning,
+    readonly = false,
     onSelect,
     onMove,
     onMoveDoor,
@@ -334,7 +335,7 @@
 
   function pointerMove(event: PointerEvent) {
     const d = drag;
-    if (!d || event.pointerId !== d.pointerId || assigning) return;
+    if (!d || event.pointerId !== d.pointerId || assigning || readonly) return;
     d.clientX = event.clientX;
     d.clientY = event.clientY;
     if (!d.moved) {
@@ -426,7 +427,7 @@
 
   function doorPointerMove(event: PointerEvent) {
     const d = doorDrag;
-    if (!d || event.pointerId !== d.pointerId || assigning) return;
+    if (!d || event.pointerId !== d.pointerId || assigning || readonly) return;
     d.clientX = event.clientX;
     d.clientY = event.clientY;
     if (!d.moved) {
@@ -485,6 +486,7 @@
       onSelect({ kind: 'door', id: door.id });
       return;
     }
+    if (readonly) return;
     // Seta no sentido de `along` aumenta o deslocamento; a perpendicular é ignorada.
     const direction =
       event.key === 'ArrowRight'
@@ -521,6 +523,7 @@
       onSelect({ kind, id });
       return;
     }
+    if (readonly) return;
     const step = event.shiftKey ? 50 : GRID_CM;
     const delta =
       event.key === 'ArrowLeft'

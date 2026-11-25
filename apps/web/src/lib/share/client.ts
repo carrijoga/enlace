@@ -7,6 +7,7 @@ import {
   type CeremonyProject,
   type CreateShareLinkRequest,
   type RedeemShareLinkRequest,
+  type Reception,
   type ShareLink,
   type ShareLinkMode,
   type SharedView,
@@ -171,6 +172,32 @@ export function toViewProject(view: SharedView): CeremonyProject {
       note: '',
     })),
     assignments: occupied.map((seat) => ({ seatId: seat.seatId, guestId: seat.seatId })),
+  };
+}
+
+/**
+ * Festa da projeção pública no formato que `ReceptionCanvas` desenha: sem atribuições (a página
+ * não tem IDs de convidado) e com a ocupação por mesa já contada.
+ */
+export function toViewReception(view: SharedView): {
+  reception: Reception;
+  occupancy: Map<string, number>;
+} | null {
+  const source = view.reception;
+  if (!source) return null;
+  const occupancy = new Map<string, number>();
+  if ('guests' in source)
+    for (const guest of source.guests)
+      occupancy.set(guest.tableId, (occupancy.get(guest.tableId) ?? 0) + 1);
+  else for (const count of source.tableCounts) occupancy.set(count.tableId, count.occupied);
+  return {
+    reception: {
+      room: source.room,
+      tables: source.tables,
+      items: source.items,
+      tableAssignments: [],
+    },
+    occupancy,
   };
 }
 

@@ -2,6 +2,15 @@
 
 Atualizado em 24/11/2026, America/Sao_Paulo.
 
+## Festa no link de visualização — 24/11/2026
+
+Pedido do usuário: o link "com nomes e só a planta" mostrava só a cerimônia. Agora `/ver` mostra também a festa ([ADR-0014](docs/decisoes/0014-link-de-visualizacao.md)).
+- `sharedViewSchema` ganhou `reception` (nulo sem festa; `default(null)` aceita respostas antigas): salão, mesas e elementos; modo `names` com `guests` por mesa, modo `plan` só com `tableCounts`. `toSharedView` recebe `reception` do projeto; sem IDs de convidado nem `tableAssignments` na saída (teste de ausência no JSON).
+- `/ver`: abas Cerimônia | Festa (só com festa), `ReceptionCanvas readonly`, lista de mesas com pessoas (modo nomes) e busca por mesa. Links já criados passam a mostrar a festa.
+- Validação: `check` e `lint` sem erros; vitest 250 passando, 43 pulados (integração precisa de PostgreSQL, não rodou aqui). Não verificado no navegador nem `measure:web`.
+
+Próximo passo: conferir `/ver` com festa no navegador e rodar os testes de integração com PostgreSQL.
+
 ## Avisos, categorias personalizadas e busca — 24/11/2026
 
 Itens 2, 3 e 4 do pedido do usuário, na branch `carrijoga/avisos-categorias-busca` (a partir da `main` com o PR #8). Um commit por item, para poder subir separadamente.

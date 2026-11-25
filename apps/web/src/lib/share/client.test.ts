@@ -105,6 +105,7 @@ describe('adaptador da projeção', () => {
       ...base,
       guestCategories: [],
       seats: [{ seatId: seatA, name: 'Pessoa A', category: 'madrinha' }],
+      reception: null,
     };
     const project = ceremonyProjectSchema.parse(toViewProject(view));
     expect(project.title).toBe('Cerimônia de Alex & Ravi');
@@ -114,7 +115,12 @@ describe('adaptador da projeção', () => {
     expect(project.assignments).toEqual([{ seatId: seatA, guestId: seatA }]);
   });
   it('modo só a planta não inventa nomes além de "Ocupada"', () => {
-    const view: SharedView = { mode: 'plan', ...base, occupiedSeatIds: [seatA, seatB] };
+    const view: SharedView = {
+      mode: 'plan',
+      ...base,
+      occupiedSeatIds: [seatA, seatB],
+      reception: null,
+    };
     const project = ceremonyProjectSchema.parse(toViewProject(view));
     expect(new Set(project.guests.map((guest) => guest.name))).toEqual(new Set(['Ocupada']));
     expect(project.assignments).toHaveLength(2);

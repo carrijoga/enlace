@@ -5,6 +5,7 @@
   import { getLayoutGeometry, getSeatLabels } from '@enlace/domain';
   import PlanCanvas from '../../lib/editor/PlanCanvas.svelte';
   import SeatList from '../../lib/editor/SeatList.svelte';
+  import ReceptionCanvas from '../../lib/editor/reception/ReceptionCanvas.svelte';
   import { legendEntries } from '../../lib/editor/guest-categories';
   import { matchesSearch, toSearchWords } from '../../lib/search';
   import {
@@ -13,7 +14,11 @@
     ShareError,
     tokenFromHash,
     toViewProject,
+    toViewReception,
   } from '../../lib/share/client';
+
+  const NO_WARNINGS: ReadonlySet<string> = new Set();
+  const noop = () => {};
 
   // Página pública do link de visualização (ADR-0014). Só lê: não carrega editor, histórico nem
   // salvamento, e nada daqui altera o projeto. O token vem do fragmento e vai só no corpo do POST.
@@ -29,8 +34,25 @@
   let query = $state('');
   let planCanvas = $state<PlanCanvas>();
   let planTitle = $state<HTMLHeadingElement>();
+  let tab = $state<'ceremony' | 'reception'>('ceremony');
+  let selectedTableId = $state<string | null>(null);
 
   const view = $derived(screen.kind === 'ready' ? screen.view : null);
+  const festa = $derived(view ? toViewReception(view) : null);
+  const showReception = $derived(tab === 'reception' && festa !== null);
+  const tableGuests = $derived(
+    view?.mode === 'names' && view.reception
+      ? view.reception.guests.map((guest) => ({ ...guest, words: toSearchWords(guest.name) }))
+      : [],
+  );
+  const tableName = (tableId: string) =>
+    festa?.reception.tables.find((table) => table.id === tableId)?.name ?? '';
+  const receptionSeats = $derived(
+    festa?.reception.tables.reduce((sum, table) => sum + table.seats, 0) ?? 0,
+  );
+  const receptionOccupied = $derived(
+    festa ? [...festa.occupancy.values()].reduce((sum, count) => sum + count, 0) : 0,
+  );
   const project = $derived(view ? toViewProject(view) : null);
   const geometry = $derived(project ? getLayoutGeometry(project.layout) : null);
   const labels = $derived(project ? getSeatLabels(project.layout) : new Map<string, string>());
@@ -47,6 +69,25 @@
     if (!normalizeName(query)) return [];
     return people.filter((person) => matchesSearch(person.words, query)).slice(0, 8);
   });
+  const tableMatches = $derived.by(() => {
+    if (!normalizeName(query)) return [];
+    return tableGuests.filter((guest) => matchesSearch(guest.words, query)).slice(0, 8);
+  });
+  const results = $derived(
+    showReception
+      ? tableMatches.map((guest, index) => ({
+          key: `${guest.tableId}-${index}`,
+          name: guest.name,
+          where: tableName(guest.tableId),
+          pick: () => chooseTable(guest.tableId, true),
+        }))
+      : matches.map((person) => ({
+          key: person.seatId,
+          name: person.name,
+          where: labels.get(person.seatId) ?? '',
+          pick: () => choose(person.seatId, true),
+        })),
+  );
   const selected = $derived.by(() => {
     if (!selectedSeatId || !project) return null;
     const guest = project.guests.find((g) => g.id === selectedSeatId);
@@ -67,6 +108,8 @@
     const current = ++generation;
     const token = tokenFromHash(location.hash);
     selectedSeatId = null;
+    selectedTableId = null;
+    tab = 'ceremony';
     query = '';
     zoomPercent = 0;
     if (!token) {
@@ -107,6 +150,21 @@
     }
     planCanvas?.reveal(seatId);
     planCanvas?.welcome(seatId);
+  }
+
+  async function chooseTable(tableId: string | null, fromSearch = false) {
+    selectedTableId = tableId;
+    if (fromSearch) query = '';
+    await tick();
+    if (fromSearch) {
+      planTitle?.focus({ preventScroll: true });
+      planTitle?.scrollIntoView({ block: 'start' });
+    }
+  }
+
+  function showTab(next: 'ceremony' | 'reception') {
+    tab = next;
+    query = '';
   }
 
   onMount(() => {
@@ -156,10 +214,27 @@
           {#if dateText}<time class="date" datetime={view?.weddingDate ?? undefined}
               >{dateText}</time
             >{/if}
-          <p class="stats">
-            <strong>{occupied} de {total}</strong> lugares ocupados
-          </p>
+          {#if showReception}
+            <p class="stats">
+              <strong>{receptionOccupied} de {receptionSeats}</strong> lugares ocupados nas mesas
+            </p>
+          {:else}
+            <p class="stats">
+              <strong>{occupied} de {total}</strong> lugares ocupados
+            </p>
+          {/if}
         </div>
+
+        {#if festa}
+          <div class="tabs" role="group" aria-label="Planta exibida">
+            <button type="button" aria-pressed={!showReception} onclick={() => showTab('ceremony')}
+              >Cerimônia</button
+            >
+            <button type="button" aria-pressed={showReception} onclick={() => showTab('reception')}
+              >Festa</button
+            >
+          </div>
+        {/if}
 
         {#if named}
           <section class="finder" aria-labelledby="finder-title">
@@ -180,13 +255,13 @@
               />
             </div>
             {#if query.trim()}
-              {#if matches.length}
+              {#if results.length}
                 <ul class="matches" aria-label="Pessoas encontradas">
-                  {#each matches as person (person.seatId)}
+                  {#each results as result (result.key)}
                     <li>
-                      <button type="button" onclick={() => choose(person.seatId, true)}>
-                        <span class="match-name">{person.name}</span>
-                        <span class="match-seat">{labels.get(person.seatId)}</span>
+                      <button type="button" onclick={result.pick}>
+                        <span class="match-name">{result.name}</span>
+                        <span class="match-seat">{result.where}</span>
                       </button>
                     </li>
                   {/each}
@@ -200,82 +275,145 @@
           </section>
         {/if}
 
-        <SeatList
-          {project}
-          selectedGuestId={null}
-          {selectedSeatId}
-          readonly
-          anonymous={!named}
-          onSeatSelect={(id) => choose(id)}
-        />
-      </div>
-
-      <section class="plan" aria-labelledby="plan-title">
-        <div class="plan-toolbar">
-          <h2 id="plan-title" bind:this={planTitle} tabindex="-1">Planta</h2>
-          <div class="zoom-tools">
-            <button
-              type="button"
-              aria-label="Diminuir zoom"
-              disabled={zoomPercent <= 70}
-              onclick={() => (zoomPercent = Math.max(70, zoomPercent - 20))}
-              ><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h12" /></svg></button
-            ><button
-              type="button"
-              onclick={() => (zoomPercent = 0)}
-              aria-label={zoomPercent
-                ? `${zoomPercent}% · Ajustar a planta à tela`
-                : 'Ajustar a planta à tela'}
-              title="Ajustar a planta à tela">{zoomPercent ? `${zoomPercent}%` : 'Ajustar'}</button
-            ><button
-              type="button"
-              aria-label="Aumentar zoom"
-              disabled={zoomPercent >= 200}
-              onclick={() => (zoomPercent = Math.min(200, (zoomPercent || 100) + 20))}
-              ><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h12M10 4v12" /></svg
-              ></button
-            >
-          </div>
-          <p class="selection" id="finder-result" role="status">
-            {#if selected?.guest && named}
-              <strong>{selected.guest.name}</strong> · {selected.label}
-            {:else if selected}
-              {selected.label}: {selected.guest ? 'ocupada' : 'disponível'}
-            {:else}
-              Selecione uma cadeira para ver os detalhes.
-            {/if}
-          </p>
-        </div>
-        <div class="canvas-frame" style:--map-ratio={geometry.height / geometry.width}>
-          <PlanCanvas
-            bind:this={planCanvas}
+        {#if showReception && festa}
+          <section class="tables" aria-labelledby="tables-title">
+            <h2 id="tables-title">Mesas</h2>
+            <ul>
+              {#each festa.reception.tables as table (table.id)}
+                {@const count = festa.occupancy.get(table.id) ?? 0}
+                <li>
+                  <button
+                    type="button"
+                    aria-pressed={selectedTableId === table.id}
+                    onclick={() => chooseTable(selectedTableId === table.id ? null : table.id)}
+                  >
+                    <span class="match-name">{table.name}</span>
+                    <span class="match-seat">{count} de {table.seats} lugares</span>
+                  </button>
+                  {#if named && selectedTableId === table.id}
+                    <ul class="table-people" aria-label={`Pessoas na ${table.name}`}>
+                      {#each tableGuests.filter((guest) => guest.tableId === table.id) as guest, index (index)}
+                        <li>{guest.name}</li>
+                      {:else}
+                        <li class="empty">Ninguém atribuído.</li>
+                      {/each}
+                    </ul>
+                  {/if}
+                </li>
+              {/each}
+            </ul>
+          </section>
+        {:else}
+          <SeatList
             {project}
-            {geometry}
             selectedGuestId={null}
             {selectedSeatId}
-            {zoom}
             readonly
             anonymous={!named}
             onSeatSelect={(id) => choose(id)}
           />
-        </div>
-        <div class="plan-footer">
-          <ul class="legend" aria-label="Legenda da planta">
-            {#if named}
-              {#each legendEntries(view?.mode === 'names' ? view.guestCategories : []) as entry (entry.value)}
-                <li>
-                  <i style:background={entry.fill} style:border-color={entry.stroke}></i>
-                  {entry.label}
-                </li>
-              {/each}
-            {:else}
-              <li><i class="occupied"></i>Ocupada</li>
-              <li><i></i>Disponível</li>
-            {/if}
-          </ul>
-          <p class="orientation">Da entrada, olhando para o altar.</p>
-        </div>
-      </section>
+        {/if}
+      </div>
+
+      {#if showReception && festa}
+        <section class="plan" aria-labelledby="plan-title">
+          <div class="plan-toolbar">
+            <h2 id="plan-title" bind:this={planTitle} tabindex="-1">Planta da festa</h2>
+            <p class="selection" id="finder-result" role="status">
+              {#if selectedTableId}
+                {@const table = festa.reception.tables.find((t) => t.id === selectedTableId)}
+                {#if table}
+                  <strong>{table.name}</strong> · {festa.occupancy.get(table.id) ?? 0} de {table.seats}
+                  lugares
+                {/if}
+              {:else}
+                Selecione uma mesa para ver os detalhes.
+              {/if}
+            </p>
+          </div>
+          <div class="reception-frame">
+            <ReceptionCanvas
+              reception={festa.reception}
+              occupancy={festa.occupancy}
+              warnedIds={NO_WARNINGS}
+              selected={selectedTableId ? { kind: 'table', id: selectedTableId } : null}
+              assigning={false}
+              readonly
+              onSelect={(ref) => (selectedTableId = ref?.kind === 'table' ? ref.id : null)}
+              onMove={noop}
+              onMoveDoor={noop}
+            />
+          </div>
+        </section>
+      {:else}
+        <section class="plan" aria-labelledby="plan-title">
+          <div class="plan-toolbar">
+            <h2 id="plan-title" bind:this={planTitle} tabindex="-1">Planta</h2>
+            <div class="zoom-tools">
+              <button
+                type="button"
+                aria-label="Diminuir zoom"
+                disabled={zoomPercent <= 70}
+                onclick={() => (zoomPercent = Math.max(70, zoomPercent - 20))}
+                ><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h12" /></svg></button
+              ><button
+                type="button"
+                onclick={() => (zoomPercent = 0)}
+                aria-label={zoomPercent
+                  ? `${zoomPercent}% · Ajustar a planta à tela`
+                  : 'Ajustar a planta à tela'}
+                title="Ajustar a planta à tela"
+                >{zoomPercent ? `${zoomPercent}%` : 'Ajustar'}</button
+              ><button
+                type="button"
+                aria-label="Aumentar zoom"
+                disabled={zoomPercent >= 200}
+                onclick={() => (zoomPercent = Math.min(200, (zoomPercent || 100) + 20))}
+                ><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h12M10 4v12" /></svg
+                ></button
+              >
+            </div>
+            <p class="selection" id="finder-result" role="status">
+              {#if selected?.guest && named}
+                <strong>{selected.guest.name}</strong> · {selected.label}
+              {:else if selected}
+                {selected.label}: {selected.guest ? 'ocupada' : 'disponível'}
+              {:else}
+                Selecione uma cadeira para ver os detalhes.
+              {/if}
+            </p>
+          </div>
+          <div class="canvas-frame" style:--map-ratio={geometry.height / geometry.width}>
+            <PlanCanvas
+              bind:this={planCanvas}
+              {project}
+              {geometry}
+              selectedGuestId={null}
+              {selectedSeatId}
+              {zoom}
+              readonly
+              anonymous={!named}
+              onSeatSelect={(id) => choose(id)}
+            />
+          </div>
+          <div class="plan-footer">
+            <ul class="legend" aria-label="Legenda da planta">
+              {#if named}
+                {#each legendEntries(view?.mode === 'names' ? view.guestCategories : []) as entry (entry.value)}
+                  <li>
+                    <i style:background={entry.fill} style:border-color={entry.stroke}></i>
+                    {entry.label}
+                  </li>
+                {/each}
+              {:else}
+                <li><i class="occupied"></i>Ocupada</li>
+                <li><i></i>Disponível</li>
+              {/if}
+            </ul>
+            <p class="orientation">Da entrada, olhando para o altar.</p>
+          </div>
+        </section>
+      {/if}
     </main>
   {/if}
 </div>
@@ -478,6 +616,73 @@
     margin: 8px 0 0;
     color: var(--muted);
     font-size: 13px;
+  }
+  .tabs {
+    display: flex;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #f6f5f0;
+  }
+  .tabs button {
+    flex: 1;
+    min-height: 44px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--green);
+    font-weight: 600;
+  }
+  .tabs button[aria-pressed='true'] {
+    background: var(--green);
+    color: #fff;
+  }
+  .tables h2 {
+    margin: 0 0 8px;
+    font:
+      400 20px / 1.25 Georgia,
+      serif;
+  }
+  .tables ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .tables > ul > li + li {
+    border-top: 1px solid var(--line);
+  }
+  .tables button {
+    display: grid;
+    width: 100%;
+    min-height: 48px;
+    padding: 8px 12px;
+    border: 0;
+    background: var(--paper);
+    color: inherit;
+    text-align: left;
+  }
+  .tables button[aria-pressed='true'] {
+    background: #eaf1e9;
+  }
+  .table-people {
+    padding: 4px 12px 10px 24px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    list-style: disc !important;
+    background: #eaf1e9;
+    font-size: 14px;
+  }
+  .table-people .empty {
+    color: var(--muted);
+    list-style: none;
+    margin-left: -12px;
+  }
+  .reception-frame {
+    display: flex;
+    min-width: 0;
+    height: clamp(320px, 62svh, 720px);
   }
   .plan {
     min-width: 0;

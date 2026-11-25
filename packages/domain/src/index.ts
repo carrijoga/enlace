@@ -393,8 +393,13 @@ export function getGuestSeatId(project: Project, guestId: string): string | unde
  * Projeção pública de um link de visualização (ADR-0014). Monta cada campo explicitamente, sem
  * espalhar o projeto: notas, IDs de convidados, título, `linkedCounts` e convidados sem lugar
  * nunca saem. No modo `plan` nenhum dado de convidado sai. A ordem segue a planta, não a lista.
+ * A festa (`reception`) entra com salão, mesas e elementos; o convidado só aparece na mesa em que
+ * está atribuído, e no modo `plan` só a contagem por mesa (ADR-0014).
  */
-export function toSharedView(project: CeremonyProject, mode: SharedView['mode']): SharedView {
+export function toSharedView(
+  project: CeremonyProject & { reception?: Project['reception'] },
+  mode: SharedView['mode'],
+): SharedView {
   const { layout } = project;
   const seatOrder = layout.rows.flatMap((row) => [...row.leftSeatIds, ...row.rightSeatIds]);
   const guestBySeat = new Map(
@@ -416,15 +421,47 @@ export function toSharedView(project: CeremonyProject, mode: SharedView['mode'])
     },
   };
   const occupied = seatOrder.filter((seatId) => guestBySeat.has(seatId));
-  if (mode === 'plan') return sharedViewSchema.parse({ mode, ...base, occupiedSeatIds: occupied });
+  const { reception } = project;
+  const receptionBase = reception && {
+    room: reception.room,
+    tables: reception.tables,
+    items: reception.items,
+  };
+  if (mode === 'plan') {
+    const counts = new Map<string, number>();
+    for (const { tableId } of reception?.tableAssignments ?? [])
+      counts.set(tableId, (counts.get(tableId) ?? 0) + 1);
+    return sharedViewSchema.parse({
+      mode,
+      ...base,
+      occupiedSeatIds: occupied,
+      reception: receptionBase && {
+        ...receptionBase,
+        tableCounts: reception.tables
+          .filter((table) => counts.has(table.id))
+          .map((table) => ({ tableId: table.id, occupied: counts.get(table.id)! })),
+      },
+    });
+  }
   const seats = occupied.map((seatId) => {
     const guest = guests.get(guestBySeat.get(seatId)!);
     if (!guest) throw new Error('Convidado inexistente.');
     return { seatId, name: guest.name, category: guest.category };
   });
-  const usedCategories = new Set(seats.map((seat) => seat.category));
+  const tableGuests = (reception?.tableAssignments ?? []).map(({ tableId, guestId }) => {
+    const guest = guests.get(guestId);
+    if (!guest) throw new Error('Convidado inexistente.');
+    return { tableId, name: guest.name, category: guest.category };
+  });
+  const usedCategories = new Set([...seats, ...tableGuests].map((entry) => entry.category));
   const guestCategories = project.guestCategories
     .filter((category) => usedCategories.has(category.id))
     .map((category) => ({ ...category }));
-  return sharedViewSchema.parse({ mode, ...base, guestCategories, seats });
+  return sharedViewSchema.parse({
+    mode,
+    ...base,
+    guestCategories,
+    seats,
+    reception: receptionBase && { ...receptionBase, guests: tableGuests },
+  });
 }
