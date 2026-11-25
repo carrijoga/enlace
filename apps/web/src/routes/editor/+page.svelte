@@ -25,6 +25,10 @@
     addGuests,
     updateGuest,
     removeGuest,
+    addGuestCategory,
+    updateGuestCategory,
+    removeGuestCategory,
+    countGuestsInCategory,
     assignGuest,
     unassignSeat,
   } from '@enlace/domain';
@@ -33,7 +37,7 @@
   import GuestsPanel from '../../lib/editor/GuestsPanel.svelte';
   import SeatList from '../../lib/editor/SeatList.svelte';
   import { SEAT_MOTION_LIMIT } from '../../lib/editor/plan-motion';
-  import { GUEST_CATEGORIES, type GuestCategory } from '../../lib/editor/guest-categories';
+  import { legendEntries, type GuestCategory } from '../../lib/editor/guest-categories';
   import {
     accountDraftKey,
     loadAccountDraft,
@@ -474,6 +478,7 @@
         (a.layout === b.layout || JSON.stringify(a.layout) === JSON.stringify(b.layout)) &&
         (a.reception === b.reception ||
           JSON.stringify(a.reception) === JSON.stringify(b.reception)) &&
+        sameItems(a.guestCategories, b.guestCategories) &&
         sameItems(a.guests, b.guests) &&
         sameItems(a.assignments, b.assignments))
     );
@@ -616,6 +621,20 @@
     );
     if (ok) selectGuest(guest.id);
     return ok;
+  }
+  function removeCategory(id: string) {
+    if (!project) return;
+    const label = project.guestCategories.find((category) => category.id === id)?.label ?? '';
+    const count = countGuestsInCategory(project, id);
+    if (!count) {
+      mutate((p) => removeGuestCategory(p, id), 'Categoria excluída.');
+      return;
+    }
+    confirmAction(
+      (p) => removeGuestCategory(p, id),
+      `Excluir a categoria “${label}”?`,
+      `${count} ${count === 1 ? 'pessoa passará' : 'pessoas passarão'} para Convidado. Ninguém sai da lista nem perde o lugar, e você pode desfazer a alteração.`,
+    );
   }
   function replaceProject(next: Project, title: string) {
     if (accountDraftCorrupt) {
@@ -1070,13 +1089,9 @@
           <span class="keyboard-note">Setas navegam · Enter seleciona</span>
         </div>
         <div class="map-legend">
-          {#each ['familia', 'padrinho', 'pajem', 'convidado'] as category (category)}<span
-              ><i
-                style:background={GUEST_CATEGORIES[category as GuestCategory].fill}
-                style:border-color={GUEST_CATEGORIES[category as GuestCategory].stroke}
-              ></i>{category === 'padrinho'
-                ? 'Padrinhos'
-                : GUEST_CATEGORIES[category as GuestCategory].label}</span
+          {#each legendEntries(project?.guestCategories ?? []) as entry (entry.value)}<span
+              ><i style:background={entry.fill} style:border-color={entry.stroke}
+              ></i>{entry.label}</span
             >{/each}<span class="map-orientation">Da entrada, olhando para o altar.</span>
         </div>
         {#if canExportPersonal}<div class="personal-map">
@@ -1127,6 +1142,11 @@
           onUnassignSeat={(id) =>
             mutate((p) => unassignSeat(p, id), 'Lugar liberado. O convidado continua na lista.')}
           onImportCsv={openCsvImport}
+          onAddCategory={(label, color) =>
+            mutate((p) => addGuestCategory(p, { label, color }), 'Categoria criada.')}
+          onUpdateCategory={(id, patch) =>
+            mutate((p) => updateGuestCategory(p, id, patch), 'Categoria atualizada.')}
+          onRemoveCategory={removeCategory}
         />
       </aside>
     </div>
@@ -1165,6 +1185,7 @@
     {@const CsvDialog = csvDialog}
     <CsvDialog
       existingNames={project.guests.map((guest) => guest.name)}
+      customCategories={project.guestCategories}
       capacity={300 - project.guests.length}
       onImport={importGuests}
       onClose={closeCsvImport}

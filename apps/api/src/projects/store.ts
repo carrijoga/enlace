@@ -33,7 +33,7 @@ const EDITABLE_PROJECT_IDS = `
   AND (l.expires_at IS NULL OR l.expires_at > statement_timestamp())`;
 
 const SNAPSHOT_FIELDS =
-  'id,title,couple_first,couple_second,wedding_date::text,layout,reception,revision,updated_at';
+  'id,title,couple_first,couple_second,wedding_date::text,layout,guest_categories,reception,revision,updated_at';
 
 type StoredReception = Omit<Reception, 'tableAssignments'>;
 
@@ -44,6 +44,7 @@ type SnapshotRow = {
   couple_second: string;
   wedding_date: string | null;
   layout: Project['layout'];
+  guest_categories: Project['guestCategories'];
   reception: StoredReception | null;
   revision: number;
   updated_at: Date;
@@ -148,7 +149,8 @@ async function replaceAggregate(client: PoolClient, projectId: string, project: 
   const reception = storedReception(project);
   await client.query(
     `UPDATE projects SET title=$2, couple_first=$3, couple_second=$4, wedding_date=$5,
-     layout_schema_version=1, layout=$6::jsonb, reception_schema_version=$7, reception=$8::jsonb
+     layout_schema_version=1, layout=$6::jsonb, reception_schema_version=$7, reception=$8::jsonb,
+     guest_categories=$9::jsonb
      WHERE id=$1`,
     [
       projectId,
@@ -159,6 +161,7 @@ async function replaceAggregate(client: PoolClient, projectId: string, project: 
       JSON.stringify(project.layout),
       reception ? 1 : null,
       reception && JSON.stringify(reception),
+      JSON.stringify(project.guestCategories),
     ],
   );
 }
@@ -211,6 +214,7 @@ async function assembleSnapshot(
       couple: { first: row.couple_first, second: row.couple_second },
       weddingDate: row.wedding_date,
       layout: row.layout,
+      guestCategories: row.guest_categories,
       guests: guestRows.rows,
       assignments: assignmentRows.rows.map(({ seat_id, guest_id }) => ({
         seatId: seat_id,
@@ -235,8 +239,8 @@ async function insertProjectRow(
 ): Promise<SnapshotRow | undefined> {
   const reception = storedReception(project);
   const inserted = await client.query<SnapshotRow>(
-    `INSERT INTO projects (id,owner_id,title,couple_first,couple_second,wedding_date,layout,reception_schema_version,reception,revision)
-     VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9::jsonb,1) ON CONFLICT (id) DO NOTHING
+    `INSERT INTO projects (id,owner_id,title,couple_first,couple_second,wedding_date,layout,reception_schema_version,reception,guest_categories,revision)
+     VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9::jsonb,$10::jsonb,1) ON CONFLICT (id) DO NOTHING
      RETURNING ${SNAPSHOT_FIELDS}`,
     [
       id,
@@ -248,6 +252,7 @@ async function insertProjectRow(
       JSON.stringify(project.layout),
       reception ? 1 : null,
       reception && JSON.stringify(reception),
+      JSON.stringify(project.guestCategories),
     ],
   );
   return inserted.rows[0];

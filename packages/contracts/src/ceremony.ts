@@ -12,6 +12,96 @@ export const dateSchema = z.iso.date().refine((date) => {
   );
 }, 'Data inválida');
 
+/** Categorias que todo projeto tem. As personalizadas são referenciadas pelo próprio UUID. */
+export const BUILTIN_GUEST_CATEGORIES = [
+  'familia',
+  'padrinho',
+  'madrinha',
+  'pajem',
+  'convidado',
+] as const;
+export type BuiltinGuestCategory = (typeof BUILTIN_GUEST_CATEGORIES)[number];
+/** Rótulos das categorias padrão; uma personalizada não pode repetir nenhum deles. */
+export const BUILTIN_GUEST_CATEGORY_LABELS: Record<BuiltinGuestCategory, string> = {
+  familia: 'Família',
+  padrinho: 'Padrinho',
+  madrinha: 'Madrinha',
+  pajem: 'Pajem',
+  convidado: 'Convidado',
+};
+/** Paleta fechada: a interface garante contraste para cada cor; o arquivo só guarda a chave. */
+export const GUEST_CATEGORY_COLORS = [
+  'rosa',
+  'azul',
+  'terracota',
+  'oliva',
+  'lavanda',
+  'mostarda',
+  'petroleo',
+  'cinza',
+] as const;
+export type GuestCategoryColor = (typeof GUEST_CATEGORY_COLORS)[number];
+export const GUEST_CATEGORY_LIMITS = { maxCustom: 20, maxLabelLength: 30 } as const;
+
+export const guestCategoryKeySchema = z.union([z.enum(BUILTIN_GUEST_CATEGORIES), uuidSchema]);
+export const customGuestCategorySchema = z
+  .object({
+    id: uuidSchema,
+    label: z
+      .string()
+      .min(1)
+      .max(GUEST_CATEGORY_LIMITS.maxLabelLength)
+      .refine(
+        (value) => value.trim().length > 0 && value === value.trim(),
+        'Nome da categoria sem espaços nas pontas',
+      ),
+    color: z.enum(GUEST_CATEGORY_COLORS),
+  })
+  .strict();
+export type CustomGuestCategory = z.infer<typeof customGuestCategorySchema>;
+
+/** Chave usada para comparar rótulos de categoria sem acento nem caixa. */
+export const categoryLabelKey = (label: string): string =>
+  label.normalize('NFD').replace(/\p{M}/gu, '').trim().toLocaleLowerCase('pt-BR');
+
+const BUILTIN_LABEL_KEYS = new Set(
+  Object.values(BUILTIN_GUEST_CATEGORY_LABELS).map(categoryLabelKey),
+);
+
+/**
+ * Valida a lista de categorias personalizadas e as referências dos convidados. Compartilhada pelo
+ * projeto e pela visualização com nomes.
+ */
+export function checkGuestCategories(
+  categories: readonly CustomGuestCategory[],
+  used: readonly { category: string; path: (string | number)[] }[],
+  ctx: z.RefinementCtx,
+  categoriesPath: string,
+): void {
+  const ids = new Set<string>();
+  const labels = new Set<string>();
+  categories.forEach((category, index) => {
+    if (ids.has(category.id))
+      ctx.addIssue({
+        code: 'custom',
+        path: [categoriesPath, index, 'id'],
+        message: 'ID de categoria duplicado',
+      });
+    ids.add(category.id);
+    const key = categoryLabelKey(category.label);
+    if (labels.has(key) || BUILTIN_LABEL_KEYS.has(key))
+      ctx.addIssue({
+        code: 'custom',
+        path: [categoriesPath, index, 'label'],
+        message: 'Já existe uma categoria com esse nome',
+      });
+    labels.add(key);
+  });
+  for (const { category, path } of used)
+    if (!(BUILTIN_GUEST_CATEGORIES as readonly string[]).includes(category) && !ids.has(category))
+      ctx.addIssue({ code: 'custom', path, message: 'Categoria inexistente' });
+}
+
 const seatListSchema = z.array(uuidSchema).max(12);
 const rowSchema = z
   .object({ id: uuidSchema, leftSeatIds: seatListSchema, rightSeatIds: seatListSchema })
@@ -24,7 +114,8 @@ export const guestSchema = z
       .min(1)
       .max(100)
       .refine((value) => value.trim().length > 0, 'Nome não pode conter apenas espaços'),
-    category: z.enum(['familia', 'padrinho', 'madrinha', 'pajem', 'convidado']),
+    /** Categoria padrão ou o `id` de uma de `guestCategories`. */
+    category: guestCategoryKeySchema,
     note: z.string().max(1000),
   })
   .strict();
@@ -57,11 +148,25 @@ export const ceremonyProjectSchema = z
     couple: z.object({ first: z.string().max(80), second: z.string().max(80) }).strict(),
     weddingDate: dateSchema.nullable(),
     layout: layoutSchema,
+    /** Ausente em arquivos anteriores às categorias personalizadas: vale como lista vazia. */
+    guestCategories: z
+      .array(customGuestCategorySchema)
+      .max(GUEST_CATEGORY_LIMITS.maxCustom)
+      .default([]),
     guests: z.array(guestSchema).max(300),
     assignments: z.array(assignmentSchema).max(300),
   })
   .strict()
   .superRefine((project, ctx) => {
+    checkGuestCategories(
+      project.guestCategories,
+      project.guests.map((guest, index) => ({
+        category: guest.category,
+        path: ['guests', index, 'category'],
+      })),
+      ctx,
+      'guestCategories',
+    );
     const rowIds = new Set<string>();
     const seats = new Set<string>();
     project.layout.rows.forEach((row, index) => {

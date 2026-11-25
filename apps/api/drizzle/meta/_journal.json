@@ -36,6 +36,13 @@
       "when": 1795484646098,
       "tag": "0004_reception",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1795570466344,
+      "tag": "0005_guest_categories",
+      "breakpoints": true
     }
   ]
 }

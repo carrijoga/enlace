@@ -3,7 +3,8 @@
   import { onMount } from 'svelte';
   import WorkspaceHeader from '../lib/account/WorkspaceHeader.svelte';
   import { readSession } from '../lib/account/client';
-  import { GUEST_CATEGORIES, type GuestCategory } from '../lib/editor/guest-categories';
+  import type { BuiltinGuestCategory } from '@enlace/contracts';
+  import { GUEST_CATEGORIES } from '../lib/editor/guest-categories';
 
   let access = $state<'unknown' | 'guest' | 'member'>('unknown');
 
@@ -46,7 +47,7 @@
   });
 
   // Ordem em que as primeiras pessoas chegam à planta ilustrativa.
-  const arrivals = new Map<string, { category: GuestCategory; order: number }>(
+  const arrivals = new Map<string, { category: BuiltinGuestCategory; order: number }>(
     (
       [
         ['L-0-0', 'familia'],

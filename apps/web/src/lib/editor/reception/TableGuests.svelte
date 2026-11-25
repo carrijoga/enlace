@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Project } from '@enlace/contracts';
-  import { GUEST_CATEGORIES } from '../guest-categories';
+  import { categoryLookup } from '../guest-categories';
   import { matchesSearch, toSearchWords } from '../../search';
   import type { TableGuestsProps } from './contracts';
 
@@ -19,6 +19,7 @@
   let search = $state('');
 
   const guests = $derived(project.guests);
+  const categoryOf = $derived(categoryLookup(project.guestCategories));
   const tables = $derived(project.reception.tables);
   const assignments = $derived(project.reception.tableAssignments);
 
@@ -116,10 +117,10 @@
             >
               <span
                 class="guest-dot"
-                style={`--category-fill:${GUEST_CATEGORIES[guest.category].fill};--category-stroke:${GUEST_CATEGORIES[guest.category].stroke}`}
+                style={`--category-fill:${categoryOf(guest.category).fill};--category-stroke:${categoryOf(guest.category).stroke}`}
               ></span>
               <span class="guest-copy"
-                ><strong>{guest.name}</strong><small>{GUEST_CATEGORIES[guest.category].label}</small
+                ><strong>{guest.name}</strong><small>{categoryOf(guest.category).label}</small
                 ></span
               >
             </button>
@@ -174,7 +175,7 @@
               <div class="guest-line">
                 <span
                   class="guest-dot"
-                  style={`--category-fill:${GUEST_CATEGORIES[guest.category].fill};--category-stroke:${GUEST_CATEGORIES[guest.category].stroke}`}
+                  style={`--category-fill:${categoryOf(guest.category).fill};--category-stroke:${categoryOf(guest.category).stroke}`}
                 ></span>
                 <span class="guest-copy"><strong>{guest.name}</strong></span>
                 <button

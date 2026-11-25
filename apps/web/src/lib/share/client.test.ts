@@ -103,6 +103,7 @@ describe('adaptador da projeção', () => {
     const view: SharedView = {
       mode: 'names',
       ...base,
+      guestCategories: [],
       seats: [{ seatId: seatA, name: 'Pessoa A', category: 'madrinha' }],
     };
     const project = ceremonyProjectSchema.parse(toViewProject(view));

@@ -163,6 +163,7 @@ export function toViewProject(view: SharedView): CeremonyProject {
     couple: view.couple,
     weddingDate: view.weddingDate,
     layout: { ...view.layout, linkedCounts: false },
+    guestCategories: view.mode === 'names' ? view.guestCategories : [],
     guests: occupied.map((seat) => ({
       id: seat.seatId,
       name: seat.name,

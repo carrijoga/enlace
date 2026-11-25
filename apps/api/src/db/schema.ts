@@ -33,6 +33,11 @@ export const projects = pgTable(
     // Planta da festa sem as atribuições (salão, mesas e elementos); nula enquanto não existir.
     receptionSchemaVersion: integer('reception_schema_version'),
     reception: jsonb('reception').$type<Omit<Reception, 'tableAssignments'>>(),
+    // Categorias de convidado criadas no projeto (`id`, `label`, `color`); validadas pelo contrato.
+    guestCategories: jsonb('guest_categories')
+      .$type<CeremonyProject['guestCategories']>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
     revision: integer('revision').notNull().default(1),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -46,6 +51,7 @@ export const projects = pgTable(
       'projects_reception_check',
       sql`(${table.reception} IS NULL) = (${table.receptionSchemaVersion} IS NULL) AND (${table.reception} IS NULL OR (jsonb_typeof(${table.reception}) = 'object' AND ${table.receptionSchemaVersion} = 1))`,
     ),
+    check('projects_guest_categories_check', sql`jsonb_typeof(${table.guestCategories}) = 'array'`),
   ],
 );
 
@@ -66,7 +72,8 @@ export const guests = pgTable(
     index('guests_project_order_idx').on(table.projectId, table.sortOrder),
     check(
       'guests_category_check',
-      sql`${table.category} IN ('familia','padrinho','madrinha','pajem','convidado')`,
+      // Categoria padrão ou o UUID de uma categoria personalizada do projeto.
+      sql`${table.category} IN ('familia','padrinho','madrinha','pajem','convidado') OR ${table.category} ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'`,
     ),
   ],
 );

@@ -1,8 +1,13 @@
 import {
+  BUILTIN_GUEST_CATEGORY_LABELS,
+  GUEST_CATEGORY_LIMITS,
+  categoryLabelKey,
   createUuid,
   projectSchema,
   sharedViewSchema,
   type CeremonyProject,
+  type CustomGuestCategory,
+  type GuestCategoryColor,
   type Project,
   type SharedView,
 } from '@enlace/contracts';
@@ -55,6 +60,7 @@ export function createInitialProject(): Project {
       linkedCounts: true,
       rows: emptyRows(),
     },
+    guestCategories: [],
     guests: [],
     assignments: [],
     reception: null,
@@ -216,6 +222,72 @@ export function removeGuest(project: Project, guestId: string): Project {
         : reception,
   });
 }
+/** Acrescenta uma categoria personalizada ao fim da lista; o nome é aparado e não pode repetir outra. */
+export function addGuestCategory(
+  project: Project,
+  input: { label: string; color: GuestCategoryColor },
+): Project {
+  if (project.guestCategories.length >= GUEST_CATEGORY_LIMITS.maxCustom)
+    throw new Error(`Limite de ${GUEST_CATEGORY_LIMITS.maxCustom} categorias personalizadas.`);
+  const category = {
+    id: uuid(),
+    label: checkedCategoryLabel(project, input.label),
+    color: input.color,
+  };
+  return validate({ ...project, guestCategories: [...project.guestCategories, category] });
+}
+export function updateGuestCategory(
+  project: Project,
+  categoryId: string,
+  patch: Partial<Pick<CustomGuestCategory, 'label' | 'color'>>,
+): Project {
+  if (!project.guestCategories.some((category) => category.id === categoryId))
+    throw new Error('Categoria inexistente.');
+  const label =
+    patch.label === undefined ? undefined : checkedCategoryLabel(project, patch.label, categoryId);
+  return validate({
+    ...project,
+    guestCategories: project.guestCategories.map((category) =>
+      category.id === categoryId
+        ? { ...category, ...patch, ...(label === undefined ? {} : { label }) }
+        : category,
+    ),
+  });
+}
+/** Quantos convidados usam a categoria: quem estiver nela volta para "Convidado" ao removê-la. */
+export function countGuestsInCategory(project: Project, categoryId: string): number {
+  return project.guests.filter((guest) => guest.category === categoryId).length;
+}
+export function removeGuestCategory(project: Project, categoryId: string): Project {
+  if (!project.guestCategories.some((category) => category.id === categoryId))
+    throw new Error('Categoria inexistente.');
+  return validate({
+    ...project,
+    guestCategories: project.guestCategories.filter((category) => category.id !== categoryId),
+    guests: project.guests.some((guest) => guest.category === categoryId)
+      ? project.guests.map((guest) =>
+          guest.category === categoryId ? { ...guest, category: 'convidado' as const } : guest,
+        )
+      : project.guests,
+  });
+}
+function checkedCategoryLabel(project: Project, raw: string, exceptId?: string): string {
+  const label = raw.trim().replace(/\s+/g, ' ');
+  if (!label) throw new Error('Dê um nome à categoria.');
+  if (label.length > GUEST_CATEGORY_LIMITS.maxLabelLength)
+    throw new Error(
+      `O nome da categoria pode ter até ${GUEST_CATEGORY_LIMITS.maxLabelLength} caracteres.`,
+    );
+  const key = categoryLabelKey(label);
+  const taken =
+    Object.values(BUILTIN_GUEST_CATEGORY_LABELS).some((other) => categoryLabelKey(other) === key) ||
+    project.guestCategories.some(
+      (other) => other.id !== exceptId && categoryLabelKey(other.label) === key,
+    );
+  if (taken) throw new Error('Já existe uma categoria com esse nome.');
+  return label;
+}
+
 export function assignGuest(project: Project, guestId: string, seatId: string): Project {
   if (!project.guests.some((guest) => guest.id === guestId))
     throw new Error('Convidado inexistente.');
@@ -350,5 +422,9 @@ export function toSharedView(project: CeremonyProject, mode: SharedView['mode'])
     if (!guest) throw new Error('Convidado inexistente.');
     return { seatId, name: guest.name, category: guest.category };
   });
-  return sharedViewSchema.parse({ mode, ...base, seats });
+  const usedCategories = new Set(seats.map((seat) => seat.category));
+  const guestCategories = project.guestCategories
+    .filter((category) => usedCategories.has(category.id))
+    .map((category) => ({ ...category }));
+  return sharedViewSchema.parse({ mode, ...base, guestCategories, seats });
 }

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import { createUuid, type Project } from '@enlace/contracts';
-  import { GUEST_CATEGORY_OPTIONS } from './guest-categories';
+  import { createUuid, type CustomGuestCategory, type Project } from '@enlace/contracts';
+  import { categoryOptions } from './guest-categories';
   import {
     CsvError,
     MAX_CSV_BYTES,
@@ -23,11 +23,13 @@
 
   let {
     existingNames,
+    customCategories,
     capacity,
     onImport,
     onClose,
   }: {
     existingNames: string[];
+    customCategories: readonly CustomGuestCategory[];
     /** Quantos convidados ainda cabem no projeto. */
     capacity: number;
     /** Retorna false quando o editor recusou o lote; o diálogo continua aberto. */
@@ -58,6 +60,7 @@
   let mapping = $state<ColumnMapping>({ name: null, category: null, note: null });
   let defaultCategory = $state<GuestCategory>('convidado');
   let categoryMap = $state<Record<string, GuestCategory>>({});
+  const options = $derived(categoryOptions(customCategories));
   let excluded = $state(new Set<number>());
   let error = $state('');
   let reading = $state(false);
@@ -72,7 +75,15 @@
   const preview = $derived(
     text === null
       ? null
-      : buildPreview({ rows, hasHeader, mapping, defaultCategory, categoryMap, existingNames }),
+      : buildPreview({
+          rows,
+          hasHeader,
+          mapping,
+          defaultCategory,
+          categoryMap,
+          existingNames,
+          customCategories,
+        }),
   );
   const lines = $derived(preview?.lines ?? []);
   const included = $derived(new Set(lines.filter((l) => !excluded.has(l.line)).map((l) => l.line)));
@@ -119,7 +130,7 @@
       for (let index = 0; index < columnCount; index++) {
         if (index === guessed.name) continue;
         const values = rows.map((row) => row.cells[index] ?? '').filter((v) => v.trim());
-        if (values.length && values.every((value) => matchCategory(value))) {
+        if (values.length && values.every((value) => matchCategory(value, customCategories))) {
           guessed.category = index;
           break;
         }
@@ -172,7 +183,7 @@
     if (onImport(toGuests(lines, included, createUuid))) dialog.close();
   }
   const categoryLabel = (value: GuestCategory | null) =>
-    GUEST_CATEGORY_OPTIONS.find((option) => option.value === value)?.label ?? '—';
+    options.find((option) => option.value === value)?.label ?? '—';
 </script>
 
 <dialog
@@ -244,7 +255,7 @@
       <label
         >Categoria quando vazia
         <select bind:value={defaultCategory}>
-          {#each GUEST_CATEGORY_OPTIONS as option (option.value)}<option value={option.value}
+          {#each options as option (option.value)}<option value={option.value}
               >{option.label}</option
             >{/each}
         </select></label
@@ -268,7 +279,7 @@
               }}
             >
               <option value="">Escolha…</option>
-              {#each GUEST_CATEGORY_OPTIONS as option (option.value)}<option value={option.value}
+              {#each options as option (option.value)}<option value={option.value}
                   >{option.label}</option
                 >{/each}
             </select></label

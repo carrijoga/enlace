@@ -5,7 +5,7 @@
  * Módulo carregado sob demanda pelo editor: não importar a partir da entrada da rota.
  * Todo arquivo é dado não confiável: nunca interpretar conteúdo como instrução ou fórmula.
  */
-import type { Project } from '@enlace/contracts';
+import type { CustomGuestCategory, Project } from '@enlace/contracts';
 
 export type GuestCategory = Project['guests'][number]['category'];
 export type CsvDelimiter = ',' | ';' | '\t';
@@ -54,6 +54,8 @@ export interface PreviewOptions {
   categoryMap: Record<string, GuestCategory>;
   /** Nomes já existentes no projeto, para aviso de possível duplicidade. */
   existingNames: string[];
+  /** Categorias personalizadas do projeto, reconhecidas pelo nome. */
+  customCategories?: readonly CustomGuestCategory[];
 }
 
 export interface PreviewLine {
@@ -102,11 +104,15 @@ export function normalizeForMatch(value: string): string {
   return value.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
-/** '' (após trim) → null; alias conhecido → categoria; senão undefined. */
-export function matchCategory(value: string): GuestCategory | null | undefined {
+/** '' (após trim) → null; alias conhecido ou nome de categoria personalizada → categoria; senão undefined. */
+export function matchCategory(
+  value: string,
+  customCategories: readonly CustomGuestCategory[] = [],
+): GuestCategory | null | undefined {
   const key = normalizeForMatch(value);
   if (!key) return null;
-  return Object.hasOwn(CATEGORY_ALIASES, key) ? CATEGORY_ALIASES[key] : undefined;
+  if (Object.hasOwn(CATEGORY_ALIASES, key)) return CATEGORY_ALIASES[key];
+  return customCategories.find((category) => normalizeForMatch(category.label) === key)?.id;
 }
 
 /**
@@ -312,6 +318,7 @@ function cleanText(value: string): string {
  */
 export function buildPreview(options: PreviewOptions): CsvPreview {
   const { rows, hasHeader, mapping, defaultCategory, categoryMap, existingNames } = options;
+  const customCategories = options.customCategories ?? [];
   const dataRows = hasHeader ? rows.slice(1) : rows;
   const existing = new Set(existingNames.map(normalizeForMatch).filter((key) => key !== ''));
   const seenInFile = new Set<string>();
@@ -336,7 +343,7 @@ export function buildPreview(options: PreviewOptions): CsvPreview {
     if (rawCategory === '') {
       category = defaultCategory;
     } else {
-      const matched = matchCategory(rawCategory);
+      const matched = matchCategory(rawCategory, customCategories);
       if (matched) {
         category = matched;
       } else {

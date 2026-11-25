@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { CeremonyProject } from '@enlace/contracts';
-  import { GUEST_CATEGORIES } from './guest-categories';
+  import { categoryLookup } from './guest-categories';
 
   // Alternativa em texto à planta SVG (WCAG 1.1.1/2.5.8): mesma seleção e atribuição, sem depender
   // da posição visual. O conteúdo só é montado ao abrir, para não pesar no cenário de 288 cadeiras.
@@ -31,6 +31,7 @@
   const total = $derived(
     rows.reduce((sum, row) => sum + row.leftSeatIds.length + row.rightSeatIds.length, 0),
   );
+  const categoryOf = $derived(categoryLookup(project.guestCategories));
   const guestsById = $derived(new Map(project.guests.map((guest) => [guest.id, guest])));
   const occupantBySeat = $derived(new Map(project.assignments.map((a) => [a.seatId, a.guestId])));
   const selectedGuestName = $derived(
@@ -58,7 +59,7 @@
         >{guest
           ? anonymous
             ? 'Ocupada'
-            : `${guest.name} · ${GUEST_CATEGORIES[guest.category].label}`
+            : `${guest.name} · ${categoryOf(guest.category).label}`
           : 'Disponível'}</span
       >
     </button>

@@ -1,6 +1,6 @@
 import { projectSchema, type Project } from '@enlace/contracts';
 import { getLayoutGeometry, type LayoutGeometry, type SeatGeometry } from '@enlace/domain';
-import { GUEST_CATEGORIES } from '../guest-categories.js';
+import { categoryLookup } from '../guest-categories.js';
 
 const PAGE_WIDTH = 1600;
 const PAGE_CENTER = PAGE_WIDTH / 2;
@@ -221,6 +221,7 @@ export function createMapSvg(projectInput: Project, personalGuestId?: string): s
   const project = projectSchema.parse(projectInput);
   const geometry = getLayoutGeometry(project.layout);
   const guestById = new Map(project.guests.map((guest) => [guest.id, guest]));
+  const categoryOf = categoryLookup(project.guestCategories);
   const assignmentBySeat = new Map(
     project.assignments.map((assignment) => [assignment.seatId, assignment]),
   );
@@ -282,7 +283,7 @@ export function createMapSvg(projectInput: Project, personalGuestId?: string): s
           chair(EMPTY_CHAIR, `<text x="0" y="5" class="chair-empty">${number}</text>`),
         );
       }
-      const category = GUEST_CATEGORIES[guest.category];
+      const category = categoryOf(guest.category);
       return placeSeat(
         seat,
         `<title>${escapeXml(guest.name)}</title>${chair(

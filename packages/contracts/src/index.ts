@@ -1,7 +1,10 @@
 import { z } from 'zod';
 import {
+  GUEST_CATEGORY_LIMITS,
   MAX_PROJECT_FILE_BYTES,
+  checkGuestCategories,
   createUuid,
+  customGuestCategorySchema,
   dateSchema,
   guestSchema,
   layoutSchema,
@@ -13,11 +16,21 @@ import {
 import { projectSchema, type Project } from './reception.js';
 
 export {
+  BUILTIN_GUEST_CATEGORIES,
+  BUILTIN_GUEST_CATEGORY_LABELS,
+  GUEST_CATEGORY_COLORS,
+  GUEST_CATEGORY_LIMITS,
   MAX_PROJECT_FILE_BYTES,
+  categoryLabelKey,
   ceremonyProjectSchema,
   createUuid,
+  customGuestCategorySchema,
+  guestCategoryKeySchema,
   projectDocumentV1Schema,
+  type BuiltinGuestCategory,
   type CeremonyProject,
+  type CustomGuestCategory,
+  type GuestCategoryColor,
 } from './ceremony.js';
 export * from './reception.js';
 
@@ -100,6 +113,7 @@ export function createDemoDocument(): ProjectDocument {
     couple: { first: 'Alex', second: 'Ravi' },
     weddingDate: null,
     layout: { mode: 'straight', curveStrength: 50, aisleWidth: 1.8, linkedCounts: true, rows },
+    guestCategories: [],
     guests: [],
     assignments: [],
     reception: null,
@@ -224,6 +238,11 @@ export const sharedViewSchema = z
       .object({
         mode: z.literal('names'),
         ...sharedBaseShape,
+        /** Só as categorias personalizadas de quem tem cadeira; ausente em respostas antigas. */
+        guestCategories: z
+          .array(customGuestCategorySchema)
+          .max(GUEST_CATEGORY_LIMITS.maxCustom)
+          .default([]),
         seats: z.array(sharedSeatSchema).max(300),
       })
       .strict(),
@@ -258,6 +277,16 @@ export const sharedViewSchema = z
       if (seen.has(seatId)) ctx.addIssue({ code: 'custom', path, message: 'Cadeira repetida' });
       seen.add(seatId);
     });
+    if (view.mode === 'names')
+      checkGuestCategories(
+        view.guestCategories,
+        view.seats.map((seat, index) => ({
+          category: seat.category,
+          path: ['seats', index, 'category'],
+        })),
+        ctx,
+        'guestCategories',
+      );
   });
 
 export type ShareLinkMode = z.infer<typeof shareLinkModeSchema>;

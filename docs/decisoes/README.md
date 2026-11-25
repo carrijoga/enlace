@@ -59,3 +59,7 @@ Não decididos: recursos na Railway, orçamento, transporte de e-mail, versões 
 ## 0016 — Compartilhamento colaborativo com edição e cópia entre contas
 
 [ADR-0016](0016-compartilhamento-colaborativo-e-copia.md): aceita e implementada localmente em 21/11/2026. Estende os links de compartilhamento com os modos `edit` (edição do projeto original por conta autenticada enquanto o link estiver ativo, com `role: 'owner' | 'editor'` e controle de revisão concorrente) e `clone` (cópia independente na conta de destino, idempotente por link e usuário), resgatados com confirmação explícita em `/participar`.
+
+## 0017 — Categorias de convidado personalizadas
+
+[ADR-0017](0017-categorias-de-convidado-personalizadas.md): aceita e implementada localmente em 24/11/2026. Categorias criadas por projeto em `guestCategories` (até 20, nome até 30 caracteres, cor de paleta fechada); `guest.category` aceita a chave padrão ou o UUID da categoria; excluir devolve as pessoas a `convidado`. Migração `0005_guest_categories`.

@@ -422,3 +422,13 @@ describe('fluxo completo', () => {
     expect(preview.lines[0]).toMatchObject({ name: 'José', category: 'familia' });
   });
 });
+
+describe('categorias personalizadas na importação', () => {
+  it('reconhece o nome de uma categoria do projeto, sem acento nem caixa', () => {
+    const id = '0f9c3d1e-7a2b-4c5d-8e6f-1a2b3c4d5e6f';
+    const custom = [{ id, label: 'Amigos da Faculdade', color: 'azul' as const }];
+    expect(matchCategory('amigos da faculdade', custom)).toBe(id);
+    expect(matchCategory('Amigos da Faculdade')).toBeUndefined();
+    expect(matchCategory('Família', custom)).toBe('familia');
+  });
+});

@@ -5,7 +5,7 @@
   import { getLayoutGeometry, getSeatLabels } from '@enlace/domain';
   import PlanCanvas from '../../lib/editor/PlanCanvas.svelte';
   import SeatList from '../../lib/editor/SeatList.svelte';
-  import { GUEST_CATEGORIES, type GuestCategory } from '../../lib/editor/guest-categories';
+  import { legendEntries } from '../../lib/editor/guest-categories';
   import { matchesSearch, toSearchWords } from '../../lib/search';
   import {
     fetchSharedView,
@@ -262,11 +262,10 @@
         <div class="plan-footer">
           <ul class="legend" aria-label="Legenda da planta">
             {#if named}
-              {#each ['familia', 'padrinho', 'pajem', 'convidado'] as category (category)}
-                {@const colors = GUEST_CATEGORIES[category as GuestCategory]}
+              {#each legendEntries(view?.mode === 'names' ? view.guestCategories : []) as entry (entry.value)}
                 <li>
-                  <i style:background={colors.fill} style:border-color={colors.stroke}></i>
-                  {category === 'padrinho' ? 'Padrinhos' : colors.label}
+                  <i style:background={entry.fill} style:border-color={entry.stroke}></i>
+                  {entry.label}
                 </li>
               {/each}
             {:else}

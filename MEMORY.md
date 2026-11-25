@@ -2,6 +2,17 @@
 
 Atualizado em 24/11/2026, America/Sao_Paulo.
 
+## Avisos, categorias personalizadas e busca — 24/11/2026
+
+Itens 2, 3 e 4 do pedido do usuário, na branch `carrijoga/avisos-categorias-busca` (a partir da `main` com o PR #8). Um commit por item, para poder subir separadamente.
+- **Ignorar avisos (festa):** caixa "Ignorar avisos na planta" no menu de avisos de `ReceptionEditor.svelte`. Os avisos seguem listados e contados; o canvas recebe um conjunto vazio em `warnedIds`. Preferência em `localStorage` (`enlace:festa:ocultar-destaque-avisos`).
+- **Busca por início de palavra:** `apps/web/src/lib/search.ts` (`toSearchWords`, `matchesSearch`): cada palavra digitada precisa começar uma palavra do nome ou anotação, sem acento nem caixa. Usado no painel de convidados, nas mesas da festa e em `/ver`.
+- **Categorias personalizadas ([ADR-0017](docs/decisoes/0017-categorias-de-convidado-personalizadas.md)):** `guestCategories` no projeto, `guest.category` aceita UUID, comandos `addGuestCategory`/`updateGuestCategory`/`removeGuestCategory` no domínio, migração `0005_guest_categories`, `GuestCategoriesEditor.svelte` no painel de convidados, cores por `categoryLookup` em planta, lista, mesas, PNG, legenda, CSV e `/ver`. Defeito achado no navegador e corrigido: `sameProject` do editor ignorava o campo novo e descartava a criação.
+- Validação: `check` e `lint` sem erros; `vitest` com PostgreSQL 18 local (`TEST_CREATE_DATABASE=1`): 33 arquivos / 291 testes, cobrindo migração `0005`, gravação, conflito de referência e cópia. Fluxo conferido no navegador Orca (criar categoria, convidado na categoria, cadeira e legenda em azul). Build de produção e `measure:web`: `/` 45,61 KiB, `/editor` 97,40 KiB, `/ver` 83,37 KiB, `/participar` 75,64 KiB.
+- Não verificado: opção de ignorar avisos e busca nova no navegador (cobertas por check e testes unitários da busca); `/ver` com categoria personalizada só por teste de domínio.
+
+Próximo passo: abrir PR, aplicar a migração `0005` no deploy e conferir no ambiente publicado.
+
 ## Exportação da planta da festa em PNG — 24/11/2026
 
 Pedido do usuário (item 1 de 4; entregue isolado para subir sem depender dos demais). O menu "Exportar" do editor ganhou "Planta da festa em PNG" (habilitado quando há `reception`); a opção antiga passou a se chamar "Planta da cerimônia em PNG".
@@ -9,7 +20,7 @@ Pedido do usuário (item 1 de 4; entregue isolado para subir sem depender dos de
 - `exports.ts`: rasterização extraída para `downloadSvgAsPng`, usada pela cerimônia e pela festa (`downloadReceptionPng`, arquivo `<titulo>-planta-festa.png`). Continua carregada sob demanda.
 - Validação: `check` e `lint` sem erros; testes de `files` (58) incluindo `reception-svg.test.ts`; imagem conferida renderizando o SVG no Edge headless com dados fictícios. Não medido: build de produção/`measure:web` (a mudança fica no chunk dinâmico de exportação).
 
-Pendentes do mesmo pedido: (2) opção para ignorar avisos sem destacar objetos em vermelho, (3) categorias de convidado personalizadas, (4) busca de convidados por prefixo de palavra em vez de qualquer trecho.
+Mergeado na `main` pelo PR #8 em 24/11/2026.
 
 ## Fase 6 sincronizada com a `main` e preparada para produção — 23/11/2026
 

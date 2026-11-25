@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { createUuid, type Project } from '@enlace/contracts';
+  import { createUuid, type GuestCategoryColor, type Project } from '@enlace/contracts';
   import { getSeatLabels } from '@enlace/domain';
-  import { GUEST_CATEGORIES, GUEST_CATEGORY_OPTIONS, type GuestCategory } from './guest-categories';
+  import { categoryOptions, type GuestCategory } from './guest-categories';
+  import GuestCategoriesEditor from './GuestCategoriesEditor.svelte';
   import { matchesSearch, toSearchWords } from '../search';
 
   type Guest = Project['guests'][number];
@@ -19,6 +20,9 @@
     onAssignGuest,
     onUnassignSeat,
     onImportCsv,
+    onAddCategory,
+    onUpdateCategory,
+    onRemoveCategory,
   }: {
     project: Project;
     selectedGuestId: string | null;
@@ -30,6 +34,12 @@
     onAssignGuest: (guestId: string, seatId: string) => void;
     onUnassignSeat: (seatId: string) => void;
     onImportCsv?: (trigger: HTMLButtonElement) => void;
+    onAddCategory: (label: string, color: GuestCategoryColor) => boolean;
+    onUpdateCategory: (
+      id: string,
+      patch: { label?: string; color?: GuestCategoryColor },
+    ) => boolean;
+    onRemoveCategory: (id: string) => void;
   } = $props();
 
   let search = $state('');
@@ -66,8 +76,20 @@
   const unseatedCount = $derived(guests.filter((guest) => !seatByGuest.has(guest.id)).length);
   // Todas as linhas ficam montadas; busca e filtro só alternam `hidden`. Recriar ~300 linhas a
   // cada mudança de filtro custava ~50 ms num celular Android no cenário máximo.
+  const options = $derived(categoryOptions(project.guestCategories));
+  const optionByValue = $derived(new Map(options.map((option) => [option.value, option])));
+  const styleOf = (category: GuestCategory) =>
+    optionByValue.get(category) ?? optionByValue.get('convidado')!;
+  // Categoria escolhida que deixou de existir (excluída ou desfeita) volta para "Convidado".
+  const validCategory = (category: GuestCategory): GuestCategory =>
+    optionByValue.has(category) ? category : 'convidado';
+  const categoryCounts = $derived.by(() => {
+    const counts: Record<string, number> = {};
+    for (const guest of guests) counts[guest.category] = (counts[guest.category] ?? 0) + 1;
+    return counts;
+  });
   const groups = $derived(
-    GUEST_CATEGORY_OPTIONS.map((category) => ({
+    options.map((category) => ({
       category,
       guests: guests.filter((guest) => guest.category === category.value),
     })),
@@ -105,7 +127,12 @@
     }
     addError = '';
     if (
-      onAddGuest({ id: createUuid(), name, category: newCategory, note: newNote.trim() }) === false
+      onAddGuest({
+        id: createUuid(),
+        name,
+        category: validCategory(newCategory),
+        note: newNote.trim(),
+      }) === false
     )
       return;
     newName = '';
@@ -133,7 +160,13 @@
       editError = 'O nome deve ter até 100 caracteres.';
       return;
     }
-    if (onUpdateGuest(id, { name, category: editCategory, note: editNote.trim() }) === false)
+    if (
+      onUpdateGuest(id, {
+        name,
+        category: validCategory(editCategory),
+        note: editNote.trim(),
+      }) === false
+    )
       return;
     editingId = null;
   }
@@ -221,7 +254,7 @@
     />
     <label for="new-guest-category">Categoria</label>
     <select id="new-guest-category" bind:value={newCategory}>
-      {#each GUEST_CATEGORY_OPTIONS as category (category.value)}<option value={category.value}
+      {#each options as category (category.value)}<option value={category.value}
           >{category.label}</option
         >{/each}
     </select>
@@ -238,6 +271,14 @@
       >Adicionar convidado</button
     >
   </form>
+
+  <GuestCategoriesEditor
+    categories={project.guestCategories}
+    countOf={(id) => categoryCounts[id] ?? 0}
+    onAdd={onAddCategory}
+    onUpdate={onUpdateCategory}
+    onRemove={onRemoveCategory}
+  />
 
   <section class="guest-list" aria-label="Lista de convidados">
     <div class="list-heading">
@@ -292,7 +333,7 @@
               >
                 <span
                   class="guest-dot"
-                  style={`--category-fill:${GUEST_CATEGORIES[guest.category].fill};--category-stroke:${GUEST_CATEGORIES[guest.category].stroke}`}
+                  style={`--category-fill:${styleOf(guest.category).fill};--category-stroke:${styleOf(guest.category).stroke}`}
                 ></span>
                 <span class="guest-copy"
                   ><strong>{guest.name}</strong>{#if guest.note}<small>{guest.note}</small
@@ -318,8 +359,8 @@
                   <label for={`edit-category-${guest.id}`}>Categoria</label><select
                     id={`edit-category-${guest.id}`}
                     bind:value={editCategory}
-                    >{#each GUEST_CATEGORY_OPTIONS as option (option.value)}<option
-                        value={option.value}>{option.label}</option
+                    >{#each options as option (option.value)}<option value={option.value}
+                        >{option.label}</option
                       >{/each}</select
                   >
                   <label for={`edit-note-${guest.id}`}>Anotação</label><textarea

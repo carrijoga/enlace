@@ -2,7 +2,7 @@
   import { tick, untrack } from 'svelte';
   import type { CeremonyProject } from '@enlace/contracts';
   import type { LayoutGeometry, SeatGeometry } from '@enlace/domain';
-  import { GUEST_CATEGORIES } from './guest-categories';
+  import { categoryLookup } from './guest-categories';
   import { glideSeats, SEAT_MOTION_LIMIT, welcomeSeat, type SeatPose } from './plan-motion';
 
   let {
@@ -36,6 +36,7 @@
   const guestList = $derived(project.guests);
   const assignmentList = $derived(project.assignments);
   const guests = $derived(new Map(guestList.map((guest) => [guest.id, guest])));
+  const categoryOf = $derived(categoryLookup(project.guestCategories));
   const assignments = $derived(new Map(assignmentList.map((a) => [a.seatId, a.guestId])));
   // Lista de cadeiras estável enquanto as fileiras não mudam: id, rótulo e índices não dependem
   // de formato, curvatura ou corredor. Assim trocar o formato só reexecuta o `transform` de cada
@@ -223,7 +224,7 @@
     </g>
     {#each seatList as seat (seat.id)}
       {@const guest = guests.get(assignments.get(seat.id) ?? '')}
-      {@const category = guest && !anonymous ? GUEST_CATEGORIES[guest.category] : null}
+      {@const category = guest && !anonymous ? categoryOf(guest.category) : null}
       {@const active = selectedSeatId === seat.id || Boolean(guest && selectedGuestId === guest.id)}
       <g
         data-seat-id={seat.id}

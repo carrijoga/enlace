@@ -28,6 +28,7 @@ const project: Project = {
     linkedCounts: true,
     rows: [{ id: rowId, leftSeatIds: [seatId], rightSeatIds: [] }],
   },
+  guestCategories: [],
   guests: [{ id: guestId, name: 'Convidada fictícia', category: 'convidado' as const, note: '' }],
   assignments: [{ seatId, guestId }],
   reception: null,
@@ -288,6 +289,50 @@ suite('PostgreSQL project store (opt-in isolated schema)', () => {
     ).rejects.toMatchObject({ code: '42501' });
     await expect(runtimePool.query('DROP TABLE projects')).rejects.toMatchObject({ code: '42501' });
     await pool.query('DELETE FROM projects WHERE id=$1', [id]);
+  });
+
+  it('persiste categorias personalizadas e as preserva em cópias', async () => {
+    const id = randomUUID();
+    const categoryId = randomUUID();
+    const withCategory: Project = {
+      ...project,
+      guestCategories: [{ id: categoryId, label: 'Amigos fictícios', color: 'azul' }],
+      guests: [{ ...project.guests[0]!, category: categoryId }],
+    };
+    const created = await store.create(ownerId, {
+      id,
+      operationId: randomUUID(),
+      project: withCategory,
+    });
+    expect(created.project).toEqual(withCategory);
+    expect((await store.get(ownerId, id)).project).toEqual(withCategory);
+
+    const renamed: Project = {
+      ...withCategory,
+      guestCategories: [{ id: categoryId, label: 'Amigos', color: 'oliva' }],
+    };
+    await store.save(ownerId, id, {
+      expectedRevision: 1,
+      operationId: randomUUID(),
+      project: renamed,
+    });
+    expect((await store.get(ownerId, id)).project.guestCategories).toEqual(renamed.guestCategories);
+
+    await expect(
+      store.save(ownerId, id, {
+        expectedRevision: 2,
+        operationId: randomUUID(),
+        project: { ...renamed, guestCategories: [] },
+      }),
+    ).rejects.toMatchObject({ status: 400, code: 'invalid_request' });
+
+    const copyId = randomUUID();
+    const copy = await transaction(pool, (client) =>
+      insertProjectCopy(client, foreignOwnerId, copyId, renamed),
+    );
+    expect(copy.project).toEqual(renamed);
+    await store.delete(ownerId, id, 2);
+    await store.delete(foreignOwnerId, copyId, 1);
   });
 
   describe('planta da festa', () => {
@@ -589,6 +634,7 @@ migrationSuite('PostgreSQL migration runner (temporary database)', () => {
         '0002_share_links.sql',
         '0003_project_link_redemptions.sql',
         '0004_reception.sql',
+        '0005_guest_categories.sql',
       ]);
       expect(second).toEqual([]);
       tempPool = new Pool({ connectionString: tempUrl.toString() });
