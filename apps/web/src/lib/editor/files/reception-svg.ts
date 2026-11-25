@@ -113,7 +113,11 @@ export function createReceptionSvg(
  * Festa da visualização pública: com nomes no modo `names` e só a planta no modo `plan`, que não
  * recebe nomes do servidor. Revalida a projeção antes de desenhar.
  */
-export function createSharedReceptionSvg(viewInput: SharedView, title: string): string {
+export function createSharedReceptionSvg(
+  viewInput: SharedView,
+  title: string,
+  { withNames = true }: { withNames?: boolean } = {},
+): string {
   const view = sharedViewSchema.parse(viewInput);
   const source = view.reception;
   if (!source) throw new Error('Este link não tem planta da festa.');
@@ -133,7 +137,7 @@ export function createSharedReceptionSvg(viewInput: SharedView, title: string): 
     tables: source.tables,
     items: source.items,
     occupancy,
-    guestsByTable,
+    guestsByTable: withNames ? guestsByTable : null,
   });
 }
 

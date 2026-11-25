@@ -80,6 +80,14 @@ describe('SVG da planta da festa', () => {
     expect(named).toContain('CONVIDADOS POR MESA');
     expect(named).toContain('Bruno Exemplo');
     expect(named).toContain('2/8');
+    const namedPlanOnly = createSharedReceptionSvg(
+      toSharedView(project, 'names'),
+      'Festa de Ana & Bia',
+      { withNames: false },
+    );
+    expect(namedPlanOnly).toContain('2/8');
+    expect(namedPlanOnly).not.toContain('Bruno');
+    expect(namedPlanOnly).not.toContain('CONVIDADOS POR MESA');
     const plan = createSharedReceptionSvg(toSharedView(project, 'plan'), 'Festa de Ana & Bia');
     expect(plan).toContain('Mesa dos amigos');
     expect(plan).toContain('2/8');

@@ -10,7 +10,7 @@ Rota `/ver`. Modo **Operate**. Quem recebe o link consulta a disposição da cer
 
 ## Baixar imagem — 25/11/2026
 
-A lateral tem a seção "Baixar imagem", logo depois da troca Cerimônia/Festa. Ela oferece a planta da cerimônia e, se o link tiver festa, a planta da festa, em PNG. No modo "Com nomes" as imagens trazem os nomes (a festa com a lista "Convidados por mesa"), e quem escolhe uma pessoa na busca ou na lista pode baixar só o lugar dela. No modo "Só a planta" as imagens mostram apenas a ocupação: as cadeiras ocupadas ficam em verde, sem nome nem categoria, e a festa sai sem lista. O desenho usa só a projeção recebida pelo link (`lib/share/downloads.ts`) e é carregado sob demanda: o JavaScript inicial de `/ver` passou de 94,60 para 95,31 KiB gzip.
+A lateral tem a seção "Baixar imagem", logo depois da troca Cerimônia/Festa. Ela oferece a planta da cerimônia e, se o link tiver festa, a planta da festa, em PNG. No modo "Com nomes" as imagens trazem os nomes, e a festa tem duas opções: com a lista "Convidados por mesa" ou só a planta, sem nomes. Quem escolhe uma pessoa na busca ou na lista pode baixar só o lugar dela. No modo "Só a planta" as imagens mostram apenas a ocupação: as cadeiras ocupadas ficam em verde, sem nome nem categoria, e a festa sai sem lista. O desenho usa só a projeção recebida pelo link (`lib/share/downloads.ts`) e é carregado sob demanda: o JavaScript inicial de `/ver` passou de 94,60 para 95,31 KiB gzip.
 
 ## Validação local em 21/11/2026
 

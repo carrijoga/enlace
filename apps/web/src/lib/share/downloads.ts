@@ -9,7 +9,7 @@ import { createSharedReceptionSvg } from '../editor/files/reception-svg.js';
 import { downloadSvgAsPng, slug } from '../editor/files/exports.js';
 import { coupleTitle, toViewProject } from './client.js';
 
-export type SharedDownload = 'ceremony' | 'reception' | 'seat';
+export type SharedDownload = 'ceremony' | 'reception' | 'reception-plan' | 'seat';
 
 export async function downloadSharedPng(
   view: SharedView,
@@ -18,12 +18,14 @@ export async function downloadSharedPng(
 ): Promise<void> {
   const title = coupleTitle(view.couple);
   const base = slug(title);
-  if (kind === 'reception') {
-    const suffix = view.mode === 'names' ? '' : '-sem-nomes';
+  if (kind === 'reception' || kind === 'reception-plan') {
+    const withNames = kind === 'reception' && view.mode === 'names';
+    const suffix = withNames ? '' : '-sem-nomes';
     await downloadSvgAsPng(
       createSharedReceptionSvg(
         view,
         title.startsWith('Cerimônia') ? title.replace('Cerimônia', 'Festa') : 'Planta da festa',
+        { withNames },
       ),
       `${base}-planta-festa${suffix}.png`,
     );

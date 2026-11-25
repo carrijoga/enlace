@@ -266,10 +266,18 @@
               disabled={Boolean(downloading)}
               onclick={() => download('ceremony')}>Planta da cerimônia</button
             >
-            {#if festa}<button
+            {#if festa && named}<button
                 type="button"
                 disabled={Boolean(downloading)}
-                onclick={() => download('reception')}>Planta da festa</button
+                onclick={() => download('reception')}>Planta da festa com nomes</button
+              ><button
+                type="button"
+                disabled={Boolean(downloading)}
+                onclick={() => download('reception-plan')}>Planta da festa sem nomes</button
+              >{:else if festa}<button
+                type="button"
+                disabled={Boolean(downloading)}
+                onclick={() => download('reception-plan')}>Planta da festa</button
               >{/if}
             {#if named && selected?.guest}<button
                 type="button"
@@ -279,7 +287,7 @@
           </div>
           <p class="download-note">
             {named
-              ? 'PNG com os nomes, como nesta página. Procure seu nome para baixar só o seu lugar.'
+              ? 'PNG como nesta página. A festa pode sair com a lista de convidados por mesa ou só com a planta. Procure seu nome para baixar só o seu lugar.'
               : 'PNG só com a planta e os lugares ocupados, sem nomes.'}
           </p>
           <p class="download-status" class:error={downloadFailed} role="status" aria-live="polite">

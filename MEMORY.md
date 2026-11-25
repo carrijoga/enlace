@@ -13,7 +13,7 @@ Próximo passo: conferir `/ver` com festa no navegador e rodar os testes de inte
 
 ## Baixar imagem em `/ver` — 25/11/2026
 
-Pedido do usuário: as visualizações "Com nomes" e "Só a planta" do compartilhamento passam a oferecer download. Seção "Baixar imagem" em `/ver` com planta da cerimônia, planta da festa (quando houver) e, no modo com nomes, o lugar da pessoa escolhida. "Só a planta" gera imagens sem nomes: `createMapSvg(..., { anonymous: true })` e `createSharedReceptionSvg` sem lista. O cartão da festa foi separado dos dados do projeto (`ReceptionCard`/`receptionCardSvg`) para servir ao editor e ao link. Branch `carrijoga/ver-exportar`.
+Pedido do usuário: as visualizações "Com nomes" e "Só a planta" do compartilhamento passam a oferecer download. Seção "Baixar imagem" em `/ver` com planta da cerimônia, planta da festa (quando houver) e, no modo com nomes, o lugar da pessoa escolhida. "Só a planta" gera imagens sem nomes: `createMapSvg(..., { anonymous: true })` e `createSharedReceptionSvg` sem lista. O cartão da festa foi separado dos dados do projeto (`ReceptionCard`/`receptionCardSvg`) para servir ao editor e ao link. Branch `carrijoga/ver-exportar`. Ajuste em seguida (branch `carrijoga/ver-festa-com-sem-nomes`): no modo "Com nomes", a festa oferece "Planta da festa com nomes" e "Planta da festa sem nomes" (`createSharedReceptionSvg(..., { withNames })`).
 
 Validação: `check` e `lint` sem erros; 103 testes do web, com testes de ausência de nomes no modo "Só a planta"; cartão anônimo conferido no Edge headless. `/ver` 94,60 → 95,31 KiB gzip (desenho sob demanda). Não verificado: a seção na página `/ver` rodando (exige API com link real) e o download no navegador.
 
