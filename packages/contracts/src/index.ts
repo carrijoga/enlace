@@ -13,7 +13,7 @@ import {
   uuidSchema,
   type CeremonyProject,
 } from './ceremony.js';
-import { projectSchema, type Project } from './reception.js';
+import { RECEPTION_LIMITS, projectSchema, receptionSchema, type Project } from './reception.js';
 
 export {
   BUILTIN_GUEST_CATEGORIES,
@@ -232,18 +232,44 @@ const sharedSeatSchema = z
   })
   .strict();
 
+/** Salão, mesas e elementos da festa; as atribuições de mesa entram por modo, sem IDs de convidado. */
+const sharedReceptionShape = {
+  room: receptionSchema.shape.room,
+  tables: receptionSchema.shape.tables,
+  items: receptionSchema.shape.items,
+};
+const sharedTableGuestSchema = z
+  .object({
+    tableId: uuidSchema,
+    name: guestSchema.shape.name,
+    category: guestSchema.shape.category,
+  })
+  .strict();
+const sharedTableCountSchema = z
+  .object({ tableId: uuidSchema, occupied: z.number().int().min(1).max(300) })
+  .strict();
+
 export const sharedViewSchema = z
   .discriminatedUnion('mode', [
     z
       .object({
         mode: z.literal('names'),
         ...sharedBaseShape,
-        /** Só as categorias personalizadas de quem tem cadeira; ausente em respostas antigas. */
+        /** Só as categorias personalizadas de quem tem lugar; ausente em respostas antigas. */
         guestCategories: z
           .array(customGuestCategorySchema)
           .max(GUEST_CATEGORY_LIMITS.maxCustom)
           .default([]),
         seats: z.array(sharedSeatSchema).max(300),
+        /** Planta da festa; `null` quando o projeto não tem festa e em respostas antigas. */
+        reception: z
+          .object({
+            ...sharedReceptionShape,
+            guests: z.array(sharedTableGuestSchema).max(300),
+          })
+          .strict()
+          .nullable()
+          .default(null),
       })
       .strict(),
     z
@@ -251,10 +277,33 @@ export const sharedViewSchema = z
         mode: z.literal('plan'),
         ...sharedBaseShape,
         occupiedSeatIds: z.array(uuidSchema).max(300),
+        reception: z
+          .object({
+            ...sharedReceptionShape,
+            tableCounts: z.array(sharedTableCountSchema).max(RECEPTION_LIMITS.maxTables),
+          })
+          .strict()
+          .nullable()
+          .default(null),
       })
       .strict(),
   ])
   .superRefine((view, ctx) => {
+    if (view.reception) {
+      const tableIds = new Set(view.reception.tables.map((table) => table.id));
+      const refs =
+        view.mode === 'names'
+          ? view.reception.guests.map((guest) => guest.tableId)
+          : view.reception.tableCounts.map((count) => count.tableId);
+      refs.forEach((tableId, index) => {
+        if (!tableIds.has(tableId))
+          ctx.addIssue({
+            code: 'custom',
+            path: ['reception', view.mode === 'names' ? 'guests' : 'tableCounts', index, 'tableId'],
+            message: 'Mesa inexistente',
+          });
+      });
+    }
     const seats = new Set<string>();
     view.layout.rows.forEach((row, index) => {
       for (const seatId of [...row.leftSeatIds, ...row.rightSeatIds]) {
@@ -280,10 +329,16 @@ export const sharedViewSchema = z
     if (view.mode === 'names')
       checkGuestCategories(
         view.guestCategories,
-        view.seats.map((seat, index) => ({
-          category: seat.category,
-          path: ['seats', index, 'category'],
-        })),
+        [
+          ...view.seats.map((seat, index) => ({
+            category: seat.category,
+            path: ['seats', index, 'category'],
+          })),
+          ...(view.reception?.guests ?? []).map((guest, index) => ({
+            category: guest.category,
+            path: ['reception', 'guests', index, 'category'],
+          })),
+        ],
         ctx,
         'guestCategories',
       );

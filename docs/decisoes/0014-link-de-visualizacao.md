@@ -82,6 +82,7 @@ Todas as consultas de gerenciamento incluem o dono, como no restante da API. O l
 - Um novo segredo de ambiente, `SHARE_LINK_SECRET`, é obrigatório em produção, entra no runbook e nunca é comitado. Sem ele, a API recusa as rotas de compartilhamento.
 - O bundle de `/ver` é separado do editor e reaproveita `PlanCanvas` e `SeatList` num modo somente leitura. O modo somente leitura precisa ser uma propriedade explícita desses componentes, não uma página com eventos desligados.
 - **Festa:** quando a fase 6 existir, a projeção ganha o salão e, no modo "Com nomes", a mesa de cada pessoa. A regra muda nesse momento e precisa ser registrada: links já criados passam a mostrar a festa, e o modo "Só a planta" continua sem nomes.
+  *Implementado em 24/11/2026:* `reception` (nulo sem festa) entra na projeção com salão, mesas e elementos. "Com nomes" traz `guests` (`tableId`, nome, categoria, sem ID de convidado); "Só a planta" traz só `tableCounts`. `/ver` ganhou as abas "Cerimônia | Festa" quando há festa; a busca da aba Festa mostra a mesa da pessoa. `ReceptionCanvas` ganhou `readonly`. Links já criados passam a mostrar a festa sem ação do dono.
 - Não altera o contrato JSON, a migração v1/v3 nem o editor de outros donos. É uma entrega pequena perto da fase 6.
 
 ## Implementação da etapa 3 (20–21/11/2026)
