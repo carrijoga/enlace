@@ -51,6 +51,25 @@
   let picked = $state<ReceptionSelection | null>(null);
   let warningsOpen = $state(false);
   let warningsBox = $state<HTMLDetailsElement>();
+  // Preferência do aparelho: os avisos continuam na lista, só deixam de pintar a planta de vermelho.
+  const HIDE_HIGHLIGHT_KEY = 'enlace:festa:ocultar-destaque-avisos';
+  let hideWarningHighlight = $state(readHideHighlight());
+  function readHideHighlight(): boolean {
+    try {
+      return window.localStorage.getItem(HIDE_HIGHLIGHT_KEY) === '1';
+    } catch {
+      return false;
+    }
+  }
+  function setHideWarningHighlight(value: boolean) {
+    hideWarningHighlight = value;
+    try {
+      if (value) window.localStorage.setItem(HIDE_HIGHLIGHT_KEY, '1');
+      else window.localStorage.removeItem(HIDE_HIGHLIGHT_KEY);
+    } catch {
+      // Sem armazenamento (modo privado): vale só nesta sessão.
+    }
+  }
   let pickedGuestId = $state<string | null>(null);
   let mobilePanel = $state<'room' | 'guests'>('room');
 
@@ -129,6 +148,7 @@
     return new Map(Object.entries(byId));
   });
   const warnedIds = $derived(new Set(warningsById.keys()));
+  const highlightedIds = $derived(hideWarningHighlight ? new Set<string>() : warnedIds);
 
   const seats = $derived(reception?.tables.reduce((sum, table) => sum + table.seats, 0) ?? 0);
   const seatedGuests = $derived(assignments.length);
@@ -371,6 +391,14 @@
             {warnings.length ? plural(warnings.length, 'aviso', 'avisos') : 'Nenhum aviso'}
           </summary>
           <div class="warnings-panel">
+            <label class="hide-highlight">
+              <input
+                type="checkbox"
+                checked={hideWarningHighlight}
+                onchange={(event) => setHideWarningHighlight(event.currentTarget.checked)}
+              />
+              Ignorar avisos na planta (não destacar em vermelho)
+            </label>
             {#if warnings.length}
               <ul>
                 {#each warnings.slice(0, 30) as warning, index (index)}
@@ -407,7 +435,7 @@
         <ReceptionCanvas
           {reception}
           {occupancy}
-          {warnedIds}
+          warnedIds={highlightedIds}
           {selected}
           assigning={Boolean(selectedGuestId)}
           onSelect={select}
@@ -629,6 +657,22 @@
     border-radius: 10px;
     box-shadow: 0 10px 28px rgb(39 52 44 / 14%);
     overscroll-behavior: contain;
+  }
+  .hide-highlight {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 0 0 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #eceee8;
+    color: #36543d;
+    font-size: 12px;
+    line-height: 1.4;
+    cursor: pointer;
+  }
+  .hide-highlight input {
+    margin: 2px 0 0;
+    accent-color: #295842;
   }
   .warnings-panel > p {
     margin: 0;
