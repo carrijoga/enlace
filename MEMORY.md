@@ -1,6 +1,6 @@
 # Memória do projeto — Enlace
 
-Atualizado em 24/11/2026, America/Sao_Paulo.
+Atualizado em 25/11/2026, America/Sao_Paulo.
 
 ## Festa no link de visualização — 24/11/2026
 
@@ -10,6 +10,12 @@ Pedido do usuário: o link "com nomes e só a planta" mostrava só a cerimônia.
 - Validação: `check` e `lint` sem erros; vitest 250 passando, 43 pulados (integração precisa de PostgreSQL, não rodou aqui). Não verificado no navegador nem `measure:web`.
 
 Próximo passo: conferir `/ver` com festa no navegador e rodar os testes de integração com PostgreSQL.
+
+## Planta da festa sem nomes — 25/11/2026
+
+Pedido do usuário: além da exportação com nomes, uma versão só da planta. O menu "Exportar" agora tem "Planta da festa com nomes (PNG)" e "Planta da festa sem nomes (PNG)". `createReceptionSvg(project, { withNames: false })` omite a seção "Convidados por mesa" e mantém mesas, ocupação (`n/lugares`) e o resumo com totais; nenhum nome de convidado entra no SVG. Arquivo `<titulo>-planta-festa-sem-nomes.png`. Branch `carrijoga/festa-exportar-so-planta`.
+
+Validação: `check` e `lint` sem erros; testes de `files` (60), com teste novo garantindo ausência de nomes; imagem conferida no Edge headless com dados fictícios.
 
 ## Avisos, categorias personalizadas e busca — 24/11/2026
 

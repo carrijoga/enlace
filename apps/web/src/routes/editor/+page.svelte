@@ -703,7 +703,9 @@
       input.value = '';
     }
   }
-  async function exportFile(kind: 'json' | 'full' | 'reception' | 'individual' | 'recovery') {
+  async function exportFile(
+    kind: 'json' | 'full' | 'reception' | 'reception-plan' | 'individual' | 'recovery',
+  ) {
     if (!project || exporting) return;
     if (exportMenu) exportMenu.open = false;
     const snapshot = project,
@@ -717,7 +719,8 @@
       else if (kind === 'individual') {
         if (!recipient) throw new Error('Selecione uma pessoa com cadeira definida.');
         await files.downloadMapPng(snapshot, recipient);
-      } else if (kind === 'reception') await files.downloadReceptionPng(snapshot);
+      } else if (kind === 'reception' || kind === 'reception-plan')
+        await files.downloadReceptionPng(snapshot, kind === 'reception');
       else await files.downloadMapPng(snapshot);
       announce('Arquivo preparado para download.');
     } catch {
@@ -890,7 +893,12 @@
           <button
             disabled={!project?.reception || Boolean(exporting)}
             title={project && !project.reception ? 'Monte a planta da festa primeiro.' : undefined}
-            onclick={() => exportFile('reception')}>Planta da festa em PNG</button
+            onclick={() => exportFile('reception')}>Planta da festa com nomes (PNG)</button
+          >
+          <button
+            disabled={!project?.reception || Boolean(exporting)}
+            title={project && !project.reception ? 'Monte a planta da festa primeiro.' : undefined}
+            onclick={() => exportFile('reception-plan')}>Planta da festa sem nomes (PNG)</button
           >
           <button
             disabled={!canExportPersonal || Boolean(exporting)}

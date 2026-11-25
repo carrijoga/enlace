@@ -60,6 +60,19 @@ describe('SVG da planta da festa', () => {
     expect(svg).not.toMatch(/NaN|Infinity/);
   });
 
+  it('sem nomes, desenha a planta com a ocupação e não expõe nenhum convidado', () => {
+    const svg = createReceptionSvg(projectWithReception(), { withNames: false });
+    expect(svg).toContain('Mesa dos amigos');
+    expect(svg).toContain('2/8');
+    expect(svg).toContain('2 CONVIDADOS COM MESA');
+    expect(svg).not.toContain('Fictícia');
+    expect(svg).not.toContain('Bruno');
+    expect(svg).not.toContain('CONVIDADOS POR MESA');
+    expect(svg).not.toContain('Sem convidados');
+    const height = (value: string) => Number(value.match(/viewBox="0 0 1600 (\d+)"/)![1]);
+    expect(height(svg)).toBeLessThan(height(createReceptionSvg(projectWithReception())));
+  });
+
   it('recusa projeto sem planta da festa', () => {
     expect(() => createReceptionSvg({ ...createDemoDocument().project, reception: null })).toThrow(
       'Monte a planta da festa',

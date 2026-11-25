@@ -61,8 +61,12 @@ function label(x: number, y: number, value: string, className: string, size: num
 /**
  * Cartão da planta da festa: o salão desenhado em escala, com mesas e elementos, e abaixo a lista
  * de convidados de cada mesa. Os nomes ficam na lista porque não cabem legíveis dentro das mesas.
+ * Com `withNames: false`, sai só a planta, com a ocupação de cada mesa e sem nenhum nome.
  */
-export function createReceptionSvg(projectInput: Project): string {
+export function createReceptionSvg(
+  projectInput: Project,
+  { withNames = true }: { withNames?: boolean } = {},
+): string {
   const project = projectSchema.parse(projectInput);
   const reception = project.reception;
   if (!reception) throw new Error('Monte a planta da festa antes de exportar.');
@@ -181,7 +185,7 @@ export function createReceptionSvg(projectInput: Project): string {
   const sectionTitle = text(PAGE_CENTER, listTop + 14, 'CONVIDADOS POR MESA', 'section');
   let rowTop = listTop + 44;
   const cards: string[] = [];
-  for (let start = 0; start < tables.length; start += LIST.columns) {
+  for (let start = 0; withNames && start < tables.length; start += LIST.columns) {
     const row = tables.slice(start, start + LIST.columns);
     const rowHeight = Math.max(
       ...row.map(
@@ -229,10 +233,16 @@ export function createReceptionSvg(projectInput: Project): string {
     });
     rowTop += rowHeight + LIST.gap;
   }
-  const listBottom = tables.length ? rowTop - LIST.gap : listTop + 44;
-  const list = tables.length
-    ? `${sectionTitle}${cards.join('')}`
-    : text(PAGE_CENTER, listTop + 14, 'NENHUMA MESA NA PLANTA', 'section');
+  const listBottom = !withNames
+    ? MAP_TOP + frameHeight
+    : tables.length
+      ? rowTop - LIST.gap
+      : listTop + 44;
+  const list = !withNames
+    ? ''
+    : tables.length
+      ? `${sectionTitle}${cards.join('')}`
+      : text(PAGE_CENTER, listTop + 14, 'NENHUMA MESA NA PLANTA', 'section');
 
   const couple = [project.couple.first.trim(), project.couple.second.trim()]
     .filter(Boolean)
@@ -278,7 +288,7 @@ export function createReceptionSvg(projectInput: Project): string {
   const cardBottom = listBottom + (signature ? 192 : 136);
 
   const height = Math.ceil(cardBottom + CARD_INSET);
-  const labels = `<title>${escapeXml(project.title)}</title><desc>Planta da festa, com mesas e convidados de cada mesa.</desc>`;
+  const labels = `<title>${escapeXml(project.title)}</title><desc>${withNames ? 'Planta da festa, com mesas e convidados de cada mesa.' : 'Planta da festa, com mesas e ocupação, sem nomes de convidados.'}</desc>`;
   const frames = `<rect width="${PAGE_WIDTH}" height="${height}" fill="#faf9f5"/><rect x="${CARD_INSET}" y="${CARD_INSET}" width="${PAGE_WIDTH - CARD_INSET * 2}" height="${finite(cardBottom - CARD_INSET)}" rx="18" fill="#fffefb" stroke="#deded2" stroke-width="2"/><rect x="${CONTENT.x}" y="${MAP_TOP}" width="${CONTENT.width}" height="${finite(frameHeight)}" rx="19" fill="#f4f5f0" stroke="#e8e8df" stroke-width="2"/>`;
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${PAGE_WIDTH}" height="${height}" viewBox="0 0 ${PAGE_WIDTH} ${height}" role="img">${labels}<style>${STYLES}</style>${frames}${header}${map}${list}${footer}</svg>`;

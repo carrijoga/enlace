@@ -103,6 +103,9 @@ export async function downloadMapPng(project: Project, personalGuestId?: string)
   await downloadSvgAsPng(createMapSvg(project, personalGuestId), filename);
 }
 
-export async function downloadReceptionPng(project: Project): Promise<void> {
-  await downloadSvgAsPng(createReceptionSvg(project), `${slug(project.title)}-planta-festa.png`);
+export async function downloadReceptionPng(project: Project, withNames = true): Promise<void> {
+  await downloadSvgAsPng(
+    createReceptionSvg(project, { withNames }),
+    `${slug(project.title)}-planta-festa${withNames ? '' : '-sem-nomes'}.png`,
+  );
 }
