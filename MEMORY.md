@@ -1,6 +1,15 @@
 # Memória do projeto — Enlace
 
-Atualizado em 23/11/2026, America/Sao_Paulo.
+Atualizado em 24/11/2026, America/Sao_Paulo.
+
+## Exportação da planta da festa em PNG — 24/11/2026
+
+Pedido do usuário (item 1 de 4; entregue isolado para subir sem depender dos demais). O menu "Exportar" do editor ganhou "Planta da festa em PNG" (habilitado quando há `reception`); a opção antiga passou a se chamar "Planta da cerimônia em PNG".
+- `apps/web/src/lib/editor/files/reception-svg.ts` (`createReceptionSvg`): cartão com cabeçalho do projeto, salão em escala (paredes, portas, colunas, elementos, mesas com cadeiras ocupadas e `n/lugares`) e, abaixo, "Convidados por mesa" com o nome completo de cada convidado. Os nomes ficam na lista porque não cabem legíveis dentro das mesas. Tudo escapado.
+- `exports.ts`: rasterização extraída para `downloadSvgAsPng`, usada pela cerimônia e pela festa (`downloadReceptionPng`, arquivo `<titulo>-planta-festa.png`). Continua carregada sob demanda.
+- Validação: `check` e `lint` sem erros; testes de `files` (58) incluindo `reception-svg.test.ts`; imagem conferida renderizando o SVG no Edge headless com dados fictícios. Não medido: build de produção/`measure:web` (a mudança fica no chunk dinâmico de exportação).
+
+Pendentes do mesmo pedido: (2) opção para ignorar avisos sem destacar objetos em vermelho, (3) categorias de convidado personalizadas, (4) busca de convidados por prefixo de palavra em vez de qualquer trecho.
 
 ## Fase 6 sincronizada com a `main` e preparada para produção — 23/11/2026
 

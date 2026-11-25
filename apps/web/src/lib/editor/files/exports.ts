@@ -1,5 +1,6 @@
 import { projectSchema, projectDocumentSchema, type Project } from '@enlace/contracts';
 import { createMapSvg } from './pure-svg.js';
+import { createReceptionSvg } from './reception-svg.js';
 
 function slug(value: string): string {
   const normalized = value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
@@ -52,8 +53,7 @@ export function downloadRawDraft(raw: string): void {
   );
 }
 
-export async function downloadMapPng(project: Project, personalGuestId?: string): Promise<void> {
-  const svg = createMapSvg(project, personalGuestId);
+async function downloadSvgAsPng(svg: string, filename: string): Promise<void> {
   const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
   const svgUrl = URL.createObjectURL(svgBlob);
   try {
@@ -90,11 +90,19 @@ export async function downloadMapPng(project: Project, personalGuestId?: string)
         'image/png',
       );
     });
-    const filename = personalGuestId
-      ? `${slug(project.title)}-planta-individual.png`
-      : `${slug(project.title)}-planta.png`;
     triggerDownload(png, filename);
   } finally {
     URL.revokeObjectURL(svgUrl);
   }
+}
+
+export async function downloadMapPng(project: Project, personalGuestId?: string): Promise<void> {
+  const filename = personalGuestId
+    ? `${slug(project.title)}-planta-individual.png`
+    : `${slug(project.title)}-planta.png`;
+  await downloadSvgAsPng(createMapSvg(project, personalGuestId), filename);
+}
+
+export async function downloadReceptionPng(project: Project): Promise<void> {
+  await downloadSvgAsPng(createReceptionSvg(project), `${slug(project.title)}-planta-festa.png`);
 }

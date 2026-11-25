@@ -11,7 +11,11 @@ const TEXT_MAX_WIDTH = 1300;
 const SEAT_GUIDE_OFFSET = 38;
 
 /** Títulos automáticos não dizem nada no impresso: usam a frase do cartão. */
-const PLACEHOLDER_TITLES = new Set(['minha cerimônia', 'meu projeto', 'cerimônia de exemplo']);
+export const PLACEHOLDER_TITLES = new Set([
+  'minha cerimônia',
+  'meu projeto',
+  'cerimônia de exemplo',
+]);
 const DEFAULT_HEADLINE = 'Nosso lugar no sim';
 
 const MONTHS = [
@@ -54,7 +58,7 @@ type ChairColors = { fill: string; stroke: string; rule: string };
 const EMPTY_CHAIR: ChairColors = { fill: '#fffefb', stroke: '#c9d2c6', rule: '#d7dcd3' };
 const HIGHLIGHTED_CHAIR: ChairColors = { fill: '#f2ead8', stroke: '#b7893f', rule: '#c8ae79' };
 
-const escapeXml = (value: string): string =>
+export const escapeXml = (value: string): string =>
   value.replace(/[&<>"']/g, (character) => {
     const entities: Record<string, string> = {
       '&': '&amp;',
@@ -66,7 +70,7 @@ const escapeXml = (value: string): string =>
     return entities[character]!;
   });
 
-const finite = (value: number): string => {
+export const finite = (value: number): string => {
   if (!Number.isFinite(value)) throw new Error('Geometria de planta inválida.');
   return String(Math.round(value * 1000) / 1000);
 };
@@ -83,7 +87,7 @@ const estimatedWidth = (value: string, size: number): number =>
   [...value].reduce((total, character) => total + glyphWidth(character), 0) * size;
 
 /** Reduz a fonte até caber; abaixo do mínimo, corta com reticências. Nunca deforma as letras. */
-function fitText(
+export function fitText(
   value: string,
   maxWidth: number,
   maxSize: number,
@@ -99,7 +103,13 @@ function fitText(
   return { value: `${characters.join('').trimEnd()}…`, size: minSize };
 }
 
-function text(x: number, y: number, value: string, className: string, size?: number): string {
+export function text(
+  x: number,
+  y: number,
+  value: string,
+  className: string,
+  size?: number,
+): string {
   const fontSize = size === undefined ? '' : ` font-size="${finite(size)}"`;
   return `<text x="${finite(x)}" y="${finite(y)}" class="${className}"${fontSize}>${escapeXml(value)}</text>`;
 }
@@ -115,13 +125,13 @@ function fittedText(
   return text(PAGE_CENTER, y, fitted.value, className, fitted.size);
 }
 
-function dateLabel(date: string | null): string {
+export function dateLabel(date: string | null): string {
   if (!date) return '';
   const [year, month, day] = date.split('-').map(Number);
   return `${day} de ${MONTHS[month! - 1]} de ${year}`;
 }
 
-const plural = (count: number, singular: string, pluralForm: string): string =>
+export const plural = (count: number, singular: string, pluralForm: string): string =>
   `${count} ${count === 1 ? singular : pluralForm}`;
 
 const aisleLabel = (width: number): string =>

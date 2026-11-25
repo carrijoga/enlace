@@ -684,7 +684,7 @@
       input.value = '';
     }
   }
-  async function exportFile(kind: 'json' | 'full' | 'individual' | 'recovery') {
+  async function exportFile(kind: 'json' | 'full' | 'reception' | 'individual' | 'recovery') {
     if (!project || exporting) return;
     if (exportMenu) exportMenu.open = false;
     const snapshot = project,
@@ -698,7 +698,8 @@
       else if (kind === 'individual') {
         if (!recipient) throw new Error('Selecione uma pessoa com cadeira definida.');
         await files.downloadMapPng(snapshot, recipient);
-      } else await files.downloadMapPng(snapshot);
+      } else if (kind === 'reception') await files.downloadReceptionPng(snapshot);
+      else await files.downloadMapPng(snapshot);
       announce('Arquivo preparado para download.');
     } catch {
       announce(
@@ -865,7 +866,12 @@
             >Projeto em JSON</button
           >
           <button disabled={!project || Boolean(exporting)} onclick={() => exportFile('full')}
-            >Planta completa em PNG</button
+            >Planta da cerimônia em PNG</button
+          >
+          <button
+            disabled={!project?.reception || Boolean(exporting)}
+            title={project && !project.reception ? 'Monte a planta da festa primeiro.' : undefined}
+            onclick={() => exportFile('reception')}>Planta da festa em PNG</button
           >
           <button
             disabled={!canExportPersonal || Boolean(exporting)}
