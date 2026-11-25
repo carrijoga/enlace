@@ -2,6 +2,7 @@
   import { createUuid, type Project } from '@enlace/contracts';
   import { getSeatLabels } from '@enlace/domain';
   import { GUEST_CATEGORIES, GUEST_CATEGORY_OPTIONS, type GuestCategory } from './guest-categories';
+  import { matchesSearch, toSearchWords } from '../search';
 
   type Guest = Project['guests'][number];
   type GuestInput = { id: string; name: string; category: GuestCategory; note: string };
@@ -72,16 +73,16 @@
     })),
   );
   const searchText = $derived(
-    new Map(guests.map((g) => [g.id, `${g.name} ${g.note}`.toLocaleLowerCase('pt-BR')])),
+    new Map(guests.map((g) => [g.id, toSearchWords(`${g.name} ${g.note}`)])),
   );
   const visibleIds = $derived.by(() => {
-    const needle = search.trim().toLocaleLowerCase('pt-BR');
+    const needle = search.trim();
     if (!needle && filter === 'all') return null;
     return new Set(
       guests
         .filter(
           (guest) =>
-            (!needle || searchText.get(guest.id)!.includes(needle)) &&
+            matchesSearch(searchText.get(guest.id)!, needle) &&
             (filter === 'all' || !seatByGuest.has(guest.id)),
         )
         .map((guest) => guest.id),

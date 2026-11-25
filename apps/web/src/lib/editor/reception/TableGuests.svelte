@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Project } from '@enlace/contracts';
   import { GUEST_CATEGORIES } from '../guest-categories';
+  import { matchesSearch, toSearchWords } from '../../search';
   import type { TableGuestsProps } from './contracts';
 
   type Guest = Project['guests'][number];
@@ -16,9 +17,6 @@
   }: TableGuestsProps = $props();
 
   let search = $state('');
-
-  const normalize = (text: string) =>
-    text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLocaleLowerCase('pt-BR');
 
   const guests = $derived(project.guests);
   const tables = $derived(project.reception.tables);
@@ -40,12 +38,11 @@
   const seatedCount = $derived(tableOfGuest.size);
   const unseated = $derived(guests.filter((guest) => !tableOfGuest.has(guest.id)));
   const searchText = $derived(
-    new Map(unseated.map((guest) => [guest.id, normalize(`${guest.name} ${guest.note}`)])),
+    new Map(unseated.map((guest) => [guest.id, toSearchWords(`${guest.name} ${guest.note}`)])),
   );
   const visibleUnseated = $derived.by(() => {
-    const needle = normalize(search.trim());
-    if (!needle) return unseated;
-    return unseated.filter((guest) => searchText.get(guest.id)!.includes(needle));
+    if (!search.trim()) return unseated;
+    return unseated.filter((guest) => matchesSearch(searchText.get(guest.id)!, search));
   });
   const selectedGuest = $derived(selectedGuestId ? guestById.get(selectedGuestId) : undefined);
 

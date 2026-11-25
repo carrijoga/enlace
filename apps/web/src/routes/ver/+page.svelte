@@ -6,6 +6,7 @@
   import PlanCanvas from '../../lib/editor/PlanCanvas.svelte';
   import SeatList from '../../lib/editor/SeatList.svelte';
   import { GUEST_CATEGORIES, type GuestCategory } from '../../lib/editor/guest-categories';
+  import { matchesSearch, toSearchWords } from '../../lib/search';
   import {
     fetchSharedView,
     normalizeName,
@@ -39,13 +40,12 @@
   const zoom = $derived(zoomPercent / 100);
   const people = $derived(
     view?.mode === 'names'
-      ? view.seats.map((seat) => ({ ...seat, key: normalizeName(seat.name) }))
+      ? view.seats.map((seat) => ({ ...seat, words: toSearchWords(seat.name) }))
       : [],
   );
   const matches = $derived.by(() => {
-    const needle = normalizeName(query);
-    if (!needle) return [];
-    return people.filter((person) => person.key.includes(needle)).slice(0, 8);
+    if (!normalizeName(query)) return [];
+    return people.filter((person) => matchesSearch(person.words, query)).slice(0, 8);
   });
   const selected = $derived.by(() => {
     if (!selectedSeatId || !project) return null;
