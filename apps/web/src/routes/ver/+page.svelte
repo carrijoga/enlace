@@ -8,6 +8,7 @@
   import ReceptionCanvas from '../../lib/editor/reception/ReceptionCanvas.svelte';
   import { legendEntries } from '../../lib/editor/guest-categories';
   import { matchesSearch, toSearchWords } from '../../lib/search';
+  import type { SharedDownload } from '../../lib/share/downloads';
   import {
     fetchSharedView,
     normalizeName,
@@ -162,6 +163,27 @@
     }
   }
 
+  let downloading = $state<SharedDownload | null>(null);
+  let downloadMessage = $state('');
+  let downloadFailed = $state(false);
+  // Só quem toca em "Baixar" carrega o desenho dos cartões; a página continua leve.
+  async function download(kind: SharedDownload) {
+    if (!view || downloading) return;
+    downloading = kind;
+    downloadMessage = 'Preparando a imagem…';
+    downloadFailed = false;
+    try {
+      const { downloadSharedPng } = await import('../../lib/share/downloads');
+      await downloadSharedPng(view, kind, selectedSeatId ?? undefined);
+      downloadMessage = 'Imagem pronta para download.';
+    } catch {
+      downloadFailed = true;
+      downloadMessage = 'Não foi possível gerar a imagem. Tente novamente.';
+    } finally {
+      downloading = null;
+    }
+  }
+
   function showTab(next: 'ceremony' | 'reception') {
     tab = next;
     query = '';
@@ -235,6 +257,35 @@
             >
           </div>
         {/if}
+
+        <section class="downloads" aria-labelledby="downloads-title">
+          <h2 id="downloads-title">Baixar imagem</h2>
+          <div class="download-buttons">
+            <button
+              type="button"
+              disabled={Boolean(downloading)}
+              onclick={() => download('ceremony')}>Planta da cerimônia</button
+            >
+            {#if festa}<button
+                type="button"
+                disabled={Boolean(downloading)}
+                onclick={() => download('reception')}>Planta da festa</button
+              >{/if}
+            {#if named && selected?.guest}<button
+                type="button"
+                disabled={Boolean(downloading)}
+                onclick={() => download('seat')}>Lugar de {selected.guest.name}</button
+              >{/if}
+          </div>
+          <p class="download-note">
+            {named
+              ? 'PNG com os nomes, como nesta página. Procure seu nome para baixar só o seu lugar.'
+              : 'PNG só com a planta e os lugares ocupados, sem nomes.'}
+          </p>
+          <p class="download-status" class:error={downloadFailed} role="status" aria-live="polite">
+            {downloadMessage}
+          </p>
+        </section>
 
         {#if named}
           <section class="finder" aria-labelledby="finder-title">
@@ -539,6 +590,43 @@
   .finder {
     padding-top: 12px;
     border-top: 1px solid var(--line);
+  }
+  .downloads h2 {
+    margin: 0 0 8px;
+    font:
+      400 20px / 1.25 Georgia,
+      serif;
+  }
+  .download-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .download-buttons button {
+    min-height: 44px;
+    padding: 8px 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fffefb;
+    color: var(--green);
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+  .download-buttons button:disabled {
+    cursor: progress;
+    opacity: 0.6;
+  }
+  .download-note,
+  .download-status {
+    margin: 8px 0 0;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .download-status:empty {
+    display: none;
+  }
+  .download-status.error {
+    color: #922f28;
   }
   .finder h2 {
     margin: 0 0 8px;

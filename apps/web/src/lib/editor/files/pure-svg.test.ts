@@ -146,4 +146,13 @@ describe('SVG puro da planta', () => {
       'não tem cadeira',
     );
   });
+
+  it('anônimo mostra a ocupação sem nome, categoria nem título de quem senta', () => {
+    const project = projectWithGuest();
+    const svg = createMapSvg(project, undefined, { anonymous: true });
+    expect(svg).not.toContain('Jo&lt;/script&gt;');
+    expect(svg).not.toContain('&lt;script&gt;');
+    expect(svg).toContain('#e3ebe1');
+    expect(() => createMapSvg(project, project.guests[0]!.id, { anonymous: true })).toThrow();
+  });
 });

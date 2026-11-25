@@ -56,6 +56,8 @@ const STYLES = [
 type ChairColors = { fill: string; stroke: string; rule: string };
 
 const EMPTY_CHAIR: ChairColors = { fill: '#fffefb', stroke: '#c9d2c6', rule: '#d7dcd3' };
+/** Mesmo verde da planta no modo "Só a planta" (`PlanCanvas`). */
+const OCCUPIED_CHAIR = { fill: '#e3ebe1', stroke: '#5f825f', rule: '#5f825f', text: '#294b32' };
 const HIGHLIGHTED_CHAIR: ChairColors = { fill: '#f2ead8', stroke: '#b7893f', rule: '#c8ae79' };
 
 export const escapeXml = (value: string): string =>
@@ -217,7 +219,15 @@ function sideLabel(geometry: LayoutGeometry, side: SeatGeometry['side'], label: 
   return { y, svg: text(x, y, label, 'side') };
 }
 
-export function createMapSvg(projectInput: Project, personalGuestId?: string): string {
+/**
+ * Cartão da cerimônia. `anonymous` desenha só a ocupação (modo "Só a planta" do link): cadeiras
+ * ocupadas em verde, sem nome, categoria nem título com o nome de quem senta.
+ */
+export function createMapSvg(
+  projectInput: Project,
+  personalGuestId?: string,
+  { anonymous = false }: { anonymous?: boolean } = {},
+): string {
   const project = projectSchema.parse(projectInput);
   const geometry = getLayoutGeometry(project.layout);
   const guestById = new Map(project.guests.map((guest) => [guest.id, guest]));
@@ -225,6 +235,7 @@ export function createMapSvg(projectInput: Project, personalGuestId?: string): s
   const assignmentBySeat = new Map(
     project.assignments.map((assignment) => [assignment.seatId, assignment]),
   );
+  if (anonymous && personalGuestId) throw new Error('Mapa individual exige nomes.');
   const personalGuest = personalGuestId ? guestById.get(personalGuestId) : undefined;
   if (personalGuestId && !personalGuest) throw new Error('Convidado não encontrado.');
   const personalAssignment = personalGuestId
@@ -257,7 +268,7 @@ export function createMapSvg(projectInput: Project, personalGuestId?: string): s
   const mapX = PAGE_CENTER - center * fit;
   const mapY = MAP_FRAME.y + MAP_FRAME.padding - cropTop * fit;
 
-  const names = personalGuest ? new Map<string, string>() : chairNames(project);
+  const names = personalGuest || anonymous ? new Map<string, string>() : chairNames(project);
   const seatsSvg = seats
     .map((seat) => {
       if (personalGuest) {
@@ -276,13 +287,20 @@ export function createMapSvg(projectInput: Project, personalGuestId?: string): s
       }
       const assignment = assignmentBySeat.get(seat.id);
       const guest = assignment ? guestById.get(assignment.guestId) : undefined;
-      if (!guest) {
-        const number = String(seat.index + 1).padStart(2, '0');
+      const number = String(seat.index + 1).padStart(2, '0');
+      if (!guest)
         return placeSeat(
           seat,
           chair(EMPTY_CHAIR, `<text x="0" y="5" class="chair-empty">${number}</text>`),
         );
-      }
+      if (anonymous)
+        return placeSeat(
+          seat,
+          chair(
+            OCCUPIED_CHAIR,
+            `<text x="0" y="5" class="chair-empty" style="fill:${OCCUPIED_CHAIR.text};font-style:normal">${number}</text>`,
+          ),
+        );
       const category = categoryOf(guest.category);
       return placeSeat(
         seat,

@@ -8,7 +8,8 @@ import {
   createRectangleOutline,
   setRoomOutline,
 } from '@enlace/domain/reception';
-import { createReceptionSvg } from './reception-svg.js';
+import { toSharedView } from '@enlace/domain';
+import { createReceptionSvg, createSharedReceptionSvg } from './reception-svg.js';
 
 const guests = [
   { id: '2c4f8a5e-6f0e-4c2b-9d1a-0b7e3c5a9f10', name: 'Ana <Fictícia>' },
@@ -71,6 +72,20 @@ describe('SVG da planta da festa', () => {
     expect(svg).not.toContain('Sem convidados');
     const height = (value: string) => Number(value.match(/viewBox="0 0 1600 (\d+)"/)![1]);
     expect(height(svg)).toBeLessThan(height(createReceptionSvg(projectWithReception())));
+  });
+
+  it('no link com nomes, lista os convidados; só a planta não leva nenhum nome', () => {
+    const project = projectWithReception();
+    const named = createSharedReceptionSvg(toSharedView(project, 'names'), 'Festa de Ana & Bia');
+    expect(named).toContain('CONVIDADOS POR MESA');
+    expect(named).toContain('Bruno Exemplo');
+    expect(named).toContain('2/8');
+    const plan = createSharedReceptionSvg(toSharedView(project, 'plan'), 'Festa de Ana & Bia');
+    expect(plan).toContain('Mesa dos amigos');
+    expect(plan).toContain('2/8');
+    expect(plan).not.toContain('Bruno');
+    expect(plan).not.toContain('Fictícia');
+    expect(plan).not.toContain('CONVIDADOS POR MESA');
   });
 
   it('recusa projeto sem planta da festa', () => {

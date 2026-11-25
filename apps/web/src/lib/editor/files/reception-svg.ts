@@ -1,4 +1,11 @@
-import { projectSchema, type Project, type ReceptionItemKind } from '@enlace/contracts';
+import {
+  projectSchema,
+  sharedViewSchema,
+  type Project,
+  type Reception,
+  type ReceptionItemKind,
+  type SharedView,
+} from '@enlace/contracts';
 import { getDoorGeometry, getTableSeatPositions } from '@enlace/domain/reception';
 import {
   PLACEHOLDER_TITLES,
@@ -58,6 +65,20 @@ function label(x: number, y: number, value: string, className: string, size: num
   return `<text x="${finite(x)}" y="${finite(y)}" class="${className}" font-size="${finite(size)}">${escapeXml(value)}</text>`;
 }
 
+/** Dados do cartão da festa, vindos do projeto (editor) ou da projeção pública (`/ver`). */
+export type ReceptionCard = {
+  title: string;
+  couple: { first: string; second: string };
+  weddingDate: string | null;
+  room: Reception['room'];
+  tables: Reception['tables'];
+  items: Reception['items'];
+  /** Convidados por mesa (`tableId` → quantidade). */
+  occupancy: ReadonlyMap<string, number>;
+  /** Nomes por mesa, na ordem de atribuição; `null` para sair só a planta, sem nenhum nome. */
+  guestsByTable: ReadonlyMap<string, readonly string[]> | null;
+};
+
 /**
  * Cartão da planta da festa: o salão desenhado em escala, com mesas e elementos, e abaixo a lista
  * de convidados de cada mesa. Os nomes ficam na lista porque não cabem legíveis dentro das mesas.
@@ -70,13 +91,56 @@ export function createReceptionSvg(
   const project = projectSchema.parse(projectInput);
   const reception = project.reception;
   if (!reception) throw new Error('Monte a planta da festa antes de exportar.');
-  const { room, tables, items, tableAssignments } = reception;
   const guestById = new Map(project.guests.map((guest) => [guest.id, guest]));
-  const guestsByTable = new Map<string, string[]>(tables.map((table) => [table.id, []]));
-  for (const assignment of tableAssignments) {
+  const guestsByTable = new Map<string, string[]>(reception.tables.map((table) => [table.id, []]));
+  for (const assignment of reception.tableAssignments) {
     const guest = guestById.get(assignment.guestId);
     if (guest) guestsByTable.get(assignment.tableId)?.push(guest.name.trim());
   }
+  return receptionCardSvg({
+    title: project.title,
+    couple: project.couple,
+    weddingDate: project.weddingDate,
+    room: reception.room,
+    tables: reception.tables,
+    items: reception.items,
+    occupancy: new Map([...guestsByTable].map(([id, names]) => [id, names.length])),
+    guestsByTable: withNames ? guestsByTable : null,
+  });
+}
+
+/**
+ * Festa da visualização pública: com nomes no modo `names` e só a planta no modo `plan`, que não
+ * recebe nomes do servidor. Revalida a projeção antes de desenhar.
+ */
+export function createSharedReceptionSvg(viewInput: SharedView, title: string): string {
+  const view = sharedViewSchema.parse(viewInput);
+  const source = view.reception;
+  if (!source) throw new Error('Este link não tem planta da festa.');
+  const occupancy = new Map<string, number>();
+  let guestsByTable: Map<string, string[]> | null = null;
+  if (view.mode === 'names' && 'guests' in source) {
+    guestsByTable = new Map(source.tables.map((table) => [table.id, []]));
+    for (const guest of source.guests) guestsByTable.get(guest.tableId)?.push(guest.name.trim());
+    for (const [id, names] of guestsByTable) occupancy.set(id, names.length);
+  } else if ('tableCounts' in source)
+    for (const count of source.tableCounts) occupancy.set(count.tableId, count.occupied);
+  return receptionCardSvg({
+    title,
+    couple: view.couple,
+    weddingDate: view.weddingDate,
+    room: source.room,
+    tables: source.tables,
+    items: source.items,
+    occupancy,
+    guestsByTable,
+  });
+}
+
+function receptionCardSvg(card: ReceptionCard): string {
+  const { room, tables, items, occupancy, guestsByTable } = card;
+  const withNames = guestsByTable !== null;
+  const namesOf = (tableId: string) => guestsByTable?.get(tableId) ?? [];
 
   // Enquadramento: salão com margem, ampliado por qualquer elemento que saia dele.
   let left = Infinity;
@@ -159,7 +223,7 @@ export function createReceptionSvg(
     .join('');
   const tablesSvg = tables
     .map((table) => {
-      const taken = guestsByTable.get(table.id)!.length;
+      const taken = Math.min(occupancy.get(table.id) ?? 0, table.seats);
       const chairs = getTableSeatPositions(table)
         .map(
           (chair, index) =>
@@ -190,17 +254,14 @@ export function createReceptionSvg(
     const rowHeight = Math.max(
       ...row.map(
         (table) =>
-          LIST.padding * 2 +
-          LIST.title +
-          12 +
-          Math.max(1, guestsByTable.get(table.id)!.length) * LIST.line,
+          LIST.padding * 2 + LIST.title + 12 + Math.max(1, namesOf(table.id).length) * LIST.line,
       ),
     );
     row.forEach((table, position) => {
       const x = CONTENT.x + position * (columnWidth + LIST.gap);
       const textX = x + LIST.padding;
       const textWidth = columnWidth - LIST.padding * 2;
-      const guests = guestsByTable.get(table.id)!;
+      const guests = namesOf(table.id);
       const countLabel = `${guests.length}/${table.seats}`;
       const title = fitText(table.name, textWidth - 70, 21, 14);
       const names = guests.length
@@ -244,14 +305,12 @@ export function createReceptionSvg(
       ? `${sectionTitle}${cards.join('')}`
       : text(PAGE_CENTER, listTop + 14, 'NENHUMA MESA NA PLANTA', 'section');
 
-  const couple = [project.couple.first.trim(), project.couple.second.trim()]
-    .filter(Boolean)
-    .join(' & ');
-  const info = [dateLabel(project.weddingDate), 'Planta da festa']
+  const couple = [card.couple.first.trim(), card.couple.second.trim()].filter(Boolean).join(' & ');
+  const info = [dateLabel(card.weddingDate), 'Planta da festa']
     .filter(Boolean)
     .join(' • ')
     .toLocaleUpperCase('pt-BR');
-  const projectTitle = project.title.trim();
+  const projectTitle = card.title.trim();
   const headline = PLACEHOLDER_TITLES.has(projectTitle.toLocaleLowerCase('pt-BR'))
     ? DEFAULT_HEADLINE
     : projectTitle;
@@ -268,7 +327,7 @@ export function createReceptionSvg(
     text(PAGE_CENTER, fittedCouple ? 247 : 212, info, 'info'),
   ].join('');
 
-  const seated = [...guestsByTable.values()].reduce((total, names) => total + names.length, 0);
+  const seated = [...occupancy.values()].reduce((total, count) => total + count, 0);
   const seats = tables.reduce((total, table) => total + table.seats, 0);
   const summary = [
     plural(tables.length, 'mesa', 'mesas'),
@@ -288,7 +347,7 @@ export function createReceptionSvg(
   const cardBottom = listBottom + (signature ? 192 : 136);
 
   const height = Math.ceil(cardBottom + CARD_INSET);
-  const labels = `<title>${escapeXml(project.title)}</title><desc>${withNames ? 'Planta da festa, com mesas e convidados de cada mesa.' : 'Planta da festa, com mesas e ocupação, sem nomes de convidados.'}</desc>`;
+  const labels = `<title>${escapeXml(card.title)}</title><desc>${withNames ? 'Planta da festa, com mesas e convidados de cada mesa.' : 'Planta da festa, com mesas e ocupação, sem nomes de convidados.'}</desc>`;
   const frames = `<rect width="${PAGE_WIDTH}" height="${height}" fill="#faf9f5"/><rect x="${CARD_INSET}" y="${CARD_INSET}" width="${PAGE_WIDTH - CARD_INSET * 2}" height="${finite(cardBottom - CARD_INSET)}" rx="18" fill="#fffefb" stroke="#deded2" stroke-width="2"/><rect x="${CONTENT.x}" y="${MAP_TOP}" width="${CONTENT.width}" height="${finite(frameHeight)}" rx="19" fill="#f4f5f0" stroke="#e8e8df" stroke-width="2"/>`;
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${PAGE_WIDTH}" height="${height}" viewBox="0 0 ${PAGE_WIDTH} ${height}" role="img">${labels}<style>${STYLES}</style>${frames}${header}${map}${list}${footer}</svg>`;

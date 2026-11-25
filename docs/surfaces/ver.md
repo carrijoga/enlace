@@ -8,6 +8,10 @@ Rota `/ver`. Modo **Operate**. Quem recebe o link consulta a disposição da cer
 - Em telas mais estreitas, os mesmos elementos seguem em uma coluna e conservam a ordem de navegação por teclado. A lista abre sob demanda e o desenho inicia enquadrado. Ao aumentar o zoom, a área da planta tem rolagem própria.
 - Os resultados da busca mantêm uma altura limitada. Ao escolher um nome, o foco vai para o título da planta e a cadeira recebe destaque. No modo “Só a planta”, a lista e o desenho indicam a ocupação sem expor nomes de convidados.
 
+## Baixar imagem — 25/11/2026
+
+A lateral tem a seção "Baixar imagem", logo depois da troca Cerimônia/Festa. Ela oferece a planta da cerimônia e, se o link tiver festa, a planta da festa, em PNG. No modo "Com nomes" as imagens trazem os nomes (a festa com a lista "Convidados por mesa"), e quem escolhe uma pessoa na busca ou na lista pode baixar só o lugar dela. No modo "Só a planta" as imagens mostram apenas a ocupação: as cadeiras ocupadas ficam em verde, sem nome nem categoria, e a festa sai sem lista. O desenho usa só a projeção recebida pelo link (`lib/share/downloads.ts`) e é carregado sob demanda: o JavaScript inicial de `/ver` passou de 94,60 para 95,31 KiB gzip.
+
 ## Validação local em 21/11/2026
 
 No navegador Orca, uma cerimônia fictícia com 55 cadeiras mostrou planta e legenda na primeira tela em 1440 × 900 e 390 × 844. Em 320 × 568, uma planta com 288 cadeiras abriu sem rolagem horizontal da página. A busca mostrou até oito resultados com nomes longos e levou à cadeira escolhida na última fileira. A validação também cobriu a mudança de uma para duas colunas entre 991 e 992 px, busca por teclado, zoom até 200% e retorno ao enquadramento, modo anônimo, link incompleto ou indisponível e nova tentativa após erro temporário.

@@ -2,7 +2,7 @@ import { projectSchema, projectDocumentSchema, type Project } from '@enlace/cont
 import { createMapSvg } from './pure-svg.js';
 import { createReceptionSvg } from './reception-svg.js';
 
-function slug(value: string): string {
+export function slug(value: string): string {
   const normalized = value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
   return (
     normalized
@@ -53,7 +53,7 @@ export function downloadRawDraft(raw: string): void {
   );
 }
 
-async function downloadSvgAsPng(svg: string, filename: string): Promise<void> {
+export async function downloadSvgAsPng(svg: string, filename: string): Promise<void> {
   const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
   const svgUrl = URL.createObjectURL(svgBlob);
   try {
